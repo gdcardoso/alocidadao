@@ -1,0 +1,14 @@
+services:
+  db:
+    image: postgis/postgis:17-3.5
+    environment:
+      POSTGRES_USER: alocidadao
+      POSTGRES_PASSWORD: alocidadao
+      POSTGRES_DB: alocidadao
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+
+volumes:
+  db-data:

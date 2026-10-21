@@ -1,0 +1,27 @@
+{
+  "name": "@alocidadao/api-client",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch --preserveWatchOutput",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@alocidadao/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@alocidadao/config": "workspace:*",
+    "typescript": "~6.0.3"
+  }
+}

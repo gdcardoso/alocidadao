@@ -10,14 +10,16 @@
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
-    "lint": "turbo run lint",
+    "lint": "oxlint --deny-warnings",
     "format": "prettier --write .",
     "db:up": "docker compose up -d --wait db",
     "db:down": "docker compose down",
     "db:migrate": "pnpm --filter @alocidadao/db db:migrate",
-    "db:generate": "pnpm --filter @alocidadao/db db:generate"
+    "db:generate": "pnpm --filter @alocidadao/db db:generate",
+    "format:check": "prettier --check ."
   },
   "devDependencies": {
+    "oxlint": "^1.89.0",
     "prettier": "^3.9.10",
     "turbo": "^2.11.10",
     "typescript": "~6.0.3"

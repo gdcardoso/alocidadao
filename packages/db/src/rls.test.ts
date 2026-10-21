@@ -51,7 +51,10 @@ async function seedTenant(db: Database, label: string, ibgeCode: string): Promis
 
   return withContext(db, { tenantId }, async (tx) => {
     await tx.insert(memberships).values({ tenantId, userId: citizenId, role: 'citizen' });
-    const [department] = await tx.insert(departments).values({ tenantId, name: 'Obras' }).returning();
+    const [department] = await tx
+      .insert(departments)
+      .values({ tenantId, name: 'Obras' })
+      .returning();
     const [team] = await tx
       .insert(teams)
       .values({ tenantId, departmentId: department!.id, name: 'Equipe 1' })
@@ -211,7 +214,9 @@ describe('regras no banco', () => {
 
   it('histórico de status não pode ser alterado nem apagado', async () => {
     await withContext(app.db, { tenantId: a.tenantId }, (tx) =>
-      tx.insert(statusEvents).values({ tenantId: a.tenantId, requestId: a.requestId, toStatus: 'open' }),
+      tx
+        .insert(statusEvents)
+        .values({ tenantId: a.tenantId, requestId: a.requestId, toStatus: 'open' }),
     );
     const updateError = await dbError(
       withContext(app.db, { tenantId: a.tenantId }, (tx) =>
@@ -228,7 +233,9 @@ describe('regras no banco', () => {
   it('permite só uma atividade ativa por solicitação', async () => {
     const assign = () =>
       withContext(app.db, { tenantId: a.tenantId }, (tx) =>
-        tx.insert(workOrders).values({ tenantId: a.tenantId, requestId: a.requestId, teamId: a.teamId }),
+        tx
+          .insert(workOrders)
+          .values({ tenantId: a.tenantId, requestId: a.requestId, teamId: a.teamId }),
       );
     await assign();
     expect(await dbError(assign())).toMatch(/work_orders_one_active_per_request_idx/);

@@ -2,3 +2,4 @@ pnpm-lock.yaml
 dist
 .turbo
 .expo
+packages/db/migrations/meta

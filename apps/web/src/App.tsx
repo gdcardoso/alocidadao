@@ -18,8 +18,7 @@ export default function App() {
     <main className="page">
       <h1>Alô Cidadão — Painel</h1>
       <p>
-        API:{' '}
-        {apiState.kind === 'loading' && 'verificando…'}
+        API: {apiState.kind === 'loading' && 'verificando…'}
         {apiState.kind === 'ok' && `online (${apiState.health.service})`}
         {apiState.kind === 'error' && 'indisponível'}
       </p>

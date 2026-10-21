@@ -68,8 +68,7 @@ export const REQUEST_TRANSITIONS: Record<RequestAction, Transition> = {
 export const AUTO_CONFIRM_AFTER_DAYS = 7;
 
 export type TransitionResult =
-  | { ok: true; to: RequestStatus }
-  | { ok: false; reason: 'invalid_status' | 'forbidden' };
+  { ok: true; to: RequestStatus } | { ok: false; reason: 'invalid_status' | 'forbidden' };
 
 export function applyRequestAction(
   current: RequestStatus,

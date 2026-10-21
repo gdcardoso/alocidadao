@@ -3,7 +3,10 @@ import { applyRequestAction, availableRequestActions } from './request-status.js
 
 describe('applyRequestAction', () => {
   it('lets a manager assign an open request', () => {
-    expect(applyRequestAction('open', 'assign', 'manager')).toEqual({ ok: true, to: 'in_progress' });
+    expect(applyRequestAction('open', 'assign', 'manager')).toEqual({
+      ok: true,
+      to: 'in_progress',
+    });
   });
 
   it('sends an impeded request back to open', () => {
@@ -35,7 +38,10 @@ describe('applyRequestAction', () => {
 
 describe('availableRequestActions', () => {
   it('lists citizen actions while awaiting confirmation', () => {
-    expect(availableRequestActions('awaiting_confirmation', 'citizen')).toEqual(['confirm', 'contest']);
+    expect(availableRequestActions('awaiting_confirmation', 'citizen')).toEqual([
+      'confirm',
+      'contest',
+    ]);
   });
 
   it('offers nothing on a final status', () => {

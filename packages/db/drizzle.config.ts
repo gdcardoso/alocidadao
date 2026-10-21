@@ -6,6 +6,8 @@ export default defineConfig({
   out: './migrations',
   dbCredentials: {
     // Migrações rodam com o dono do banco, nunca com app_user.
-    url: process.env.DATABASE_OWNER_URL ?? 'postgres://alocidadao:alocidadao@localhost:5433/alocidadao',
+    url:
+      process.env.DATABASE_OWNER_URL ??
+      'postgres://alocidadao:alocidadao@localhost:5433/alocidadao',
   },
 });

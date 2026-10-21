@@ -6,29 +6,29 @@
 
 O Alô Cidadão será um produto SaaS próprio, ainda sem cliente: o MVP precisa ser demonstrável e vendável a prefeituras com custo de infraestrutura de \~US$ 20–35/mês. Base: Declaração de Escopo v0 (01/04/2026).
 
-| Tema | Decisão | Motivo |
-| --- | --- | --- |
-| Distribuição | Um único app "Alô Cidadão" (Android e iOS), telas por perfil | Uma ficha por loja, um par de credenciais de push |
-| Linguagem | TypeScript em todas as camadas, monorepo (pnpm + Turborepo) | Tipos e validações compartilhados entre API, WEB e app |
-| App | React Native + Expo (development build) | Acesso nativo completo (câmera, localização, rede) com produtividade |
-| WEB | React (Vite), mapas com MapLibre/Leaflet + OpenStreetMap | Sem custo de mapas |
-| API | Node.js + Fastify, REST, schemas Zod, JWT | Mesma linguagem do restante |
-| Banco | PostgreSQL + PostGIS + JSONB, Row-Level Security por prefeitura | Dados relacionais, consultas geográficas, isolamento multi-tenant |
-| Notificações | Serviço próprio enviando direto a FCM (Android) e APNs (iOS) + caixa de notificações no app + e-mail | Sem fornecedor intermediário; envio gratuito |
-| Infraestrutura | DigitalOcean: 1 Droplet com Docker Compose + Spaces (fotos e backups) | Barato e portável para outro provedor |
-| Contas nas lojas | Conta de organização (CNPJ + D-U-N-S) | Exigência da Apple e credibilidade |
+| Tema             | Decisão                                                                                              | Motivo                                                               |
+| ---------------- | ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| Distribuição     | Um único app "Alô Cidadão" (Android e iOS), telas por perfil                                         | Uma ficha por loja, um par de credenciais de push                    |
+| Linguagem        | TypeScript em todas as camadas, monorepo (pnpm + Turborepo)                                          | Tipos e validações compartilhados entre API, WEB e app               |
+| App              | React Native + Expo (development build)                                                              | Acesso nativo completo (câmera, localização, rede) com produtividade |
+| WEB              | React (Vite), mapas com MapLibre/Leaflet + OpenStreetMap                                             | Sem custo de mapas                                                   |
+| API              | Node.js + Fastify, REST, schemas Zod, JWT                                                            | Mesma linguagem do restante                                          |
+| Banco            | PostgreSQL + PostGIS + JSONB, Row-Level Security por prefeitura                                      | Dados relacionais, consultas geográficas, isolamento multi-tenant    |
+| Notificações     | Serviço próprio enviando direto a FCM (Android) e APNs (iOS) + caixa de notificações no app + e-mail | Sem fornecedor intermediário; envio gratuito                         |
+| Infraestrutura   | DigitalOcean: 1 Droplet com Docker Compose + Spaces (fotos e backups)                                | Barato e portável para outro provedor                                |
+| Contas nas lojas | Conta de organização (CNPJ + D-U-N-S)                                                                | Exigência da Apple e credibilidade                                   |
 
 ## Corte do MVP
 
 O MVP fecha um ciclo completo de irregularidade — cidadão reporta, prefeitura atribui, equipe executa, cidadão confirma — e deixa serviços, workflows configuráveis e relatórios avançados para depois.
 
-| Módulo | Entra no MVP | Fica para depois |
-| --- | --- | --- |
-| Cidadão (app) | Cadastro e login; escolha da prefeitura; registro de irregularidade com foto, localização, categoria e descrição; lista das próprias solicitações com status e histórico; confirmar ou contestar o atendimento | Solicitação de serviços (IPTU, vigilância sanitária); prioridade definida pelo cidadão; login Gov.br; denúncia anônima |
-| Gestor da prefeitura (WEB) | Lista com filtros (status, categoria, data, bairro); mapa com pins; triagem (aceitar, recusar, marcar duplicada); atribuir a equipe com prazo | Atribuição automática; SLAs por categoria; relatórios e indicadores |
-| Agente de campo (app) | Lista de atividades da equipe; navegação até o local; iniciar, concluir com foto e relato, ou registrar impedimento; uso offline com sincronização | Reprogramar pelo próprio agente; checklists por categoria |
-| Admin da prefeitura (WEB) | Usuários, equipes, setores e categorias da prefeitura | Relatórios |
-| Admin da plataforma (WEB) | Cadastro e ativação de prefeituras; criação do admin de cada prefeitura; catálogo padrão de categorias | Editor visual de workflows; cobrança e planos |
+| Módulo                     | Entra no MVP                                                                                                                                                                                                   | Fica para depois                                                                                                       |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Cidadão (app)              | Cadastro e login; escolha da prefeitura; registro de irregularidade com foto, localização, categoria e descrição; lista das próprias solicitações com status e histórico; confirmar ou contestar o atendimento | Solicitação de serviços (IPTU, vigilância sanitária); prioridade definida pelo cidadão; login Gov.br; denúncia anônima |
+| Gestor da prefeitura (WEB) | Lista com filtros (status, categoria, data, bairro); mapa com pins; triagem (aceitar, recusar, marcar duplicada); atribuir a equipe com prazo                                                                  | Atribuição automática; SLAs por categoria; relatórios e indicadores                                                    |
+| Agente de campo (app)      | Lista de atividades da equipe; navegação até o local; iniciar, concluir com foto e relato, ou registrar impedimento; uso offline com sincronização                                                             | Reprogramar pelo próprio agente; checklists por categoria                                                              |
+| Admin da prefeitura (WEB)  | Usuários, equipes, setores e categorias da prefeitura                                                                                                                                                          | Relatórios                                                                                                             |
+| Admin da plataforma (WEB)  | Cadastro e ativação de prefeituras; criação do admin de cada prefeitura; catálogo padrão de categorias                                                                                                         | Editor visual de workflows; cobrança e planos                                                                          |
 
 **Critério de pronto do MVP:** uma demonstração ponta a ponta com duas prefeituras de teste isoladas, em aparelhos Android e iOS reais, incluindo um atendimento registrado offline e notificações push em cada mudança de status.
 
@@ -38,13 +38,13 @@ O editor visual de workflows é o item mais caro do escopo original; no MVP o fl
 
 Cinco perfis, todos com login único por e-mail ou celular; os quatro perfis da prefeitura só enxergam dados da própria prefeitura, garantido pelo banco (Row-Level Security), não só pela API.
 
-| Perfil (no código) | Plataforma | Vê | Pode fazer |
-| --- | --- | --- | --- |
-| Cidadão (`citizen`) | App | As próprias solicitações | Criar solicitação, acompanhar, confirmar ou contestar atendimento, cancelar antes da triagem |
-| Agente de campo (`field_agent`) | App | Atividades das equipes a que pertence | Iniciar, concluir com foto e relato, registrar impedimento |
-| Gestor (`manager`) | WEB | Solicitações dos setores que gerencia | Triar, atribuir a equipe, definir prazo, reatribuir, encerrar |
-| Admin da prefeitura (`tenant_admin`) | WEB | Tudo da prefeitura | Usuários, equipes, setores, categorias; tudo que o gestor faz |
-| Admin da plataforma (`platform_admin`) | WEB | Todas as prefeituras | Criar e ativar prefeituras, criar o admin de cada uma, catálogo padrão de categorias |
+| Perfil (no código)                     | Plataforma | Vê                                    | Pode fazer                                                                                   |
+| -------------------------------------- | ---------- | ------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Cidadão (`citizen`)                    | App        | As próprias solicitações              | Criar solicitação, acompanhar, confirmar ou contestar atendimento, cancelar antes da triagem |
+| Agente de campo (`field_agent`)        | App        | Atividades das equipes a que pertence | Iniciar, concluir com foto e relato, registrar impedimento                                   |
+| Gestor (`manager`)                     | WEB        | Solicitações dos setores que gerencia | Triar, atribuir a equipe, definir prazo, reatribuir, encerrar                                |
+| Admin da prefeitura (`tenant_admin`)   | WEB        | Tudo da prefeitura                    | Usuários, equipes, setores, categorias; tudo que o gestor faz                                |
+| Admin da plataforma (`platform_admin`) | WEB        | Todas as prefeituras                  | Criar e ativar prefeituras, criar o admin de cada uma, catálogo padrão de categorias         |
 
 Uma mesma pessoa pode ter mais de um perfil (um servidor que também é cidadão); o app mostra a troca de perfil quando houver mais de um.
 
@@ -52,20 +52,20 @@ Uma mesma pessoa pode ter mais de um perfil (um servidor que também é cidadão
 
 O centro do modelo é a **Solicitação** (o que o cidadão pediu) separada da **Atividade** (o trabalho de campo): uma solicitação pode gerar mais de uma atividade, por exemplo após um impedimento ou uma contestação. Toda tabela da prefeitura carrega `tenant_id`.
 
-| Entidade | Atributos principais | Relacionamentos |
-| --- | --- | --- |
-| Prefeitura (`tenant`) | nome, município, UF, código IBGE, limite geográfico (polígono), ativa | tem setores, equipes, categorias, usuários |
-| Usuário (`user`) | nome, e-mail, celular, CPF (opcional no MVP), senha | tem vínculos de perfil |
-| Vínculo de perfil (`membership`) | perfil, prefeitura (nulo para admin da plataforma) | usuário × prefeitura × perfil |
-| Setor (`department`) | nome (ex.: Obras, Limpeza Urbana) | pertence à prefeitura; tem gestores, equipes, categorias |
-| Equipe (`team`) | nome | pertence a um setor; tem agentes |
-| Categoria (`category`) | nome, ícone, setor responsável, prazo padrão (dias), campos extras (JSONB), ativa | copiada do catálogo padrão e ajustável por prefeitura |
-| Solicitação (`request`) | protocolo, status, descrição, localização (ponto PostGIS), endereço, campos extras (JSONB), prazo | do cidadão, de uma categoria; tem atividades, anexos, histórico |
-| Atividade (`work_order`) | status, equipe, prazo, relato de conclusão, motivo de impedimento | de uma solicitação; atribuída a uma equipe |
-| Anexo (`attachment`) | tipo (abertura, conclusão, contestação), chave no Spaces, localização e hora da captura | de uma solicitação ou atividade |
-| Histórico (`status_event`) | status anterior, novo status, autor, comentário, data, contexto da conexão | de uma solicitação ou atividade; só inserção |
-| Notificação (`notification`) | destinatário, evento, título, lida em | caixa de entrada no app |
-| Aparelho (`device`) | plataforma, token de push, versão do app, último acesso | de um usuário |
+| Entidade                         | Atributos principais                                                                              | Relacionamentos                                                 |
+| -------------------------------- | ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| Prefeitura (`tenant`)            | nome, município, UF, código IBGE, limite geográfico (polígono), ativa                             | tem setores, equipes, categorias, usuários                      |
+| Usuário (`user`)                 | nome, e-mail, celular, CPF (opcional no MVP), senha                                               | tem vínculos de perfil                                          |
+| Vínculo de perfil (`membership`) | perfil, prefeitura (nulo para admin da plataforma)                                                | usuário × prefeitura × perfil                                   |
+| Setor (`department`)             | nome (ex.: Obras, Limpeza Urbana)                                                                 | pertence à prefeitura; tem gestores, equipes, categorias        |
+| Equipe (`team`)                  | nome                                                                                              | pertence a um setor; tem agentes                                |
+| Categoria (`category`)           | nome, ícone, setor responsável, prazo padrão (dias), campos extras (JSONB), ativa                 | copiada do catálogo padrão e ajustável por prefeitura           |
+| Solicitação (`request`)          | protocolo, status, descrição, localização (ponto PostGIS), endereço, campos extras (JSONB), prazo | do cidadão, de uma categoria; tem atividades, anexos, histórico |
+| Atividade (`work_order`)         | status, equipe, prazo, relato de conclusão, motivo de impedimento                                 | de uma solicitação; atribuída a uma equipe                      |
+| Anexo (`attachment`)             | tipo (abertura, conclusão, contestação), chave no Spaces, localização e hora da captura           | de uma solicitação ou atividade                                 |
+| Histórico (`status_event`)       | status anterior, novo status, autor, comentário, data, contexto da conexão                        | de uma solicitação ou atividade; só inserção                    |
+| Notificação (`notification`)     | destinatário, evento, título, lida em                                                             | caixa de entrada no app                                         |
+| Aparelho (`device`)              | plataforma, token de push, versão do app, último acesso                                           | de um usuário                                                   |
 
 **Contexto da conexão** (tipo de rede, geração móvel, latência até a API, tempo de envio das fotos, se foi enviado offline) é gravado em cada evento de histórico e anexo.
 
@@ -95,16 +95,16 @@ stateDiagram-v2
     Duplicada --> [*]
 ```
 
-| De | Para | Quem | Condição |
-| --- | --- | --- | --- |
-| Aberta | Cancelada | Cidadão | Antes de ser atribuída |
-| Aberta | Recusada | Gestor | Motivo obrigatório |
-| Aberta | Duplicada | Gestor | Ligada à solicitação original |
-| Aberta | Em atendimento | Gestor | Cria a atividade para uma equipe, com prazo |
-| Em atendimento | Aguardando confirmação | Agente | Conclusão com foto e relato |
-| Em atendimento | Aberta | Agente | Impedimento com motivo |
-| Aguardando confirmação | Concluída | Cidadão ou sistema | Confirmação, ou 7 dias sem resposta |
-| Aguardando confirmação | Aberta | Cidadão | Contestação com comentário e foto |
+| De                     | Para                   | Quem               | Condição                                    |
+| ---------------------- | ---------------------- | ------------------ | ------------------------------------------- |
+| Aberta                 | Cancelada              | Cidadão            | Antes de ser atribuída                      |
+| Aberta                 | Recusada               | Gestor             | Motivo obrigatório                          |
+| Aberta                 | Duplicada              | Gestor             | Ligada à solicitação original               |
+| Aberta                 | Em atendimento         | Gestor             | Cria a atividade para uma equipe, com prazo |
+| Em atendimento         | Aguardando confirmação | Agente             | Conclusão com foto e relato                 |
+| Em atendimento         | Aberta                 | Agente             | Impedimento com motivo                      |
+| Aguardando confirmação | Concluída              | Cidadão ou sistema | Confirmação, ou 7 dias sem resposta         |
+| Aguardando confirmação | Aberta                 | Cidadão            | Contestação com comentário e foto           |
 
 A atividade de campo tem ciclo próprio: **Atribuída → Em execução → Concluída**, ou **Impedida** (pelo agente) e **Cancelada** (pelo gestor, ao reatribuir ou encerrar). Uma solicitação tem no máximo uma atividade ativa por vez. Estados e transições ficam no pacote `shared` e são validados na API.
 
@@ -149,16 +149,16 @@ Quatro fluxos cobrem o ciclo do MVP; o quinto prepara uma prefeitura nova para u
 
 Toda mudança de status gera uma notificação na caixa de entrada do app; o push é o aviso dela, e o e-mail entra só onde o destinatário precisa agir.
 
-| Evento | Destinatário | Push | E-mail |
-| --- | --- | --- | --- |
-| Solicitação recebida (protocolo gerado) | Cidadão | Sim | Não |
-| Solicitação recusada ou duplicada | Cidadão | Sim | Não |
-| Solicitação em atendimento | Cidadão | Sim | Não |
-| Atendimento concluído, aguardando confirmação | Cidadão | Sim | Sim |
-| Nova atividade atribuída | Agentes da equipe | Sim | Não |
-| Impedimento registrado | Gestores do setor | Não (WEB) | Sim |
-| Contestação do cidadão | Gestores do setor | Não (WEB) | Sim |
-| Convite de acesso (novo usuário da prefeitura) | Usuário convidado | Não | Sim |
+| Evento                                         | Destinatário      | Push      | E-mail |
+| ---------------------------------------------- | ----------------- | --------- | ------ |
+| Solicitação recebida (protocolo gerado)        | Cidadão           | Sim       | Não    |
+| Solicitação recusada ou duplicada              | Cidadão           | Sim       | Não    |
+| Solicitação em atendimento                     | Cidadão           | Sim       | Não    |
+| Atendimento concluído, aguardando confirmação  | Cidadão           | Sim       | Sim    |
+| Nova atividade atribuída                       | Agentes da equipe | Sim       | Não    |
+| Impedimento registrado                         | Gestores do setor | Não (WEB) | Sim    |
+| Contestação do cidadão                         | Gestores do setor | Não (WEB) | Sim    |
+| Convite de acesso (novo usuário da prefeitura) | Usuário convidado | Não       | Sim    |
 
 O conteúdo do push leva só protocolo e status, sem nome, endereço ou descrição. Envios passam por uma fila no backend com nova tentativa e descarte de tokens inválidos.
 
@@ -166,39 +166,39 @@ O conteúdo do push leva só protocolo e status, sem nome, endereço ou descriç
 
 Os requisitos que mais pesam no MVP são o uso offline do agente de campo e o isolamento entre prefeituras; os demais seguem práticas padrão.
 
-| Tema | Requisito no MVP |
-| --- | --- |
-| Offline (agente) | Atividades da equipe baixadas no aparelho (SQLite); iniciar, concluir e registrar impedimento sem rede; envio em fila com nova tentativa; fotos comprimidas antes do envio |
-| Offline (cidadão) | Nova solicitação pode ser criada sem rede e fica na fila; consultas exigem conexão |
-| Conflitos | O servidor é a fonte da verdade: ação offline sobre atividade reatribuída ou cancelada é recusada e o agente é avisado |
-| Qualidade da conexão | Tipo de rede, geração móvel, latência até a API e tempo de envio das fotos gravados em cada ação |
-| Isolamento | `tenant_id` em toda tabela da prefeitura + Row-Level Security no Postgres; testes automáticos tentando ler dados de outra prefeitura |
-| Autenticação | JWT de curta duração + refresh token; senha com hash forte; bloqueio após tentativas falhas |
-| Fotos | Envio direto ao Spaces por URL assinada; leitura só por URL assinada com validade curta; metadados EXIF de localização removidos das fotos exibidas ao público |
-| LGPD | Termo de uso e política de privacidade no cadastro; coleta mínima (CPF opcional); exclusão de conta pelo app; registro de quem acessou dados pessoais |
-| Histórico | Eventos de status apenas inseridos, nunca alterados (trilha de auditoria) |
-| Backups | `pg_dump` diário para o Spaces, mantido por 30 dias, com restauração testada |
-| Observabilidade | Logs estruturados, rastreamento de erros no app e na API, verificação de saúde da API |
+| Tema                 | Requisito no MVP                                                                                                                                                           |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Offline (agente)     | Atividades da equipe baixadas no aparelho (SQLite); iniciar, concluir e registrar impedimento sem rede; envio em fila com nova tentativa; fotos comprimidas antes do envio |
+| Offline (cidadão)    | Nova solicitação pode ser criada sem rede e fica na fila; consultas exigem conexão                                                                                         |
+| Conflitos            | O servidor é a fonte da verdade: ação offline sobre atividade reatribuída ou cancelada é recusada e o agente é avisado                                                     |
+| Qualidade da conexão | Tipo de rede, geração móvel, latência até a API e tempo de envio das fotos gravados em cada ação                                                                           |
+| Isolamento           | `tenant_id` em toda tabela da prefeitura + Row-Level Security no Postgres; testes automáticos tentando ler dados de outra prefeitura                                       |
+| Autenticação         | JWT de curta duração + refresh token; senha com hash forte; bloqueio após tentativas falhas                                                                                |
+| Fotos                | Envio direto ao Spaces por URL assinada; leitura só por URL assinada com validade curta; metadados EXIF de localização removidos das fotos exibidas ao público             |
+| LGPD                 | Termo de uso e política de privacidade no cadastro; coleta mínima (CPF opcional); exclusão de conta pelo app; registro de quem acessou dados pessoais                      |
+| Histórico            | Eventos de status apenas inseridos, nunca alterados (trilha de auditoria)                                                                                                  |
+| Backups              | `pg_dump` diário para o Spaces, mantido por 30 dias, com restauração testada                                                                                               |
+| Observabilidade      | Logs estruturados, rastreamento de erros no app e na API, verificação de saúde da API                                                                                      |
 
 ## Testes de risco e próximos passos
 
 Com este planejamento aprovado, o próximo passo é montar o monorepo e, junto com ele, provar os quatro pontos que podem mudar a arquitetura.
 
-| Teste | Como provar | Pronto quando |
-| --- | --- | --- |
-| Push direto FCM e APNs | API envia para um aparelho Android e um iPhone reais usando o token nativo do `expo-notifications` | Push chega nos dois, com app aberto, em segundo plano e fechado |
-| Offline com fotos | Agente conclui 3 atividades com foto em modo avião e reconecta | Tudo sincroniza sem duplicar; conflito de atividade reatribuída é avisado |
-| Isolamento por prefeitura | Duas prefeituras de teste com RLS; testes tentando ler e escrever dados da outra | Todas as tentativas falham no banco, mesmo com a API ignorando o filtro |
-| Recursos nativos no Expo | Development build com câmera, localização e `netinfo` + medição de latência | Funciona em Android e iOS reais, permissões pedidas no momento do uso |
+| Teste                     | Como provar                                                                                        | Pronto quando                                                             |
+| ------------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Push direto FCM e APNs    | API envia para um aparelho Android e um iPhone reais usando o token nativo do `expo-notifications` | Push chega nos dois, com app aberto, em segundo plano e fechado           |
+| Offline com fotos         | Agente conclui 3 atividades com foto em modo avião e reconecta                                     | Tudo sincroniza sem duplicar; conflito de atividade reatribuída é avisado |
+| Isolamento por prefeitura | Duas prefeituras de teste com RLS; testes tentando ler e escrever dados da outra                   | Todas as tentativas falham no banco, mesmo com a API ignorando o filtro   |
+| Recursos nativos no Expo  | Development build com câmera, localização e `netinfo` + medição de latência                        | Funciona em Android e iOS reais, permissões pedidas no momento do uso     |
 
 - [x] Revisar e aprovar este planejamento
-- [ ] Criar o monorepo (pnpm, Turborepo, TypeScript, lint, CI) — estrutura pronta; faltam lint e CI
+- [x] Criar o monorepo (pnpm, Turborepo, TypeScript, lint, CI)
 - [x] Pacote `shared` com perfis, status e transições em Zod
 - [ ] Executar os quatro testes de risco
-    - [x] Isolamento por prefeitura — `packages/db`, ver `docs/decisoes/0001-isolamento-por-prefeitura.md`
-    - [ ] Recursos nativos no Expo
-    - [ ] Offline com fotos
-    - [ ] Push direto FCM e APNs
+  - [x] Isolamento por prefeitura — `packages/db`, ver `docs/decisoes/0001-isolamento-por-prefeitura.md`
+  - [ ] Recursos nativos no Expo
+  - [ ] Offline com fotos
+  - [ ] Push direto FCM e APNs
 - [ ] Abrir as contas de organização na Apple (D-U-N-S) e no Google Play
 - [ ] Quebrar o MVP em atividades estimadas
 

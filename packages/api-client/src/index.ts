@@ -30,7 +30,8 @@ export function createApiClient({ baseUrl, getToken, fetch: fetchImpl = fetch }:
   }
 
   return {
-    health: async (): Promise<HealthResponse> => healthResponseSchema.parse(await request('/health')),
+    health: async (): Promise<HealthResponse> =>
+      healthResponseSchema.parse(await request('/health')),
   };
 }
 

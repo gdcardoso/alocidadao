@@ -191,10 +191,14 @@ Com este planejamento aprovado, o próximo passo é montar o monorepo e, junto c
 | Isolamento por prefeitura | Duas prefeituras de teste com RLS; testes tentando ler e escrever dados da outra | Todas as tentativas falham no banco, mesmo com a API ignorando o filtro |
 | Recursos nativos no Expo | Development build com câmera, localização e `netinfo` + medição de latência | Funciona em Android e iOS reais, permissões pedidas no momento do uso |
 
-- [ ] Revisar e aprovar este planejamento
-- [ ] Criar o monorepo (pnpm, Turborepo, TypeScript, lint, CI)
-- [ ] Pacote `shared` com perfis, status e transições em Zod
+- [x] Revisar e aprovar este planejamento
+- [ ] Criar o monorepo (pnpm, Turborepo, TypeScript, lint, CI) — estrutura pronta; faltam lint e CI
+- [x] Pacote `shared` com perfis, status e transições em Zod
 - [ ] Executar os quatro testes de risco
+    - [x] Isolamento por prefeitura — `packages/db`, ver `docs/decisoes/0001-isolamento-por-prefeitura.md`
+    - [ ] Recursos nativos no Expo
+    - [ ] Offline com fotos
+    - [ ] Push direto FCM e APNs
 - [ ] Abrir as contas de organização na Apple (D-U-N-S) e no Google Play
 - [ ] Quebrar o MVP em atividades estimadas
 

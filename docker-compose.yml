@@ -1,14 +1,21 @@
 services:
   db:
-    image: postgis/postgis:17-3.5
+    build: ./docker/postgres
+    image: alocidadao-postgres:17
     environment:
       POSTGRES_USER: alocidadao
       POSTGRES_PASSWORD: alocidadao
       POSTGRES_DB: alocidadao
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - db-data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U alocidadao -d alocidadao"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
 
 volumes:
   db-data:

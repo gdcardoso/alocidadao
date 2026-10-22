@@ -59,6 +59,19 @@ export class HttpTransport implements Transport {
     return { key, durationMs: Date.now() - start };
   }
 
+  /** Lista as atividades do agente (GET /dev/work-orders). */
+  async listWorkOrders(): Promise<unknown> {
+    const response = await this.request(`${this.options.baseUrl}/dev/work-orders`, {
+      headers: this.devHeaders(),
+    });
+    if (response.status !== 200) throw new NetworkError(`work_orders_${response.status}`);
+    try {
+      return JSON.parse(await response.text());
+    } catch {
+      throw new NetworkError('invalid_work_orders_response');
+    }
+  }
+
   async sendAction(workOrderId: string, input: WorkOrderActionInput): Promise<SendActionResult> {
     const response = await this.request(
       `${this.options.baseUrl}/dev/work-orders/${workOrderId}/actions`,

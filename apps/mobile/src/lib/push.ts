@@ -1,12 +1,14 @@
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
+import { classifyTokenError } from './push-error';
 
 export const STATUS_CHANNEL_ID = 'status';
 
 export type PushRegistration =
   | { platform: 'android' | 'ios'; token: string }
-  | { error: 'permission_denied' | 'unsupported' | 'push_not_configured' };
+  | { error: 'permission_denied' | 'unsupported' | 'push_not_configured' }
+  | { error: 'token_failed'; message: string };
 
 /**
  * Pede permissão e devolve o token nativo (FCM no Android, APNs no iOS).
@@ -36,7 +38,9 @@ export async function registerForPush(): Promise<PushRegistration> {
     const token = await Notifications.getDevicePushTokenAsync();
     if (typeof token.data !== 'string') return { error: 'unsupported' };
     return { platform, token: token.data };
-  } catch {
-    return { error: 'push_not_configured' };
+  } catch (e) {
+    console.warn('Falha ao obter o token de push', e);
+    if (classifyTokenError(e) === 'push_not_configured') return { error: 'push_not_configured' };
+    return { error: 'token_failed', message: e instanceof Error ? e.message : String(e) };
   }
 }

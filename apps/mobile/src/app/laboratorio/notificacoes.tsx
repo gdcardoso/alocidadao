@@ -126,6 +126,11 @@ export default function NotificacoesLab() {
           Push ainda não configurado neste build (falta o google-services.json).
         </Text>
       )}
+      {registration && 'error' in registration && registration.error === 'token_failed' && (
+        <Text style={styles.error}>
+          Não foi possível obter o token de push: {registration.message}
+        </Text>
+      )}
       {error === 'unsupported' && (
         <Text style={styles.error}>Este aparelho ou simulador não recebe push remoto.</Text>
       )}

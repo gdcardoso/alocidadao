@@ -277,3 +277,24 @@ export const statusEvents = pgTable(
     index().on(t.requestId, t.createdAt),
   ],
 );
+
+/**
+ * Ações feitas no aparelho (possivelmente offline) e a resposta dada a cada uma.
+ * O id nasce no aparelho: reenviar a mesma ação devolve a resposta guardada em vez de repetir o efeito.
+ * Só inserção (UPDATE e DELETE são revogados de app_user).
+ */
+export const clientActions = pgTable(
+  'client_actions',
+  {
+    id: uuid('id').primaryKey(),
+    tenantId: tenantId(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id),
+    kind: text('kind').notNull(),
+    targetId: uuid('target_id'),
+    response: jsonb('response').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [unique().on(t.tenantId, t.id)],
+);

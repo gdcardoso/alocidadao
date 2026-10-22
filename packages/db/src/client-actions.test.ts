@@ -1,0 +1,100 @@
+import { randomUUID } from 'node:crypto';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { createDatabase, withContext, type Database } from './client.js';
+import { seedDev } from './seed-dev-data.js';
+import { clientActions, tenants, users } from './schema.js';
+import { TEST_APP_URL, TEST_OWNER_URL } from './test/urls.js';
+
+// O dono prepara os dados; os testes rodam como app_user (mesma conexão da API).
+
+const owner = createDatabase(TEST_OWNER_URL);
+const app = createDatabase(TEST_APP_URL);
+
+const ACTION_ID = randomUUID();
+let a: { tenantId: string; userId: string };
+let b: { tenantId: string; userId: string };
+
+async function seedTenant(db: Database, label: string, ibgeCode: string) {
+  const [tenant] = await db
+    .insert(tenants)
+    .values({ name: `Prefeitura ${label}`, city: label, state: 'SP', ibgeCode, active: true })
+    .returning();
+  const [user] = await db
+    .insert(users)
+    .values({ name: `Agente ${label}`, email: `agente.${label}@acoes.dev`, passwordHash: 'x' })
+    .returning();
+  return { tenantId: tenant!.id, userId: user!.id };
+}
+
+function insertAction(seed: { tenantId: string; userId: string }, id: string) {
+  return withContext(app.db, { tenantId: seed.tenantId, userId: seed.userId }, (tx) =>
+    tx.insert(clientActions).values({
+      id,
+      tenantId: seed.tenantId,
+      userId: seed.userId,
+      kind: 'work_order.start',
+      targetId: randomUUID(),
+      response: { ok: true },
+    }),
+  );
+}
+
+/** Drizzle embrulha o erro do Postgres; devolve a mensagem original. */
+async function dbError(promise: Promise<unknown>): Promise<string> {
+  try {
+    await promise;
+  } catch (error) {
+    const cause = (error as { cause?: { message?: string } }).cause;
+    return cause?.message ?? (error as Error).message;
+  }
+  throw new Error('Era esperado que o banco recusasse a operação');
+}
+
+beforeAll(async () => {
+  a = await seedTenant(owner.db, 'acoes-a', '0000011');
+  b = await seedTenant(owner.db, 'acoes-b', '0000012');
+});
+
+afterAll(async () => {
+  await owner.pool.end();
+  await app.pool.end();
+});
+
+describe('registro de ações do aparelho', () => {
+  it('rejects a repeated client action id', async () => {
+    await insertAction(a, ACTION_ID);
+    expect(await dbError(insertAction(a, ACTION_ID))).toMatch(/duplicate key/);
+  });
+
+  it('hides actions from another tenant', async () => {
+    const rows = await withContext(app.db, { tenantId: b.tenantId }, (tx) =>
+      tx.select().from(clientActions),
+    );
+    expect(rows).toHaveLength(0);
+  });
+
+  it('does not allow rewriting an action', async () =>
+    expect(
+      await dbError(
+        withContext(app.db, { tenantId: a.tenantId }, (tx) =>
+          tx.update(clientActions).set({ response: {} }),
+        ),
+      ),
+    ).toMatch(/permission denied/));
+
+  it('does not allow deleting an action', async () =>
+    expect(
+      await dbError(
+        withContext(app.db, { tenantId: a.tenantId }, (tx) => tx.delete(clientActions)),
+      ),
+    ).toMatch(/permission denied/));
+});
+
+describe('dados de demonstração', () => {
+  it('seeds the demo tenant once', async () => {
+    const first = await seedDev(owner.db);
+    const second = await seedDev(owner.db);
+    expect(second).toEqual(first);
+    expect(first.workOrderIds).toHaveLength(3);
+  });
+});

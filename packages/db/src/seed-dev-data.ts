@@ -1,0 +1,150 @@
+import { randomUUID } from 'node:crypto';
+import { and, asc, eq } from 'drizzle-orm';
+import { geoPoint, withContext, type Database } from './client.js';
+import {
+  categories,
+  departments,
+  memberships,
+  requests,
+  teamMembers,
+  teams,
+  tenants,
+  users,
+  workOrders,
+} from './schema.js';
+
+export const DEMO_IBGE_CODE = '9999901';
+const AGENT_EMAIL = 'agente.demo@alocidadao.dev';
+const CITIZEN_EMAIL = 'cidadao.demo@alocidadao.dev';
+const TEAM_NAME = 'Equipe Obras – Centro';
+
+/** Ponto de referência (centro de São Paulo) em torno do qual ficam as solicitações. */
+const CENTER = { lat: -23.5505, lng: -46.6333 };
+
+// Deslocamentos fixos (1e-3 grau de latitude ≈ 111 m; de longitude ≈ 102 m nesta latitude),
+// todos a menos de 300 m do centro.
+const REQUESTS = [
+  { description: 'Buraco na via em frente ao número 100', dLat: 0, dLng: 0.0005 },
+  { description: 'Buraco profundo na esquina', dLat: 0.001, dLng: -0.0005 },
+  { description: 'Buraco no cruzamento, risco para motos', dLat: -0.0015, dLng: 0.001 },
+];
+
+export interface SeedDevResult {
+  tenantId: string;
+  teamId: string;
+  agentId: string;
+  workOrderIds: string[];
+}
+
+/**
+ * Cria a prefeitura de demonstração (IBGE 9999901) com equipe, agente, cidadão e 3 solicitações
+ * atribuídas à equipe. Idempotente: se a prefeitura já existe, devolve os ids existentes.
+ * Use a conexão do dono (superusuário): ele cria a prefeitura e os usuários, que são globais.
+ */
+export async function seedDev(db: Database): Promise<SeedDevResult> {
+  const [existing] = await db
+    .select({ id: tenants.id })
+    .from(tenants)
+    .where(eq(tenants.ibgeCode, DEMO_IBGE_CODE));
+
+  const tenantId = existing?.id ?? randomUUID();
+  return withContext(db, { tenantId }, async (tx) => {
+    if (existing) {
+      const [team] = await tx
+        .select({ id: teams.id })
+        .from(teams)
+        .where(and(eq(teams.tenantId, tenantId), eq(teams.name, TEAM_NAME)));
+      const [agent] = await tx
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.email, AGENT_EMAIL));
+      if (!team || !agent) throw new Error('A prefeitura demo existe mas está incompleta');
+      const orders = await tx
+        .select({ id: workOrders.id })
+        .from(workOrders)
+        .where(and(eq(workOrders.tenantId, tenantId), eq(workOrders.teamId, team.id)))
+        .orderBy(asc(workOrders.createdAt));
+      return {
+        tenantId,
+        teamId: team.id,
+        agentId: agent.id,
+        workOrderIds: orders.map((o) => o.id),
+      };
+    }
+
+    await tx.insert(tenants).values({
+      id: tenantId,
+      name: 'Prefeitura Demo A',
+      city: 'Demo A',
+      state: 'SP',
+      ibgeCode: DEMO_IBGE_CODE,
+      active: true,
+    });
+
+    // Usuários são globais; os dados de acesso são só de desenvolvimento.
+    const [agent] = await tx
+      .insert(users)
+      .values({
+        name: 'Agente Demo',
+        email: AGENT_EMAIL,
+        phone: '+5511900000001',
+        passwordHash: 'dev',
+      })
+      .returning({ id: users.id });
+    const [citizen] = await tx
+      .insert(users)
+      .values({ name: 'Cidadão Demo', email: CITIZEN_EMAIL, passwordHash: 'dev' })
+      .returning({ id: users.id });
+
+    await tx.insert(memberships).values([
+      { tenantId, userId: agent!.id, role: 'field_agent' },
+      { tenantId, userId: citizen!.id, role: 'citizen' },
+    ]);
+
+    const [department] = await tx
+      .insert(departments)
+      .values({ tenantId, name: 'Obras' })
+      .returning({ id: departments.id });
+    const [team] = await tx
+      .insert(teams)
+      .values({ tenantId, departmentId: department!.id, name: TEAM_NAME })
+      .returning({ id: teams.id });
+    await tx.insert(teamMembers).values({ tenantId, teamId: team!.id, userId: agent!.id });
+    const [category] = await tx
+      .insert(categories)
+      .values({ tenantId, departmentId: department!.id, name: 'Buraco na via' })
+      .returning({ id: categories.id });
+
+    // created_at explícito e crescente: dentro de uma transação now() é igual para todas as
+    // linhas, e a ordem por created_at é o que reencontra as atividades na segunda execução.
+    const base = Date.now();
+    const workOrderIds: string[] = [];
+    for (const [index, item] of REQUESTS.entries()) {
+      const createdAt = new Date(base + index * 1000);
+      const [request] = await tx
+        .insert(requests)
+        .values({
+          tenantId,
+          citizenId: citizen!.id,
+          categoryId: category!.id,
+          description: item.description,
+          location: geoPoint({ lat: CENTER.lat + item.dLat, lng: CENTER.lng + item.dLng }),
+          createdAt,
+        })
+        .returning({ id: requests.id });
+      const [order] = await tx
+        .insert(workOrders)
+        .values({
+          tenantId,
+          requestId: request!.id,
+          teamId: team!.id,
+          status: 'assigned',
+          createdAt,
+        })
+        .returning({ id: workOrders.id });
+      workOrderIds.push(order!.id);
+    }
+
+    return { tenantId, teamId: team!.id, agentId: agent!.id, workOrderIds };
+  });
+}

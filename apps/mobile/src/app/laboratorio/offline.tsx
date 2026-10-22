@@ -11,6 +11,7 @@ import { PhotoCapture } from './camera';
 const CONFLICT_MESSAGE =
   'Esta atividade foi reatribuída ou cancelada pela prefeitura. O que você registrou ficou guardado no aparelho.';
 const MAX_PHOTOS = 3;
+const MIN_NOTE_LENGTH = 3;
 const baseUrl = process.env.EXPO_PUBLIC_API_URL ?? 'http://10.0.2.2:3333';
 
 function Button({
@@ -144,6 +145,10 @@ export default function OfflineLab() {
       setMessage(`Concluir pede de 1 a ${MAX_PHOTOS} fotos.`);
       return;
     }
+    if (note.trim().length < MIN_NOTE_LENGTH) {
+      setMessage(`Escreva um relato com pelo menos ${MIN_NOTE_LENGTH} letras.`);
+      return;
+    }
     setMessage(null);
     await enqueue(completing, 'complete', { note, photoUris: photos });
     setCompleting(null);
@@ -189,7 +194,7 @@ export default function OfflineLab() {
                 setPhotos([]);
                 setNote('');
               }}
-              disabled={o.status === 'completed'}
+              disabled={o.status !== 'in_execution'}
             />
           </View>
           {completing === o.id && (

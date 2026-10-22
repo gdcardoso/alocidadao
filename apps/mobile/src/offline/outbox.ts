@@ -51,6 +51,14 @@ export class PhotoMissingError extends Error {
   }
 }
 
+/** A API recusou o pedido de upload (4xx): reenviar não adianta. */
+export class UploadRejectedError extends Error {
+  constructor(public readonly code: string) {
+    super(code);
+    this.name = 'UploadRejectedError';
+  }
+}
+
 /** Erros inesperados (não de rede) esgotam a paciência depois de tantas tentativas. */
 export const MAX_UNEXPECTED_ATTEMPTS = 5;
 
@@ -140,6 +148,11 @@ export async function processOutbox(deps: ProcessOutboxDeps): Promise<ProcessOut
         });
         result.stoppedByNetwork = true;
         break;
+      }
+      if (error instanceof UploadRejectedError) {
+        await store.update(item.id, { status: 'failed', lastError: error.code });
+        result.failed++;
+        continue;
       }
       if (error instanceof PhotoMissingError) {
         await store.update(item.id, { status: 'failed', lastError: 'photo_missing' });

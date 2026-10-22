@@ -1,5 +1,5 @@
 import { workOrderActionResultSchema } from '@alocidadao/shared';
-import { NetworkError, type SendActionResult } from './outbox';
+import { NetworkError, UploadRejectedError, type SendActionResult } from './outbox';
 
 function parseJson(bodyText: string): unknown {
   try {
@@ -23,24 +23,17 @@ export function mapActionResponse(status: number, bodyText: string): SendActionR
     }
     return { kind: 'ok' };
   }
-  if (status >= 300 && status < 400) throw new NetworkError(`redirect_${status}`);
-  switch (status) {
-    case 409:
-      if (body.code === 'work_order_unavailable') {
-        return { kind: 'conflict', status: body.status ?? 'unknown' };
-      }
-      return { kind: 'rejected', code: body.code ?? 'client_action_conflict' };
-    case 422:
-      return { kind: 'rejected', code: body.code ?? 'photo_invalid' };
-    case 404:
-      return { kind: 'rejected', code: 'not_found' };
-    case 401:
-      return { kind: 'rejected', code: 'unauthorized' };
-    case 503:
-      return { kind: 'rejected', code: body.code ?? 'unavailable' };
-    default:
-      throw new NetworkError(`http_${status}`);
+  if (status === 409 && body.code === 'work_order_unavailable') {
+    return { kind: 'conflict', status: body.status ?? 'unknown' };
   }
+  // Qualquer outro 4xx não melhora com nova tentativa: recusa e segue a fila.
+  if (status >= 400 && status < 500) {
+    const fallback =
+      status === 404 ? 'not_found' : status === 409 ? 'client_action_conflict' : `http_${status}`;
+    return { kind: 'rejected', code: body.code ?? fallback };
+  }
+  // 3xx, 5xx (inclusive 503) e o que não for JSON: tenta de novo com espera.
+  throw new NetworkError(`http_${status}`);
 }
 
 export interface Presign {
@@ -50,6 +43,16 @@ export interface Presign {
 }
 
 export function parsePresignResponse(status: number, bodyText: string): Presign {
+  if (status >= 400 && status < 500) {
+    const json = parseJson(bodyText);
+    const code =
+      typeof json === 'object' &&
+      json !== null &&
+      typeof (json as { code?: unknown }).code === 'string'
+        ? (json as { code: string }).code
+        : `uploads_${status}`;
+    throw new UploadRejectedError(code);
+  }
   if (status !== 200) throw new NetworkError(`uploads_${status}`);
   const json = parseJson(bodyText) as Partial<Presign> | undefined;
   const headers = json?.headers;

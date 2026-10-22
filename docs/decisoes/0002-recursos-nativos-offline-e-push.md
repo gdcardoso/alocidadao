@@ -68,7 +68,7 @@ Roteiro: 3 atividades, início e conclusão (com 1 ou 2 fotos e relato) em modo 
 - O hook de sincronização roda só na tela do laboratório. No app real ele sobe na raiz (`_layout`), para sincronizar ao abrir o app em qualquer tela.
 - A foto de uma conclusão em conflito já foi enviada ao storage antes do 409 e fica órfã. Precisa de expiração/limpeza do bucket.
 - A API não lê o `.env`; as variáveis precisam estar no ambiente do processo.
-- As rotas `/dev/*` ficam ligadas sempre que `NODE_ENV` não é `production`, inclusive quando está vazio. Em produção, definir `NODE_ENV=production` e substituir a identidade de desenvolvimento por autenticação.
+- As rotas `/dev/*` só ficam ligadas com `ENABLE_DEV_ROUTES=true` e `NODE_ENV` diferente de `production` (o script `dev` da API define a variável; sem ela, ficam desligadas). Em produção, definir `NODE_ENV=production` e substituir a identidade de desenvolvimento por autenticação.
 - Itens menores registrados na revisão (timeout de 30 s também no PUT da foto, pastas de fotos de itens em conflito não removidas, 401/503 que falham o item de vez, entre outros) entram no plano do app do agente.
 
 ## Pendente
@@ -130,4 +130,4 @@ Mesma sequência da seção 1, exceto push. Rode `EXPO_PUBLIC_API_URL=http://<IP
 
 ## Conclusão
 
-Com a evidência de hoje, a arquitetura do planejamento se mantém: o development build suporta câmera, localização, rede, SQLite e notificações; a fila offline sobrevive a modo avião, conflito e fechamento forçado sem duplicar; o upload por URL assinada funciona com `File` como corpo; e o envio de push direto tem o fluxo de registro e a API prontos e testados. Isso vale só para o emulador. Falta provar em aparelho real a foto da câmera, o modo avião e o envio por 4G, e provar a entrega de push (FCM e APNs), que ainda não foi tentada. Se a entrega real falhar, a alternativa a avaliar é o serviço de push do Expo, o que muda o planejamento.
+Com a evidência de hoje, a arquitetura do planejamento se mantém: o development build suporta câmera, localização, rede, SQLite e notificações; a fila offline sobrevive a modo avião, conflito e fechamento forçado sem duplicar; o upload por URL assinada funciona com `File` como corpo; e o envio de push direto tem o fluxo de registro e a API prontos e testados. Isso vale só para o emulador. Falta provar em aparelho real a foto da câmera, o modo avião e o envio por 4G, e provar a entrega de push (FCM e APNs), que ainda não foi tentada. Se a entrega real falhar, a decisão de push direto (FCM/APNs) volta para revisão com o dono do produto.

@@ -59,7 +59,7 @@ const app = await buildApp({
   storage,
   database,
   push: { android: fcm, ios: apns },
-  devRoutes: env.NODE_ENV !== 'production',
+  devRoutes: env.ENABLE_DEV_ROUTES === 'true' && env.NODE_ENV !== 'production',
 });
 
 try {

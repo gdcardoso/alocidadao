@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { mapActionResponse, parsePresignResponse } from './http-mapping';
-import { NetworkError } from './outbox';
+import { NetworkError, UploadRejectedError } from './outbox';
 
 const ok = JSON.stringify({
   workOrderId: '22222222-2222-4222-8222-222222222222',
@@ -36,8 +36,15 @@ describe('mapActionResponse', () => {
       code: 'photo_invalid',
     });
     expect(mapActionResponse(404, '')).toEqual({ kind: 'rejected', code: 'not_found' });
-    expect(mapActionResponse(401, '')).toEqual({ kind: 'rejected', code: 'unauthorized' });
-    expect(mapActionResponse(503, '{}')).toEqual({ kind: 'rejected', code: 'unavailable' });
+    expect(mapActionResponse(401, '')).toEqual({ kind: 'rejected', code: 'http_401' });
+    expect(mapActionResponse(400, JSON.stringify({ code: 'FST_ERR_VALIDATION' }))).toEqual({
+      kind: 'rejected',
+      code: 'FST_ERR_VALIDATION',
+    });
+    expect(mapActionResponse(400, '')).toEqual({ kind: 'rejected', code: 'http_400' });
+  });
+  it('retries 503 instead of rejecting', () => {
+    expect(() => mapActionResponse(503, '{}')).toThrow(NetworkError);
   });
 });
 
@@ -50,5 +57,18 @@ describe('parsePresignResponse', () => {
     expect(() => parsePresignResponse(200, '<html/>')).toThrow(NetworkError);
     expect(() => parsePresignResponse(200, '{"key":"k"}')).toThrow(NetworkError);
     expect(() => parsePresignResponse(302, '')).toThrow(NetworkError);
+  });
+  it('retries 503 and 5xx', () => {
+    expect(() => parsePresignResponse(503, '{}')).toThrow(NetworkError);
+    expect(() => parsePresignResponse(500, '')).toThrow(NetworkError);
+  });
+  it('rejects 4xx for good', () => {
+    expect(() => parsePresignResponse(400, '{}')).toThrow(UploadRejectedError);
+    expect(() => parsePresignResponse(401, '')).toThrow(UploadRejectedError);
+    try {
+      parsePresignResponse(400, JSON.stringify({ code: 'bad_content_type' }));
+    } catch (e) {
+      expect((e as UploadRejectedError).code).toBe('bad_content_type');
+    }
   });
 });

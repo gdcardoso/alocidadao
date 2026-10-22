@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { createDatabase, geoPoint, schema, seedDev, withContext } from '@alocidadao/db';
+import { createDatabase, geoPoint, schema, withContext } from '@alocidadao/db';
+import { seedDev } from '@alocidadao/db/seed';
 import type { ConnectionContext } from '@alocidadao/shared';
 import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';

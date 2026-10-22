@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
   NetworkError,
   PhotoMissingError,
+  UploadRejectedError,
   backoffMs,
   MAX_UNEXPECTED_ATTEMPTS,
   enqueueWorkOrderAction,
@@ -159,6 +160,18 @@ describe('processOutbox', () => {
       status: 'failed',
       lastError: 'photo_missing',
     });
+  });
+
+  it('fails an item whose upload was rejected and still sends the next', async () => {
+    const first = makeItem({ id: 'a', photoPaths: ['/a.jpg'], photoKeys: [null] });
+    const second = makeItem({ id: 'b', photoPaths: [], photoKeys: [] });
+    await store.add(first);
+    await store.add(second);
+    transport.failUploadWith('/a.jpg', new UploadRejectedError('uploads_400'));
+    const result = await processOutbox(deps());
+    expect(result).toMatchObject({ failed: 1, sent: 1 });
+    expect(await store.get('a')).toMatchObject({ status: 'failed', lastError: 'uploads_400' });
+    expect(await store.get('b')).toMatchObject({ status: 'done' });
   });
 
   it('flags actions created offline', async () => {

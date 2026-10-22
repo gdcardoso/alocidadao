@@ -1,0 +1,29 @@
+import { Link, type Href } from 'expo-router';
+import { ScrollView, StyleSheet, Text } from 'react-native';
+
+// As telas abaixo são criadas nas próximas tarefas dos spikes.
+const sections: { href: string; label: string }[] = [
+  { href: '/laboratorio/rede', label: 'Rede' },
+  { href: '/laboratorio/camera', label: 'Câmera e local' },
+  { href: '/laboratorio/offline', label: 'Atividades offline' },
+  { href: '/laboratorio/notificacoes', label: 'Notificações' },
+];
+
+export default function Laboratorio() {
+  return (
+    <ScrollView contentContainerStyle={styles.container}>
+      <Text style={styles.title}>Laboratório</Text>
+      {sections.map((section) => (
+        <Link key={section.href} href={section.href as Href} style={styles.link}>
+          {section.label}
+        </Link>
+      ))}
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { padding: 24, gap: 16 },
+  title: { fontSize: 24, fontWeight: '600' },
+  link: { fontSize: 18, color: '#0b5fff' },
+});

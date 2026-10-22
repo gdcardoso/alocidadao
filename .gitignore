@@ -6,3 +6,7 @@ coverage/
 .env
 .env*.local
 .DS_Store
+secrets/
+*.p8
+google-services.json
+GoogleService-Info.plist

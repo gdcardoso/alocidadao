@@ -7,6 +7,7 @@ import {
   validatorCompiler,
   type ZodTypeProvider,
 } from 'fastify-type-provider-zod';
+import { registerDevPush, type PushSenders } from './dev/push.js';
 import { registerDevUploads } from './dev/uploads.js';
 import { registerDevWorkOrders } from './dev/work-orders.js';
 import type { Storage } from './storage/s3.js';
@@ -17,6 +18,8 @@ export interface AppOptions {
   storage?: Storage;
   /** Banco como app_user (RLS). Opcional: as rotas que dependem dele respondem 503 sem ele. */
   database?: Database;
+  /** Envio de push por plataforma. Opcional: /dev/push responde 503 sem o envio pedido. */
+  push?: PushSenders;
   /** Registra as rotas /dev/*; nunca em produção. */
   devRoutes?: boolean;
 }
@@ -26,6 +29,7 @@ export async function buildApp({
   corsOrigin,
   storage,
   database,
+  push,
   devRoutes = false,
 }: AppOptions = {}) {
   const app = Fastify({ logger }).withTypeProvider<ZodTypeProvider>();
@@ -43,6 +47,7 @@ export async function buildApp({
   if (devRoutes) {
     registerDevUploads(app, storage);
     registerDevWorkOrders(app, database, storage);
+    registerDevPush(app, push);
   }
 
   return app;

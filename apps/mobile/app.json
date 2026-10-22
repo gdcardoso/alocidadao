@@ -39,7 +39,8 @@
         {
           "locationWhenInUsePermission": "Para saber onde está o problema e qual prefeitura atende."
         }
-      ]
+      ],
+      "expo-sqlite"
     ]
   }
 }

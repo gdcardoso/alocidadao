@@ -231,6 +231,27 @@ describe('work order actions', () => {
     expect(await countStatusEvents(id)).toBe(1);
   });
 
+  it('refuses a clientActionId reused for another work order', async () => {
+    const [first, second] = [await freshWorkOrder(), await freshWorkOrder()];
+    const action = start();
+    expect((await act(first, action)).statusCode).toBe(200);
+    const res = await act(second, action);
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toEqual({ code: 'client_action_conflict' });
+    expect(await countStatusEvents(second)).toBe(0);
+  });
+
+  it('answers 409 (never 500) when one id races on two work orders', async () => {
+    const [first, second] = [await freshWorkOrder(), await freshWorkOrder()];
+    const action = start();
+    const results = await Promise.all([act(first, action), act(second, action)]);
+    expect(results.map((r) => r.statusCode).toSorted()).toEqual([200, 409]);
+    expect(results.find((r) => r.statusCode === 409)?.json()).toEqual({
+      code: 'client_action_conflict',
+    });
+    expect((await countStatusEvents(first)) + (await countStatusEvents(second))).toBe(1);
+  });
+
   it('refuses actions on a cancelled work order', async () => {
     await inject('POST', `/dev/work-orders/${wo[2]!}/cancel`);
     const action = start();

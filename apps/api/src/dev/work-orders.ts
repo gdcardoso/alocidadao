@@ -23,6 +23,7 @@ const ACTIVE_STATUSES: WorkOrderStatus[] = ['assigned', 'in_execution'];
 type Outcome =
   | { kind: 'ok'; result: WorkOrderActionResult }
   | { kind: 'not_found' }
+  | { kind: 'client_action_conflict' }
   | { kind: 'unavailable'; status: WorkOrderStatus }
   | { kind: 'photo_invalid'; key: string };
 
@@ -32,14 +33,35 @@ function isUniqueViolation(error: unknown): boolean {
   return e.code === '23505' || e.cause?.code === '23505';
 }
 
-async function findStoredResponse(tx: Transaction, clientActionId: string) {
+/**
+ * Procura a ação já gravada. Só vale como repetição se for da mesma pessoa, da mesma atividade
+ * e do mesmo tipo; qualquer diferença é um conflito (o id foi reutilizado para outra coisa).
+ */
+async function findStoredAction(
+  tx: Transaction,
+  input: WorkOrderActionInput,
+  workOrderId: string,
+  userId: string,
+) {
   const [stored] = await tx
-    .select({ response: clientActions.response })
+    .select({
+      response: clientActions.response,
+      targetId: clientActions.targetId,
+      kind: clientActions.kind,
+      userId: clientActions.userId,
+    })
     .from(clientActions)
-    .where(eq(clientActions.id, clientActionId));
+    .where(eq(clientActions.id, input.clientActionId));
   if (!stored) return undefined;
+  if (
+    stored.targetId !== workOrderId ||
+    stored.kind !== `work_order.${input.action}` ||
+    stored.userId !== userId
+  ) {
+    return { kind: 'client_action_conflict' as const };
+  }
   const parsed = workOrderActionResultSchema.parse(stored.response);
-  return { ...parsed, duplicate: true };
+  return { kind: 'ok' as const, result: { ...parsed, duplicate: true } };
 }
 
 async function checkPhotos(storage: Storage, tenantId: string, keys: string[]) {
@@ -75,8 +97,8 @@ async function applyAction(
     if (!member) return { kind: 'not_found' as const };
 
     // Depois da trava, a leitura enxerga o que a ação concorrente já gravou.
-    const stored = await findStoredResponse(tx, input.clientActionId);
-    if (stored) return { kind: 'ok' as const, result: stored };
+    const stored = await findStoredAction(tx, input, order.id, userId);
+    if (stored) return stored;
 
     const target: WorkOrderStatus = input.action === 'start' ? 'in_execution' : 'completed';
     if (!canTransitionWorkOrder(order.status, target)) {
@@ -185,11 +207,11 @@ export function registerDevWorkOrders(
       } catch (error) {
         if (!isUniqueViolation(error)) throw error;
         // Outra requisição com o mesmo clientActionId gravou primeiro: devolve a resposta dela.
+        // Se ela é de outra atividade/ação, ou de outra prefeitura (não visível aqui), é conflito.
         const stored = await withContext(database, identity, (tx) =>
-          findStoredResponse(tx, input.clientActionId),
+          findStoredAction(tx, input, id, identity.userId),
         );
-        if (!stored) throw error;
-        outcome = { kind: 'ok', result: stored };
+        outcome = stored ?? { kind: 'client_action_conflict' };
       }
 
       switch (outcome.kind) {
@@ -197,6 +219,8 @@ export function registerDevWorkOrders(
           return outcome.result;
         case 'not_found':
           return reply.code(404).send({ code: 'work_order_not_found' });
+        case 'client_action_conflict':
+          return reply.code(409).send({ code: 'client_action_conflict' });
         case 'unavailable':
           return reply.code(409).send({ code: 'work_order_unavailable', status: outcome.status });
         case 'photo_invalid':

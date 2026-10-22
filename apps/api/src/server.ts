@@ -1,3 +1,4 @@
+import { createDatabase } from '@alocidadao/db';
 import { buildApp } from './app.js';
 import { createStorage } from './storage/s3.js';
 
@@ -16,10 +17,13 @@ const storage = env.S3_ENDPOINT
     })
   : undefined;
 
+const database = env.DATABASE_URL ? createDatabase(env.DATABASE_URL).db : undefined;
+
 const app = await buildApp({
   logger: true,
   corsOrigin: env.CORS_ORIGIN,
   storage,
+  database,
   devRoutes: env.NODE_ENV !== 'production',
 });
 

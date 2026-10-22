@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { workOrderStatusSchema } from './work-order-status.js';
 
 export const geoPointSchema = z.object({
   lat: z.number().min(-90).max(90),
@@ -42,3 +43,55 @@ export const healthResponseSchema = z.object({
   time: z.iso.datetime(),
 });
 export type HealthResponse = z.infer<typeof healthResponseSchema>;
+
+/** Ação feita pelo agente no aparelho (possivelmente offline) sobre uma atividade. */
+export const workOrderActionInputSchema = z
+  .object({
+    clientActionId: z.uuid(),
+    action: z.enum(['start', 'complete']),
+    occurredAt: z.iso.datetime(),
+    note: z.string().trim().min(3).max(2000).optional(),
+    photoKeys: z.array(z.string().min(1)).max(MAX_PHOTOS_PER_COMPLETION),
+    connection: connectionContextSchema,
+  })
+  .superRefine((value, ctx) => {
+    if (value.action === 'complete') {
+      if (!value.note) {
+        ctx.addIssue({ code: 'custom', path: ['note'], message: 'A observação é obrigatória' });
+      }
+      if (value.photoKeys.length < 1) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['photoKeys'],
+          message: 'Ao menos uma foto é obrigatória',
+        });
+      }
+    } else if (value.photoKeys.length > 0) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['photoKeys'],
+        message: 'Iniciar a atividade não leva fotos',
+      });
+    }
+  });
+export type WorkOrderActionInput = z.infer<typeof workOrderActionInputSchema>;
+
+export const workOrderActionResultSchema = z.object({
+  workOrderId: z.uuid(),
+  status: workOrderStatusSchema,
+  duplicate: z.boolean(),
+});
+export type WorkOrderActionResult = z.infer<typeof workOrderActionResultSchema>;
+
+/** Item da lista de atividades ativas do agente. */
+export const workOrderSummarySchema = z.object({
+  id: z.uuid(),
+  status: workOrderStatusSchema,
+  protocol: z.string(),
+  description: z.string(),
+  categoryName: z.string(),
+  address: z.string().nullable(),
+  location: geoPointSchema,
+  dueAt: z.iso.datetime().nullable(),
+});
+export type WorkOrderSummary = z.infer<typeof workOrderSummarySchema>;

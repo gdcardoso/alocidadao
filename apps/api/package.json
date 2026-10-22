@@ -11,10 +11,12 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@alocidadao/db": "workspace:*",
     "@alocidadao/shared": "workspace:*",
     "@aws-sdk/client-s3": "^3.1156.0",
     "@aws-sdk/s3-request-presigner": "^3.1156.0",
     "@fastify/cors": "^11.0.0",
+    "drizzle-orm": "^0.45.4",
     "fastify": "^5.12.7",
     "fastify-type-provider-zod": "^7.0.0",
     "zod": "^4.6.7"

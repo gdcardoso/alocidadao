@@ -1,5 +1,5 @@
 import NetInfo from '@react-native-community/netinfo';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { createHttpTransportFromEnv } from '../../offline/http-transport';
 import type { OutboxItem } from '../../offline/outbox';
@@ -69,7 +69,16 @@ export default function OfflineLab() {
     if (cache) setOrders(await cache.list());
   }, [cache]);
 
-  const { store, items, syncing, syncNow, refresh } = useOutboxSync(() => void reloadLocal());
+  // A tela atualiza a lista depois de cada passada da fila (ver `fetchListRef`).
+  const onlineRef = useRef(online);
+  useEffect(() => {
+    onlineRef.current = online;
+  }, [online]);
+  const fetchListRef = useRef<() => Promise<void>>(async () => undefined);
+  const { store, items, syncing, lastSyncError, syncNow, refresh } = useOutboxSync(() => {
+    void reloadLocal();
+    if (onlineRef.current) void fetchListRef.current();
+  });
 
   // Mostra no cartão o resultado dos itens já resolvidos (conflito não é reenviado).
   const conflictByOrder = useMemo(
@@ -77,15 +86,18 @@ export default function OfflineLab() {
     [items],
   );
 
-  const fetchList = useCallback(async () => {
+  const fetchListOnce = useCallback(async () => {
     if (!cache || !store) return;
     setMessage(null);
     try {
+      // A fila é lida ANTES da lista do servidor: item `done` neste instante já estava gravado
+      // no servidor quando a lista foi pedida; item não terminal pode não estar, então o
+      // status otimista dele prevalece sobre o do servidor (sem corrida com a sincronização).
+      const queue = await store.list();
       const transport = createHttpTransportFromEnv(baseUrl);
       const list = (await transport.listWorkOrders()) as CachedWorkOrder[];
       await cache.replaceAll(list);
-      // O servidor ainda não viu o que está na fila: reaplica o status otimista.
-      for (const item of await store.list()) {
+      for (const item of queue) {
         if (item.status === 'pending' || item.status === 'sending') {
           await cache.setLocalStatus(item.workOrderId, LOCAL_STATUS[item.action]);
         }
@@ -95,6 +107,18 @@ export default function OfflineLab() {
       setMessage(`Não foi possível atualizar a lista: ${e instanceof Error ? e.message : e}`);
     }
   }, [cache, store]);
+
+  // Atualizações da lista rodam uma de cada vez (o SQLite não aceita transações aninhadas).
+  const fetchChain = useRef<Promise<void>>(Promise.resolve());
+  const fetchList = useCallback(() => {
+    const run = fetchChain.current.then(() => fetchListOnce());
+    fetchChain.current = run;
+    return run;
+  }, [fetchListOnce]);
+
+  useEffect(() => {
+    fetchListRef.current = fetchList;
+  }, [fetchList]);
 
   useEffect(() => {
     if (cache && store && online) void fetchList();
@@ -140,6 +164,7 @@ export default function OfflineLab() {
         />
       </View>
       {message && <Text style={styles.error}>{message}</Text>}
+      {lastSyncError && <Text style={styles.error}>Falha na sincronização: {lastSyncError}</Text>}
 
       <Text style={styles.subtitle}>Atividades</Text>
       {orders.length === 0 && <Text style={styles.row}>Nenhuma atividade no aparelho.</Text>}

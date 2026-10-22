@@ -30,6 +30,7 @@ export function useOutboxSync(onSynced?: () => void) {
   const [store, setStore] = useState<SqliteOutboxStore | null>(null);
   const [items, setItems] = useState<OutboxItem[]>([]);
   const [syncing, setSyncing] = useState(false);
+  const [lastSyncError, setLastSyncError] = useState<string | null>(null);
   const onSyncedRef = useRef(onSynced);
   useEffect(() => {
     onSyncedRef.current = onSynced;
@@ -46,20 +47,36 @@ export function useOutboxSync(onSynced?: () => void) {
       if (cancelled) return;
       const transport = createHttpTransportFromEnv(baseUrl);
       const flight: () => Promise<unknown> = createSingleFlight(async () => {
+        if (cancelled) return;
         setSyncing(true);
         try {
           await processOutbox({ store: s, transport, connection });
+          if (!cancelled) setLastSyncError(null);
+        } catch (error) {
+          // Uma passada que falha não pode derrubar o rearme do timer nem virar rejeição solta.
+          console.warn('Falha na sincronização da fila', error);
+          if (!cancelled) setLastSyncError(error instanceof Error ? error.message : String(error));
         } finally {
-          setSyncing(false);
-          await refresh(s);
-          onSyncedRef.current?.();
+          if (!cancelled) {
+            setSyncing(false);
+            try {
+              await refresh(s);
+            } catch (error) {
+              console.warn('Falha ao ler a fila', error);
+            }
+            onSyncedRef.current?.();
+          }
         }
         // Itens em espera de backoff: tenta de novo quando vencerem (só com rede).
-        if (timer.current) clearTimeout(timer.current);
-        const waiting = await s.listPending();
-        const next = Math.min(...waiting.map((i) => i.nextAttemptAt));
-        if (waiting.length > 0 && (await NetInfo.fetch()).isConnected === true) {
-          timer.current = setTimeout(() => void flight(), Math.max(next - Date.now(), 0) + 200);
+        try {
+          if (timer.current) clearTimeout(timer.current);
+          const waiting = await s.listPending();
+          const next = Math.min(...waiting.map((i) => i.nextAttemptAt));
+          if (!cancelled && waiting.length > 0 && (await NetInfo.fetch()).isConnected === true) {
+            timer.current = setTimeout(() => void flight(), Math.max(next - Date.now(), 0) + 200);
+          }
+        } catch (error) {
+          console.warn('Falha ao reagendar a fila', error);
         }
       });
       runRef.current = flight;
@@ -91,5 +108,5 @@ export function useOutboxSync(onSynced?: () => void) {
     await runRef.current?.();
   }, []);
 
-  return { store, items, syncing, syncNow, refresh };
+  return { store, items, syncing, lastSyncError, syncNow, refresh };
 }

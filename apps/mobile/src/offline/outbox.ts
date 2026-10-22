@@ -20,8 +20,8 @@ export interface OutboxItem {
 
 export interface OutboxStore {
   add(item: OutboxItem): Promise<void>;
-  /** Itens `pending` com `nextAttemptAt <= now`, em ordem de `createdAt`. */
-  listDue(now: number): Promise<OutboxItem[]>;
+  /** Itens `pending`, em ordem de `createdAt` (empate: ordem de inserção). */
+  listPending(): Promise<OutboxItem[]>;
   update(id: string, patch: Partial<OutboxItem>): Promise<void>;
   resetInFlight(): Promise<void>;
   list(): Promise<OutboxItem[]>;
@@ -50,6 +50,9 @@ export class PhotoMissingError extends Error {
     this.name = 'PhotoMissingError';
   }
 }
+
+/** Erros inesperados (não de rede) esgotam a paciência depois de tantas tentativas. */
+export const MAX_UNEXPECTED_ATTEMPTS = 5;
 
 export function backoffMs(attempts: number): number {
   return Math.min(5_000 * 2 ** (attempts - 1), 300_000);
@@ -83,9 +86,11 @@ export async function processOutbox(deps: ProcessOutboxDeps): Promise<ProcessOut
   };
 
   await store.resetInFlight();
-  const items = await store.listDue(now());
+  const items = await store.listPending();
 
   for (const item of items) {
+    // Fila estritamente FIFO: um item em espera de backoff trava os mais novos.
+    if (item.nextAttemptAt > now()) break;
     await store.update(item.id, { status: 'sending' });
     try {
       const photoKeys = [...item.photoKeys];
@@ -141,7 +146,25 @@ export async function processOutbox(deps: ProcessOutboxDeps): Promise<ProcessOut
         result.failed++;
         continue;
       }
-      throw error;
+      const attempts = item.attempts + 1;
+      const detail = error instanceof Error ? error.message : String(error);
+      if (attempts >= MAX_UNEXPECTED_ATTEMPTS) {
+        await store.update(item.id, {
+          status: 'failed',
+          attempts,
+          lastError: `unexpected_error: ${detail}`,
+        });
+        result.failed++;
+        continue;
+      }
+      await store.update(item.id, {
+        status: 'pending',
+        attempts,
+        nextAttemptAt: now() + backoffMs(attempts),
+        lastError: `unexpected_error: ${detail}`,
+      });
+      result.stoppedByNetwork = true;
+      break;
     }
   }
   return result;
@@ -150,7 +173,7 @@ export async function processOutbox(deps: ProcessOutboxDeps): Promise<ProcessOut
 export interface EnqueueDeps {
   randomUuid: () => string;
   /** Copia a foto para a pasta durável do item e devolve o novo caminho. */
-  stashPhoto: (id: string, uri: string) => Promise<string>;
+  stashPhoto: (id: string, uri: string, index: number) => Promise<string>;
   now?: () => number;
 }
 
@@ -172,8 +195,9 @@ export async function enqueueWorkOrderAction(
   const now = deps.now ?? Date.now;
   const id = deps.randomUuid();
   const photoPaths: string[] = [];
-  for (const uri of input.photoUris ?? []) {
-    photoPaths.push(await deps.stashPhoto(id, uri));
+  const uris = input.photoUris ?? [];
+  for (let i = 0; i < uris.length; i++) {
+    photoPaths.push(await deps.stashPhoto(id, uris[i]!, i));
   }
   const item: OutboxItem = {
     id,

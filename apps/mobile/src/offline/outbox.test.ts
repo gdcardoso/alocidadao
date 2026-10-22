@@ -3,6 +3,7 @@ import {
   NetworkError,
   PhotoMissingError,
   backoffMs,
+  MAX_UNEXPECTED_ATTEMPTS,
   enqueueWorkOrderAction,
   processOutbox,
 } from './outbox';
@@ -176,7 +177,7 @@ describe('processOutbox', () => {
 describe('enqueueWorkOrderAction', () => {
   const enqueueDeps = {
     randomUuid: () => 'uuid-1',
-    stashPhoto: async (id: string, uri: string) => `/outbox/${id}/${uri.split('/').pop()}`,
+    stashPhoto: async (id: string, _uri: string, i: number) => `/outbox/${id}/${i}.jpg`,
     now: () => 42,
   };
 
@@ -197,11 +198,47 @@ describe('enqueueWorkOrderAction', () => {
       status: 'pending',
       createdOffline: true,
       note: 'ok ok',
-      photoPaths: ['/outbox/uuid-1/x.jpg'],
+      photoPaths: ['/outbox/uuid-1/0.jpg'],
       photoKeys: [null],
       attempts: 0,
       createdAt: 42,
     });
     expect(await store.get('uuid-1')).toEqual(item);
+  });
+});
+
+describe('strict FIFO and unexpected errors', () => {
+  it('does not let a newer item overtake one that is backing off', async () => {
+    const mk = (id: string, createdAt: number) =>
+      makeItem({ id, createdAt, photoPaths: [], photoKeys: [] });
+    await store.add(mk('a', 1));
+    await store.add(mk('b', 2));
+    transport.failNextSendWith(new NetworkError('offline'));
+    await processOutbox(deps());
+    const second = await processOutbox(deps());
+    expect(second.sent).toBe(0);
+    expect(transport.sent).toEqual([]);
+    clock.advance(backoffMs(1));
+    await processOutbox(deps());
+    expect(transport.sent.map((s) => s.input.clientActionId)).toEqual(['a', 'b']);
+  });
+
+  it('retries unexpected errors with backoff and then fails the item', async () => {
+    await store.add(makeItem({ id: 'a', createdAt: 1, photoPaths: [], photoKeys: [] }));
+    await store.add(makeItem({ id: 'b', createdAt: 2, photoPaths: [], photoKeys: [] }));
+    for (let i = 1; i < MAX_UNEXPECTED_ATTEMPTS; i++) {
+      transport.failNextSendWith(new SyntaxError('html'));
+      await processOutbox(deps());
+      expect(await store.get('a')).toMatchObject({ status: 'pending', attempts: i });
+      expect((await store.get('a')).nextAttemptAt).toBe(clock.now + backoffMs(i));
+      expect(transport.sent).toEqual([]);
+      clock.advance(backoffMs(i));
+    }
+    transport.failNextSendWith(new SyntaxError('html'));
+    const result = await processOutbox(deps());
+    expect(await store.get('a')).toMatchObject({ status: 'failed' });
+    expect((await store.get('a')).lastError).toMatch(/^unexpected_error/);
+    expect(result).toMatchObject({ failed: 1, sent: 1 });
+    expect((await store.get('b')).status).toBe('done');
   });
 });

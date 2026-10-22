@@ -1,5 +1,6 @@
 import { File } from 'expo-file-system';
 import type { WorkOrderActionInput } from '@alocidadao/shared';
+import { mapActionResponse, parsePresignResponse } from './http-mapping';
 import { NetworkError, PhotoMissingError, type SendActionResult, type Transport } from './outbox';
 
 const TIMEOUT_MS = 30_000;
@@ -27,7 +28,7 @@ export class HttpTransport implements Transport {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.options.timeoutMs ?? TIMEOUT_MS);
     try {
-      return await fetch(url, { ...init, signal: controller.signal });
+      return await fetch(url, { ...init, signal: controller.signal, redirect: 'manual' });
     } catch (error) {
       throw new NetworkError(error instanceof Error ? error.message : 'network_error');
     } finally {
@@ -50,12 +51,7 @@ export class HttpTransport implements Transport {
       method: 'POST',
       headers: this.devHeaders(),
     });
-    if (!presign.ok) throw new NetworkError(`uploads_${presign.status}`);
-    const { key, url, headers } = (await presign.json()) as {
-      key: string;
-      url: string;
-      headers: Record<string, string>;
-    };
+    const { key, url, headers } = parsePresignResponse(presign.status, await presign.text());
 
     const start = Date.now();
     const put = await this.request(url, { method: 'PUT', headers, body: file });
@@ -72,25 +68,6 @@ export class HttpTransport implements Transport {
         body: JSON.stringify(input),
       },
     );
-    if (response.ok) return { kind: 'ok' };
-
-    const body = (await response.json().catch(() => ({}))) as { code?: string; status?: string };
-    switch (response.status) {
-      case 409:
-        if (body.code === 'work_order_unavailable') {
-          return { kind: 'conflict', status: body.status ?? 'unknown' };
-        }
-        return { kind: 'rejected', code: body.code ?? 'client_action_conflict' };
-      case 422:
-        return { kind: 'rejected', code: body.code ?? 'photo_invalid' };
-      case 404:
-        return { kind: 'rejected', code: 'not_found' };
-      case 401:
-        return { kind: 'rejected', code: 'unauthorized' };
-      case 503:
-        return { kind: 'rejected', code: body.code ?? 'unavailable' };
-      default:
-        throw new NetworkError(`http_${response.status}`);
-    }
+    return mapActionResponse(response.status, await response.text());
   }
 }

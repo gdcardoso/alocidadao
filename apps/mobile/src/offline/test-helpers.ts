@@ -8,9 +8,9 @@ export class MemoryOutboxStore implements OutboxStore {
   async add(item: OutboxItem): Promise<void> {
     this.items.set(item.id, { ...item });
   }
-  async listDue(now: number): Promise<OutboxItem[]> {
+  async listPending(): Promise<OutboxItem[]> {
     return [...this.items.values()]
-      .filter((i) => i.status === 'pending' && i.nextAttemptAt <= now)
+      .filter((i) => i.status === 'pending')
       .toSorted((a, b) => a.createdAt - b.createdAt)
       .map((i) => ({ ...i }));
   }

@@ -98,12 +98,13 @@ function fromRow(row: Row): OutboxItem {
 const outboxDir = (id: string) => new Directory(Paths.document, 'outbox', id);
 
 /** Copia a foto para `Paths.document/outbox/<id>/` e devolve o novo caminho. */
-export async function stashPhoto(id: string, uri: string): Promise<string> {
+export async function stashPhoto(id: string, uri: string, index: number): Promise<string> {
   const dir = outboxDir(id);
   dir.create({ intermediates: true, idempotent: true });
   const source = new File(uri);
-  const target = new File(dir, source.name);
-  await source.copy(target, { overwrite: true });
+  // Nome por índice: fotos de origem com o mesmo nome não se sobrescrevem.
+  const target = new File(dir, `${index}.jpg`);
+  await source.copy(target);
   return target.uri;
 }
 
@@ -119,11 +120,9 @@ export class SqliteOutboxStore implements OutboxStore {
     );
   }
 
-  async listDue(now: number): Promise<OutboxItem[]> {
+  async listPending(): Promise<OutboxItem[]> {
     const rows = await this.db.getAllAsync<Row>(
-      `SELECT * FROM outbox WHERE status = 'pending' AND next_attempt_at <= ?
-       ORDER BY created_at ASC`,
-      [now],
+      `SELECT * FROM outbox WHERE status = 'pending' ORDER BY created_at ASC, rowid ASC`,
     );
     return rows.map(fromRow);
   }
@@ -149,7 +148,9 @@ export class SqliteOutboxStore implements OutboxStore {
   }
 
   async list(): Promise<OutboxItem[]> {
-    const rows = await this.db.getAllAsync<Row>(`SELECT * FROM outbox ORDER BY created_at ASC`);
+    const rows = await this.db.getAllAsync<Row>(
+      `SELECT * FROM outbox ORDER BY created_at ASC, rowid ASC`,
+    );
     return rows.map(fromRow);
   }
 }

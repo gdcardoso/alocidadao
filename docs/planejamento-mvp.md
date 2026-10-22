@@ -196,11 +196,24 @@ Com este planejamento aprovado, o próximo passo é montar o monorepo e, junto c
 - [x] Pacote `shared` com perfis, status e transições em Zod
 - [ ] Executar os quatro testes de risco
   - [x] Isolamento por prefeitura — `packages/db`, ver `docs/decisoes/0001-isolamento-por-prefeitura.md`
-  - [ ] Recursos nativos no Expo
-  - [ ] Offline com fotos
-  - [ ] Push direto FCM e APNs
+  - [ ] Recursos nativos no Expo — provado no emulador Android; falta aparelho real, Android e iPhone (ver `docs/decisoes/0002-recursos-nativos-offline-e-push.md`)
+  - [ ] Offline com fotos — provado no emulador Android (modo avião, conflito, fechamento forçado); falta aparelho real (ver decisão 0002)
+  - [ ] Push direto FCM e APNs — não provado: registro e envio prontos e testados, sem entrega real; faltam os arquivos do Firebase e a conta Apple (ver decisão 0002)
 - [ ] Abrir as contas de organização na Apple (D-U-N-S) e no Google Play
 - [ ] Quebrar o MVP em atividades estimadas
+
+### Próximos planos
+
+Um de cada vez, depois dos testes de risco.
+
+1. **Modelo de dados do design:** as migrações da seção 9 do spec (ocorrências, atividade nova, usuários sem senha, prefeitura com status, contrato, papéis internos, auditoria) e as transições novas no `shared`.
+2. **Acesso:** código por celular no app, CPF + código por e-mail (Resend, `nao-responda@alocidadao.com.br`) no painel, sessões, `devices` e a regra dos 90 dias.
+3. **App do cidadão:** telas 0 a 8, prefeitura pela localização, agrupamento pela 5b e registro offline, reaproveitando a fila dos testes de risco.
+4. **App do agente:** telas A1 a A5, sobre a fila e o cache dos testes de risco.
+5. **Painel da prefeitura:** W0 a W7, com mapa, triagem, agrupamento, atribuição, revisão e configurações.
+6. **Backoffice:** P1 a P6.
+7. **Notificações:** fila de envio, caixa de entrada, e-mails e conclusão automática em 7 dias.
+8. **Infraestrutura:** Droplet e Spaces na DigitalOcean, backups, observabilidade e publicação nas lojas.
 
 ## Perguntas em aberto
 

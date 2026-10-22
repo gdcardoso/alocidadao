@@ -32,8 +32,9 @@ jobs:
         run: pnpm format:check
 
       # Mesmo Postgres + PostGIS do ambiente local, com app_user e banco de teste (docker/postgres).
-      - name: Subir banco
-        run: pnpm db:up
+      # Também sobe o MinIO (S3) e cria o bucket para os testes de armazenamento.
+      - name: Subir banco e armazenamento
+        run: pnpm infra:up
 
       - name: Build, tipos e testes
         run: pnpm turbo run build typecheck test

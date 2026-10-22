@@ -17,5 +17,36 @@ services:
       timeout: 3s
       retries: 30
 
+  # MinIO (compatível com S3) no lugar do DigitalOcean Spaces em desenvolvimento.
+  # As imagens oficiais minio/* saíram do Docker Hub; usamos as da Chainguard (mesmo MinIO).
+  storage:
+    image: cgr.dev/chainguard/minio:latest
+    command: ['server', '/data', '--console-address', ':9001']
+    environment:
+      MINIO_ROOT_USER: alocidadao
+      MINIO_ROOT_PASSWORD: alocidadao-dev
+    ports:
+      - '9000:9000'
+      - '9001:9001'
+    volumes:
+      - storage-data:/data
+    healthcheck:
+      test: ['CMD', '/usr/bin/mc', 'ready', 'local']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # Cria o bucket de desenvolvimento e termina. Idempotente (--ignore-existing).
+  storage-init:
+    image: cgr.dev/chainguard/minio-client:latest
+    depends_on:
+      storage:
+        condition: service_healthy
+    environment:
+      MC_HOST_local: http://alocidadao:alocidadao-dev@storage:9000
+    entrypoint: ['/usr/bin/mc']
+    command: ['mb', '--ignore-existing', 'local/alocidadao-dev']
+
 volumes:
   db-data:
+  storage-data:

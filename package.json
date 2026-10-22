@@ -13,6 +13,7 @@
     "lint": "oxlint --deny-warnings",
     "format": "prettier --write .",
     "db:up": "docker compose up -d --wait db",
+    "infra:up": "docker compose up -d --wait db storage && docker compose run --rm storage-init",
     "db:down": "docker compose down",
     "db:migrate": "pnpm --filter @alocidadao/db db:migrate",
     "db:generate": "pnpm --filter @alocidadao/db db:generate",

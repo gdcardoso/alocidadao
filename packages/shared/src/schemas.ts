@@ -17,6 +17,14 @@ export const connectionContextSchema = z.object({
 export type ConnectionContext = z.infer<typeof connectionContextSchema>;
 
 export const MAX_PHOTOS_PER_REQUEST = 3;
+export const MAX_PHOTOS_PER_COMPLETION = 3;
+
+/** Lado maior da foto reduzida no aparelho, em pixels. */
+export const PHOTO_MAX_SIDE_PX = 1600;
+/** Tamanho alvo da foto após a compressão, em bytes. */
+export const PHOTO_TARGET_BYTES = 300_000;
+/** Limite rígido aceito pelo servidor, em bytes. */
+export const PHOTO_MAX_BYTES = 1_000_000;
 
 export const createRequestInputSchema = z.object({
   categoryId: z.uuid(),

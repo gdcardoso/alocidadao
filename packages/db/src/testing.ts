@@ -21,6 +21,12 @@ function quoteIdent(name: string): string {
 export async function resetTestDatabase(ownerUrl: string): Promise<void> {
   const database = decodeURIComponent(new URL(ownerUrl).pathname.slice(1));
   if (!database) throw new Error('A URL de conexão não informa o nome do banco');
+  // Trava de segurança: esta função apaga o schema public, então só vale para bancos de teste.
+  if (!database.endsWith('_test')) {
+    throw new Error(
+      `resetTestDatabase recusou o banco "${database}": só bancos cujo nome termina em "_test" podem ser recriados`,
+    );
+  }
 
   const admin = new pg.Client({ connectionString: withDatabase(ownerUrl, 'postgres') });
   await admin.connect();

@@ -15,6 +15,7 @@ O isolamento entre prefeituras é garantido pelo PostgreSQL, não só pela API. 
 5. **Tabelas globais.**
    - `tenants`: leitura livre (o cidadão escolhe a prefeitura); criar e alterar só o admin.
    - `users`: cada um vê a si mesmo; a equipe interna vê todos; os demais, só quem tem vínculo com a prefeitura do contexto. `platform_role` e `account_status` ficam fora dos grants de `INSERT`/`UPDATE`, então a API não dá papel interno a ninguém nem congela conta por `UPDATE` direto.
+   - `users` (escrita): cada um altera a própria conta; o admin altera qualquer uma; o suporte altera só contas sem `platform_role`, para não redirecionar o login da equipe interna. O `INSERT` não precisa desse filtro: `platform_role` está fora do grant, então conta nova nunca nasce com papel.
    - Login (sem senha): `auth_find_user_by_phone(phone)` e `auth_find_user_by_cpf(cpf)` são `SECURITY DEFINER`, só acham contas `active` e devolvem só o necessário para seguir o login.
    - `tenant_contracts`: a equipe interna lê; só o admin cria e altera.
    - `staff_audit_events`: a prefeitura do contexto lê o que a equipe interna fez nela; só a equipe grava, em nome próprio (`staff_user_id = app_current_user()`), e só inserção.

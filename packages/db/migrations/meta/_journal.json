@@ -78,6 +78,13 @@
       "when": 1792760394631,
       "tag": "0010_occurrence_geography_index",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1792761638975,
+      "tag": "0011_support_cannot_edit_staff",
+      "breakpoints": true
     }
   ]
 }

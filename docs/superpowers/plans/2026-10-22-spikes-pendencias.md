@@ -22,11 +22,16 @@ Itens menores achados nas revisões dos spikes (`2026-10-22-spikes-de-risco.md`)
 - `client_actions`: amarrar `user_id = app_current_user()` na política quando houver login real.
 - `getInstallationId`: duas primeiras chamadas simultâneas podem gerar ids diferentes (entra no trabalho de `devices`).
 - Identidade por cabeçalho `x-dev-*` some com o login real.
+- Suporte ainda pode alterar telefone, e-mail e CPF de qualquer conta que não seja da equipe interna: trocar por funções que exigem verificação e estreitar o `UPDATE` direto.
+- `auth_find_user_by_cpf` devolve o e-mail completo e permite enumerar telefones e CPFs: a API mascara o e-mail e limita tentativas.
+- Exigir e-mail e CPF para gestor e admin é regra da API (o banco só exige telefone ou CPF).
 
 ## Plano 3 — App do cidadão
 
 - `src/lib/api.ts` usa `10.0.2.2` como padrão (só vale no emulador Android): trocar por configuração de build.
 - Título repetido no cabeçalho.
+- O evento de conclusão guarda o relato interno do agente em `status_events.comment`: não mostrar ao cidadão (ou mover para `details`).
+- Solicitação que apoia ocorrência já em atendimento nasce "Em atendimento" (6.1): regra ainda não codificada.
 
 ## Plano 4 — App do agente
 
@@ -42,6 +47,18 @@ Itens menores achados nas revisões dos spikes (`2026-10-22-spikes-de-risco.md`)
 - Estado `online` começa verdadeiro antes do primeiro evento do NetInfo; cartão em conflito mostra o status otimista até atualizar; lista do servidor sem validação; `fetchChain` frágil; `reloadLocal` sem `catch`; sem testes do hook.
 - Câmera: decodifica a foto duas vezes; pode passar de 1 MB sem aviso; JPEGs intermediários não são apagados; temporizador da localização não é limpo; mensagem técnica mostrada ao usuário; `PhotoCapture` mora num arquivo de rota.
 - iOS: desligar os textos de microfone e de localização "sempre" antes do primeiro TestFlight.
+- Decidir quais status o agente vê na lista (hoje `/dev` lista todos os ativos, inclusive `awaiting_review` e `impeded`).
+
+## Plano 5 — Painel
+
+- Restringir a leitura de `staff_audit_events` a admin e gestor da prefeitura e à equipe interna (hoje qualquer contexto da prefeitura lê); não gravar dados pessoais em `details`.
+- Admin e gestor da prefeitura ainda não conseguem cadastrar nem achar pelo telefone um usuário de fora: precisa de função `SECURITY DEFINER`.
+- `merged_into_id` sem `CHECK` ligando ao status `merged` (e diferente do próprio id).
+- `status_events.request_id` não é amarrado à mesma ocorrência (precisa acompanhar a junção).
+
+## Plano 6 — Backoffice
+
+- `municipality_leads.updated_by` não é forçado a `app_current_user()` e `updated_at` não muda no `UPDATE`.
 
 ## Plano 7 — Notificações
 
@@ -54,3 +71,4 @@ Itens menores achados nas revisões dos spikes (`2026-10-22-spikes-de-risco.md`)
 - Imagens do MinIO (Chainguard) em `:latest`: fixar por digest; conferir no primeiro CI que o `cgr.dev` é acessível.
 - Script `dev` da API só funciona em macOS/Linux.
 - Produção: nunca definir `ENABLE_DEV_ROUTES`; definir `NODE_ENV=production`.
+- Índice GiST em `tenants.boundary` quando houver muitas prefeituras.

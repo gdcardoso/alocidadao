@@ -57,7 +57,10 @@ export const REQUEST_TRANSITIONS: Record<RequestAction, Transition<RequestStatus
   reject: { from: ['open', 'in_progress'], to: 'rejected', actors: ['manager', 'tenant_admin'] },
 };
 
-/** Days without citizen response before a completed request is auto-confirmed. */
+/**
+ * Days without citizen response before a request awaiting confirmation is auto-confirmed.
+ * See docs/superpowers/specs/2026-10-22-telas-e-regras-mvp-design.md, section 6.1.
+ */
 export const AUTO_CONFIRM_AFTER_DAYS = 7;
 
 const machine = createStateMachine(REQUEST_ACTIONS, REQUEST_TRANSITIONS);

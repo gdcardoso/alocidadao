@@ -147,6 +147,21 @@ describe('contas', () => {
     );
     expect(frozen.rows).toEqual([]);
   });
+
+  it('conta congelada não aparece no login por CPF', async () => {
+    const cpf = '12345678999';
+    const id = await createUser(owner.db, { name: 'Congelada', phone: '+5511940000096', cpf });
+    const active = await withContext(app.db, {}, (tx) =>
+      tx.execute(sql`select * from auth_find_user_by_cpf(${cpf})`),
+    );
+    expect(active.rows).toHaveLength(1);
+
+    await owner.db.update(users).set({ accountStatus: 'frozen' }).where(eq(users.id, id));
+    const frozen = await withContext(app.db, {}, (tx) =>
+      tx.execute(sql`select * from auth_find_user_by_cpf(${cpf})`),
+    );
+    expect(frozen.rows).toEqual([]);
+  });
 });
 
 describe('equipe interna', () => {
@@ -192,6 +207,80 @@ describe('equipe interna', () => {
       tx.select().from(tenantContracts),
     );
     expect(hidden).toHaveLength(0);
+  });
+
+  it('suporte não altera conta da equipe interna', async () => {
+    const support = { userId: supportId, platformRole: 'support' } as const;
+    const admin = { userId: adminId, platformRole: 'admin' } as const;
+
+    // Sem isso o suporte trocaria o e-mail do admin e receberia o código de login do painel.
+    const blocked = await withContext(app.db, support, (tx) =>
+      tx
+        .update(users)
+        .set({ email: 'suporte-no-controle@evil.dev' })
+        .where(eq(users.id, adminId))
+        .returning({ id: users.id }),
+    );
+    expect(blocked).toHaveLength(0);
+    const ownAccount = await withContext(app.db, support, (tx) =>
+      tx
+        .update(users)
+        .set({ name: 'Renomeado' })
+        .where(eq(users.id, supportId))
+        .returning({ id: users.id }),
+    );
+    // A própria conta continua editável.
+    expect(ownAccount).toHaveLength(1);
+    const [untouched] = await owner.db.select().from(users).where(eq(users.id, adminId));
+    expect(untouched!.email).toBeNull();
+
+    const changed = await withContext(app.db, admin, (tx) =>
+      tx
+        .update(users)
+        .set({ email: 'admin@plataforma.dev' })
+        .where(eq(users.id, adminId))
+        .returning({ id: users.id }),
+    );
+    expect(changed).toHaveLength(1);
+
+    const citizen = await withContext(app.db, support, (tx) =>
+      tx
+        .update(users)
+        .set({ name: 'Cidadã Atendida' })
+        .where(eq(users.id, citizenId))
+        .returning({ id: users.id }),
+    );
+    expect(citizen).toHaveLength(1);
+  });
+
+  it('suporte não altera contrato', async () => {
+    const support = { userId: supportId, platformRole: 'support' } as const;
+    const admin = { userId: adminId, platformRole: 'admin' } as const;
+    await owner.db.delete(tenantContracts).where(eq(tenantContracts.tenantId, tenantB));
+    await owner.db.insert(tenantContracts).values({
+      tenantId: tenantB,
+      plan: 'essencial',
+      startsOn: '2026-11-01',
+      includedPanelUsers: 5,
+    });
+
+    const blocked = await withContext(app.db, support, (tx) =>
+      tx
+        .update(tenantContracts)
+        .set({ includedPanelUsers: 99 })
+        .where(eq(tenantContracts.tenantId, tenantB))
+        .returning({ id: tenantContracts.id }),
+    );
+    expect(blocked).toHaveLength(0);
+
+    const allowed = await withContext(app.db, admin, (tx) =>
+      tx
+        .update(tenantContracts)
+        .set({ includedPanelUsers: 6 })
+        .where(eq(tenantContracts.tenantId, tenantB))
+        .returning({ id: tenantContracts.id }),
+    );
+    expect(allowed).toHaveLength(1);
   });
 
   it('contrato não termina antes de começar nem tem zero usuários de painel', async () => {

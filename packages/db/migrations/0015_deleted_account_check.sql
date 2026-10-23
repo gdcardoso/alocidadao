@@ -1,0 +1,2 @@
+ALTER TABLE "users" DROP CONSTRAINT "users_phone_or_cpf_check";--> statement-breakpoint
+ALTER TABLE "users" ADD CONSTRAINT "users_phone_or_cpf_check" CHECK ("users"."phone" is not null or "users"."cpf" is not null or "users"."deleted_at" is not null);

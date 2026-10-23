@@ -110,7 +110,11 @@ export const users = pgTable(
       .where(sql`${t.accountStatus} = 'active'`),
     check('users_phone_check', sql`${t.phone} ~ '^\\+[1-9][0-9]{7,14}$'`),
     check('users_cpf_check', sql`${t.cpf} ~ '^[0-9]{11}$'`),
-    check('users_phone_or_cpf_check', sql`${t.phone} is not null or ${t.cpf} is not null`),
+    // Conta excluída fica sem telefone e sem CPF.
+    check(
+      'users_phone_or_cpf_check',
+      sql`${t.phone} is not null or ${t.cpf} is not null or ${t.deletedAt} is not null`,
+    ),
   ],
 );
 

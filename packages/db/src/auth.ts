@@ -2,8 +2,9 @@ import { sql } from 'drizzle-orm';
 import type { Database, Transaction } from './client.js';
 import type { verificationCodes } from './schema.js';
 
-// Funções do acesso sem senha. Rodam antes de existir contexto de usuário: chamam as
-// funções SECURITY DEFINER da migração auth_functions, que devolvem só o necessário.
+// Funções do acesso sem senha. As de login rodam antes de existir contexto de usuário:
+// chamam as funções SECURITY DEFINER da migração auth_functions, que devolvem só o
+// necessário. As de conta (no fim do arquivo) rodam com o usuário no contexto.
 
 type Executor = Database | Transaction;
 
@@ -123,4 +124,45 @@ export async function sessionForRefresh(
   const row = rows[0];
   if (!row) return null;
   return { sessionId: row.session_id, userId: row.user_id, audience: row.audience };
+}
+
+// ── Conta ──────────────────────────────────────────────────────────────────
+// Rodam dentro de withContext com o usuário: as funções da migração account_functions
+// agem sobre app_current_user() e recusam a chamada sem usuário no contexto.
+
+/**
+ * Troca o telefone da própria conta, depois de a API conferir o código enviado ao número
+ * novo. Número de outra conta ativa falha com 23505.
+ */
+export async function changePhone(tx: Transaction, phone: string): Promise<void> {
+  await tx.execute(sql`select account_change_phone(${phone})`);
+}
+
+/**
+ * Exclui a própria conta: apaga nome, telefone, e-mail e CPF, congela, revoga as sessões,
+ * apaga os aparelhos e desativa os vínculos. As solicitações continuam com a prefeitura.
+ */
+export async function deleteAccount(tx: Transaction): Promise<void> {
+  await tx.execute(sql`select account_delete()`);
+}
+
+/**
+ * Número reaproveitado: congela a conta antiga, se ainda ativa com esse telefone e parada
+ * há 90 dias, e revoga as sessões dela. O contexto é o da conta nova, criada na mesma
+ * transação. Devolve se congelou.
+ */
+export async function freezeStaleAccount(
+  tx: Transaction,
+  userId: string,
+  phone: string,
+): Promise<boolean> {
+  const { rows } = await tx.execute<{ frozen: boolean }>(
+    sql`select auth_freeze_stale_account(${userId}::uuid, ${phone}) as frozen`,
+  );
+  return rows[0]!.frozen;
+}
+
+/** Os vínculos `invited` da própria conta passam a `active`. */
+export async function activateInvitations(tx: Transaction): Promise<void> {
+  await tx.execute(sql`select account_activate_invitations()`);
 }

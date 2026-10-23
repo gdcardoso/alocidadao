@@ -212,7 +212,7 @@ describe('equipe interna', () => {
     expect(hidden).toHaveLength(0);
   });
 
-  it('suporte não altera conta da equipe interna', async () => {
+  it('equipe interna só altera a própria conta', async () => {
     const support = { userId: supportId, platformRole: 'support' } as const;
     const admin = { userId: adminId, platformRole: 'admin' } as const;
 
@@ -246,14 +246,20 @@ describe('equipe interna', () => {
     );
     expect(changed).toHaveLength(1);
 
-    const citizen = await withContext(app.db, support, (tx) =>
-      tx
-        .update(users)
-        .set({ name: 'Cidadã Atendida' })
-        .where(eq(users.id, citizenId))
-        .returning({ id: users.id }),
-    );
-    expect(citizen).toHaveLength(1);
+    // Regra nova (substitui a da 0011): nem suporte nem admin alteram conta de cidadão por
+    // UPDATE direto; as correções terão funções próprias.
+    for (const staff of [support, admin]) {
+      const citizen = await withContext(app.db, staff, (tx) =>
+        tx
+          .update(users)
+          .set({ name: 'Cidadã Atendida' })
+          .where(eq(users.id, citizenId))
+          .returning({ id: users.id }),
+      );
+      expect(citizen).toHaveLength(0);
+    }
+    const [citizenRow] = await owner.db.select().from(users).where(eq(users.id, citizenId));
+    expect(citizenRow!.name).toBe('Cidadã');
   });
 
   it('suporte não altera contrato', async () => {

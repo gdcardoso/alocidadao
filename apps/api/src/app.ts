@@ -1,8 +1,8 @@
 import cors from '@fastify/cors';
-import rateLimit from '@fastify/rate-limit';
+import rateLimit, { type RateLimitPluginOptions } from '@fastify/rate-limit';
 import type { Database } from '@alocidadao/db';
 import { healthResponseSchema } from '@alocidadao/shared';
-import Fastify from 'fastify';
+import Fastify, { type FastifyInstance } from 'fastify';
 import {
   serializerCompiler,
   validatorCompiler,
@@ -29,6 +29,8 @@ export interface AuthOptions {
   email: EmailSender;
   /** Limite por IP em /auth/*. Padrão: 20 por minuto. */
   rateLimit?: { max: number; timeWindowMs: number };
+  /** Limite por conta em POST /me/phone/start (cada SMS custa). Padrão: 5 por hora. */
+  phoneChangeRateLimit?: { max: number; timeWindowMs: number };
 }
 
 export interface AppOptions {
@@ -43,6 +45,29 @@ export interface AppOptions {
   devRoutes?: boolean;
   /** Login sem senha. As rotas /auth/* (e /me*) só existem com `auth` e `database`. */
   auth?: AuthOptions;
+}
+
+/**
+ * Registra o @fastify/rate-limit no escopo, com a resposta 429
+ * `{ code: 'rate_limited', retryAfterSeconds }`.
+ */
+async function registerRateLimit(scope: FastifyInstance, options: RateLimitPluginOptions) {
+  await scope.register(rateLimit, {
+    ...options,
+    errorResponseBuilder: (_request, context) => ({
+      statusCode: 429,
+      code: 'rate_limited',
+      retryAfterSeconds: Math.max(1, Math.ceil(context.ttl / 1000)),
+    }),
+  });
+  scope.setErrorHandler((error: { statusCode?: number; code?: string }, _request, reply) => {
+    if (error.statusCode === 429 && error.code === 'rate_limited') {
+      const { retryAfterSeconds } = error as { retryAfterSeconds?: number };
+      return reply.code(429).send({ code: 'rate_limited', retryAfterSeconds });
+    }
+    // Os demais erros seguem para o tratamento padrão.
+    return reply.send(error);
+  });
 }
 
 export async function buildApp({
@@ -80,28 +105,24 @@ export async function buildApp({
     };
     // Escopo próprio: o limite por IP vale só para /auth/*.
     await app.register(async (scope) => {
-      await scope.register(rateLimit, {
+      await registerRateLimit(scope, {
         max: auth.rateLimit?.max ?? 20,
         timeWindow: auth.rateLimit?.timeWindowMs ?? 60_000,
-        errorResponseBuilder: (_request, context) => ({
-          statusCode: 429,
-          code: 'rate_limited',
-          retryAfterSeconds: Math.max(1, Math.ceil(context.ttl / 1000)),
-        }),
-      });
-      scope.setErrorHandler((error: { statusCode?: number; code?: string }, _request, reply) => {
-        if (error.statusCode === 429 && error.code === 'rate_limited') {
-          const { retryAfterSeconds } = error as { retryAfterSeconds?: number };
-          return reply.code(429).send({ code: 'rate_limited', retryAfterSeconds });
-        }
-        // Os demais erros seguem para o tratamento padrão.
-        return reply.send(error);
       });
       registerAppAuthRoutes(scope, deps);
       registerPanelAuthRoutes(scope, deps);
     });
-    // Fora do escopo de /auth: o limite por IP não vale para o perfil.
-    registerMeRoutes(app, deps);
+    // Perfil: sem limite por IP; só a troca de número tem limite próprio, por conta.
+    await app.register(async (scope) => {
+      await registerRateLimit(scope, { global: false });
+      registerMeRoutes(scope, {
+        ...deps,
+        phoneChangeRateLimit: {
+          max: auth.phoneChangeRateLimit?.max ?? 5,
+          timeWindowMs: auth.phoneChangeRateLimit?.timeWindowMs ?? 60 * 60_000,
+        },
+      });
+    });
   }
 
   if (devRoutes) {

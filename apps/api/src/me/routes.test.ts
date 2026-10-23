@@ -180,6 +180,43 @@ describe('me routes', () => {
     expect(taken.json()).toEqual({ code: 'email_in_use' });
   });
 
+  it('panel user cannot change e-mail via PATCH me', async () => {
+    const manager = await createUser({ email: 'gestor.fixo@exemplo.com' });
+    const tenantId = await createTenant('Prefeitura do Gestor', 'active');
+    await owner.db
+      .insert(memberships)
+      .values({ tenantId, userId: manager.id, role: 'manager', status: 'active' });
+    const staff = await createUser({ email: 'equipe.fixa@exemplo.com', platformRole: 'admin' });
+
+    for (const user of [manager, staff]) {
+      const session = await signIn(user.phone);
+      for (const newEmail of ['novo.endereco@exemplo.com', null]) {
+        const res = await app.inject({
+          method: 'PATCH',
+          url: '/me',
+          headers: bearer(session),
+          payload: { name: 'Nome Trocado', email: newEmail },
+        });
+        expect(res.statusCode).toBe(403);
+        expect(res.json()).toEqual({ code: 'email_managed_by_admin' });
+      }
+      // A requisição inteira é recusada: nem o nome muda.
+      const [row] = await owner.db.select().from(users).where(eq(users.id, user.id));
+      expect(row).toMatchObject({ name: 'Conta de perfil' });
+      expect(row!.email).toMatch(/\.fixo@|\.fixa@/);
+
+      // Só o nome continua permitido.
+      const renamed = await app.inject({
+        method: 'PATCH',
+        url: '/me',
+        headers: bearer(session),
+        payload: { name: 'Nome Trocado' },
+      });
+      expect(renamed.statusCode).toBe(200);
+      expect(renamed.json<MeResponse>().name).toBe('Nome Trocado');
+    }
+  });
+
   it('device update upserts the device', async () => {
     const user = await createUser();
     const installationId = randomUUID();
@@ -292,6 +329,70 @@ describe('me routes', () => {
     });
     expect(loginCode.statusCode).toBe(400);
     expect(loginCode.json()).toEqual({ code: 'code_invalid' });
+  });
+
+  it('phone change start is limited per account', async () => {
+    const user = await createUser();
+    const other = await createUser();
+    const session = await signIn(user.phone);
+    const otherSession = await signIn(other.phone);
+    const start = (s: SessionTokens) =>
+      app.inject({
+        method: 'POST',
+        url: '/me/phone/start',
+        headers: bearer(s),
+        payload: { phone: newPhone() },
+      });
+
+    // Padrão: 5 por hora por conta, mesmo para números diferentes.
+    for (let i = 0; i < 5; i++) expect((await start(session)).statusCode).toBe(200);
+    const sixth = await start(session);
+    expect(sixth.statusCode).toBe(429);
+    const body = sixth.json<{ code: string; retryAfterSeconds: number }>();
+    expect(body.code).toBe('rate_limited');
+    expect(body.retryAfterSeconds).toBeGreaterThan(0);
+
+    // O limite é da conta: outra conta no mesmo IP continua podendo pedir.
+    expect((await start(otherSession)).statusCode).toBe(200);
+
+    // Sem token, 401 antes de contar.
+    const anonymous = await app.inject({
+      method: 'POST',
+      url: '/me/phone/start',
+      payload: { phone: newPhone() },
+    });
+    expect(anonymous.statusCode).toBe(401);
+  });
+
+  it('phone change start limit is configurable', async () => {
+    const limited = await buildApp({
+      database: appDb.db,
+      auth: {
+        secret,
+        devFixedCode: '123456',
+        sms,
+        email,
+        rateLimit: { max: 1000, timeWindowMs: 60_000 },
+        phoneChangeRateLimit: { max: 1, timeWindowMs: 60_000 },
+      },
+    });
+    try {
+      const user = await createUser();
+      const session = await signIn(user.phone);
+      const start = () =>
+        limited.inject({
+          method: 'POST',
+          url: '/me/phone/start',
+          headers: bearer(session),
+          payload: { phone: newPhone() },
+        });
+      expect((await start()).statusCode).toBe(200);
+      const second = await start();
+      expect(second.statusCode).toBe(429);
+      expect(second.json()).toMatchObject({ code: 'rate_limited' });
+    } finally {
+      await limited.close();
+    }
   });
 
   it('phone change to a number in use is 409', async () => {

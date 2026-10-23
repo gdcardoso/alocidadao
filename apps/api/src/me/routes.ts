@@ -30,10 +30,18 @@ import { smsCodeText } from '../messaging/sms.js';
 
 const { users, memberships, tenants, devices } = schema;
 
-export type MeDeps = Pick<AuthDeps, 'db' | 'secret' | 'devFixedCode' | 'sms'>;
+export type MeDeps = Pick<AuthDeps, 'db' | 'secret' | 'devFixedCode' | 'sms'> & {
+  /**
+   * Limite por conta de POST /me/phone/start. Exige o @fastify/rate-limit registrado no
+   * escopo (com `global: false`).
+   */
+  phoneChangeRateLimit: { max: number; timeWindowMs: number };
+};
 
 /** Conta congelada ou excluída: as rotas de perfil respondem 401. */
 const INACTIVE = Symbol('inactive');
+/** Conta com acesso ao painel tentando trocar o e-mail: 403. */
+const EMAIL_MANAGED = Symbol('email_managed');
 
 /**
  * Roda `fn` no contexto da própria conta, só se ela continua ativa. O token de acesso não
@@ -92,10 +100,25 @@ async function loadMe(tx: Transaction, userId: string): Promise<MeResponse> {
   return { ...user!, agentTenants, panelTenants };
 }
 
+/** Papel interno ou vínculo ativo de gestor ou administrador da prefeitura. */
+async function hasPanelAccess(tx: Transaction, userId: string): Promise<boolean> {
+  const { rows } = await tx.execute<{ access: boolean }>(sql`
+    select
+      (select platform_role is not null from users where id = ${userId})
+      or exists (
+        select 1 from memberships
+        where user_id = ${userId}
+          and status = 'active'
+          and role in ('manager', 'tenant_admin')
+      ) as access
+  `);
+  return rows[0]!.access === true;
+}
+
 /** Perfil e conta: dados, aparelhos, troca de número e exclusão. Cada um só a própria. */
 export function registerMeRoutes(instance: FastifyInstance, deps: MeDeps) {
   const app = instance.withTypeProvider<ZodTypeProvider>();
-  const { db, secret, devFixedCode, sms } = deps;
+  const { db, secret, devFixedCode, sms, phoneChangeRateLimit } = deps;
   const anyAudience = requireAuth(['app', 'panel']);
   const unauthorized = { code: 'unauthorized' } as const;
 
@@ -119,7 +142,12 @@ export function registerMeRoutes(instance: FastifyInstance, deps: MeDeps) {
       preHandler: anyAudience,
       schema: {
         body: updateMeBodySchema,
-        response: { 200: meResponseSchema, 401: apiErrorSchema, 409: apiErrorSchema },
+        response: {
+          200: meResponseSchema,
+          401: apiErrorSchema,
+          403: apiErrorSchema,
+          409: apiErrorSchema,
+        },
       },
     },
     async (request, reply) => {
@@ -127,6 +155,9 @@ export function registerMeRoutes(instance: FastifyInstance, deps: MeDeps) {
       const { name, email } = request.body;
       try {
         const me = await asActiveUser(db, userId, async (tx) => {
+          // O e-mail é o segundo fator do login do painel (CPF + código no e-mail): quem tem
+          // acesso ao painel não troca o e-mail por aqui. A troca fica com o administrador.
+          if (email !== undefined && (await hasPanelAccess(tx, userId))) return EMAIL_MANAGED;
           await tx
             .update(users)
             .set({
@@ -137,6 +168,7 @@ export function registerMeRoutes(instance: FastifyInstance, deps: MeDeps) {
           return loadMe(tx, userId);
         });
         if (me === INACTIVE) return reply.code(401).send(unauthorized);
+        if (me === EMAIL_MANAGED) return reply.code(403).send({ code: 'email_managed_by_admin' });
         return me;
       } catch (error) {
         if (usersUniqueConflict(error) !== 'email_in_use') throw error;
@@ -183,6 +215,16 @@ export function registerMeRoutes(instance: FastifyInstance, deps: MeDeps) {
     '/me/phone/start',
     {
       preHandler: anyAudience,
+      config: {
+        // Cada SMS custa: limite por conta, além do limite por número. Roda no preHandler,
+        // depois do requireAuth, para já ter request.auth.
+        rateLimit: {
+          hook: 'preHandler',
+          max: phoneChangeRateLimit.max,
+          timeWindow: phoneChangeRateLimit.timeWindowMs,
+          keyGenerator: (request) => `phone-change:${request.auth?.userId ?? request.ip}`,
+        },
+      },
       schema: {
         body: phoneChangeStartBodySchema,
         response: {

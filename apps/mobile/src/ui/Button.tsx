@@ -65,7 +65,10 @@ function BaseButton({
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={palette.fg} />
+        // "small" mede 20, o mesmo do ícone; a caixa mantém a altura do conteúdo.
+        <View style={styles.content}>
+          <ActivityIndicator size="small" color={palette.fg} style={styles.spinner} />
+        </View>
       ) : (
         <View style={styles.content}>
           {Icon ? <Icon size={large ? 20 : 18} color={palette.fg} /> : null}
@@ -158,5 +161,6 @@ const styles = StyleSheet.create({
   medium: { minHeight: 48, borderRadius: 24 },
   disabled: { opacity: DISABLED_OPACITY },
   content: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8 },
+  spinner: { width: 20, height: 20 },
   label: { fontFamily: fonts.bodySemibold, textAlign: 'center', flexShrink: 1 },
 });

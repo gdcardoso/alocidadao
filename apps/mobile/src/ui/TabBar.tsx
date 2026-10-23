@@ -31,9 +31,7 @@ function Tab({
       style={[styles.tab, active && styles.tabActive]}
     >
       <Icon size={22} color={color} />
-      <Text style={[styles.tabLabel, { color }, active && styles.tabLabelActive]} numberOfLines={1}>
-        {label}
-      </Text>
+      <Text style={[styles.tabLabel, { color }, active && styles.tabLabelActive]}>{label}</Text>
     </Pressable>
   );
 }
@@ -60,9 +58,7 @@ export function TabBar({ active, onNavigate }: TabBarProps) {
           style={({ pressed }) => [styles.newButton, pressed && styles.newPressed]}
         >
           <Camera size={22} color={colors.onPrimary} />
-          <Text style={styles.newLabel} numberOfLines={1}>
-            Nova
-          </Text>
+          <Text style={styles.newLabel}>Nova</Text>
         </Pressable>
         <Tab
           label="Perfil"
@@ -89,8 +85,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 8,
   },
+  // Largura mínima do Pencil; com fonte grande o item cresce em vez de cortar o texto.
   tab: {
-    width: 96,
+    minWidth: 96,
+    paddingHorizontal: 6,
     minHeight: 52,
     borderRadius: 26,
     alignItems: 'center',
@@ -98,7 +96,7 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   tabActive: { backgroundColor: colors.primarySoft },
-  tabLabel: { fontFamily: fonts.bodyMedium, fontSize: 12 },
+  tabLabel: { fontFamily: fonts.bodyMedium, fontSize: 12, textAlign: 'center' },
   tabLabelActive: { fontFamily: fonts.bodySemibold },
   newButton: {
     minHeight: 52,

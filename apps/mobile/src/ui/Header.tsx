@@ -22,7 +22,7 @@ export function Header({ nav, onNavPress, title, subtitle, align = 'left' }: Hea
     return (
       <View style={styles.row}>
         {button ?? <View style={styles.spacer} />}
-        <Text style={styles.centerTitle} accessibilityRole="header" numberOfLines={2}>
+        <Text style={styles.centerTitle} accessibilityRole="header">
           {title}
         </Text>
         <View style={styles.spacer} />

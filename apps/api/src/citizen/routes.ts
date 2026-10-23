@@ -5,6 +5,7 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { asActiveUser, INACTIVE } from '../auth/active-user.js';
 import { requireAuth } from '../auth/plugin.js';
 import { newRequestPhotoKey, type Storage } from '../storage/s3.js';
+import { registerCreateRequestRoutes } from './create-request.js';
 import { registerLocateRoutes } from './locate.js';
 
 export interface CitizenDeps {
@@ -23,6 +24,7 @@ export function registerCitizenRoutes(instance: FastifyInstance, deps: CitizenDe
   const { db, storage } = deps;
 
   registerLocateRoutes(instance, deps);
+  registerCreateRequestRoutes(instance, deps);
 
   app.post(
     '/citizen/uploads',

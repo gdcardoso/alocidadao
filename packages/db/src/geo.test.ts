@@ -175,6 +175,20 @@ describe('findSimilarOccurrences', () => {
     expect(found[0]!.distanceM).toBe(5);
   });
 
+  it('contagem de relatos ignora solicitações canceladas', async () => {
+    const categoryId = await newCategory(a);
+    const occurrenceId = await newOccurrence(a, categoryId, north(POINT_A, 3), 'triage', 3);
+    await owner.db.execute(
+      sql`update requests set status = 'cancelled'
+          where id = (select id from requests where occurrence_id = ${occurrenceId} limit 1)`,
+    );
+
+    const found = await withContext(app.db, { tenantId: a.tenantId }, (tx) =>
+      findSimilarOccurrences(tx, { categoryId, point: POINT_A }),
+    );
+    expect(found).toEqual([{ id: occurrenceId, status: 'triage', distanceM: 3, requestCount: 2 }]);
+  });
+
   it('ignora o que está fora do raio, encerrado, de outra categoria ou de outra prefeitura', async () => {
     const categoryId = await newCategory(a);
     const otherCategoryId = await newCategory(a);

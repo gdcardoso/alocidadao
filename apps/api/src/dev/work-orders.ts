@@ -16,6 +16,7 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { requireAuth } from '../auth/plugin.js';
 import { requireTenantMember } from '../auth/tenant-context.js';
+import { isUniqueViolation } from '../db-errors.js';
 import type { Storage } from '../storage/s3.js';
 
 const {
@@ -43,12 +44,6 @@ type Outcome =
   | { kind: 'client_action_conflict' }
   | { kind: 'unavailable'; status: WorkOrderStatus }
   | { kind: 'photo_invalid'; key: string };
-
-/** Drizzle embrulha o erro do Postgres em `cause`; procura o código nos dois níveis. */
-export function isUniqueViolation(error: unknown): boolean {
-  const e = error as { code?: string; cause?: { code?: string } };
-  return e.code === '23505' || e.cause?.code === '23505';
-}
 
 /**
  * Procura a ação já gravada. Só vale como repetição se for da mesma pessoa, da mesma atividade

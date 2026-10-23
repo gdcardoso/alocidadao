@@ -10,7 +10,6 @@ import { createStorage, newPhotoKey } from '../storage/s3.js';
 import { testStorageConfig } from '../storage/test-fixtures.js';
 import { appAuthHeader, testAuthOptions } from '../test/session.js';
 import { API_TEST_APP_URL, API_TEST_OWNER_URL } from '../test/urls.js';
-import { isUniqueViolation } from './work-orders.js';
 
 const {
   tenants,
@@ -371,12 +370,6 @@ describe('work order actions', () => {
     expect(again.statusCode).toBe(200);
     expect(again.json()).toEqual({ workOrderId: id, status: 'awaiting_review', duplicate: true });
     expect(await countStatusEvents(id)).toBe(2);
-  });
-
-  it('isUniqueViolation recognizes the code on the error and on its cause', () => {
-    expect(isUniqueViolation({ code: '23505' })).toBe(true);
-    expect(isUniqueViolation({ cause: { code: '23505' } })).toBe(true);
-    expect(isUniqueViolation(new Error())).toBe(false);
   });
 
   it('refuses complete on an assigned work order', async () => {

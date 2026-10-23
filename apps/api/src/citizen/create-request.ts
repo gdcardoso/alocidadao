@@ -21,7 +21,7 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { asActiveUser, enterTenant, INACTIVE } from '../auth/active-user.js';
 import { requireAuth } from '../auth/plugin.js';
-import { isUniqueViolation } from '../dev/work-orders.js';
+import { isUniqueViolation, violatedConstraint } from '../db-errors.js';
 import type { Storage } from '../storage/s3.js';
 import type { CitizenDeps } from './routes.js';
 
@@ -30,7 +30,7 @@ const { categories, occurrences, requests, photos, statusEvents, clientActions }
 /** Tipo gravado em `client_actions` para a criação de solicitação. */
 const CREATE_REQUEST_KIND = 'create_request';
 /** Restrição única de `photos.storage_key` (nome gerado pelo Drizzle). */
-const PHOTO_KEY_CONSTRAINT = 'photos_storage_key_unique';
+export const PHOTO_KEY_CONSTRAINT = 'photos_storage_key_unique';
 
 const municipalitySchema = z.object({ ibgeCode: z.string(), name: z.string(), state: z.string() });
 /** 422 com o município do ponto, quando há; os outros 422 trazem só o código. */
@@ -51,12 +51,6 @@ type Outcome =
   | { kind: 'storage_not_configured' }
   | { kind: 'photo_missing' }
   | { kind: 'occurrence_unavailable' };
-
-/** Nome da restrição violada; o Drizzle embrulha o erro do Postgres em `cause`. */
-function violatedConstraint(error: unknown): string | undefined {
-  const e = error as { constraint?: string; cause?: { constraint?: string } };
-  return e.constraint ?? e.cause?.constraint;
-}
 
 /**
  * Procura o envio já gravado. Só é repetição se for da mesma pessoa e do mesmo tipo; o mesmo
@@ -84,7 +78,7 @@ async function findStoredRequest(
 }
 
 /** As fotos precisam estar no prefixo do próprio cidadão e já enviadas ao armazenamento. */
-async function photosExist(storage: Storage, userId: string, keys: string[]) {
+export async function photosExist(storage: Storage, userId: string, keys: string[]) {
   for (const key of keys) {
     if (!key.startsWith(`requests/${userId}/`)) return false;
     if (!(await storage.head(key))) return false;

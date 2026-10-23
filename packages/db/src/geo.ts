@@ -3,7 +3,7 @@ import {
   type GeoPoint,
   type OccurrenceStatus,
 } from '@alocidadao/shared';
-import { and, asc, count, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, count, eq, inArray, ne, sql } from 'drizzle-orm';
 import { geoPoint, type Transaction } from './client.js';
 import { categories, municipalities, occurrences, requests, tenants } from './schema.js';
 
@@ -81,7 +81,12 @@ export async function findSimilarOccurrences(
     )
     .leftJoin(
       requests,
-      and(eq(requests.tenantId, occurrences.tenantId), eq(requests.occurrenceId, occurrences.id)),
+      // Solicitação cancelada pelo cidadão não conta como relato.
+      and(
+        eq(requests.tenantId, occurrences.tenantId),
+        eq(requests.occurrenceId, occurrences.id),
+        ne(requests.status, 'cancelled'),
+      ),
     )
     .where(
       and(

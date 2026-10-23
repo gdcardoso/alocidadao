@@ -24,6 +24,9 @@ const TEAM_NAME = 'Equipe Obras – Centro';
 /** Ponto de referência (centro de São Paulo) em torno do qual ficam as solicitações. */
 const CENTER = { lat: -23.5505, lng: -46.6333 };
 
+/** Meia-largura, em graus, do limite quadrado da prefeitura demo em torno de CENTER (≈ 5,5 km). */
+const BOUNDARY_HALF_SIDE = 0.05;
+
 // Deslocamentos fixos (1e-3 grau de latitude ≈ 111 m; de longitude ≈ 102 m nesta latitude),
 // todos a menos de 300 m do centro.
 const REQUESTS = [
@@ -58,7 +61,16 @@ export async function seedDev(db: Database): Promise<SeedDevResult> {
     // next_request_protocol() lê a prefeitura de app_current_tenant().
     await tx.execute(sql`select set_config('app.tenant_id', ${tenantId}, true)`);
 
+    // Limite quadrado em torno de CENTER; também preenche a prefeitura demo criada antes do limite.
+    const setBoundary = sql`
+      update tenants
+      set boundary = ST_Multi(ST_MakeEnvelope(
+        ${CENTER.lng - BOUNDARY_HALF_SIDE}, ${CENTER.lat - BOUNDARY_HALF_SIDE},
+        ${CENTER.lng + BOUNDARY_HALF_SIDE}, ${CENTER.lat + BOUNDARY_HALF_SIDE}, 4326))
+      where id = ${tenantId} and boundary is null`;
+
     if (existing) {
+      await tx.execute(setBoundary);
       const [team] = await tx
         .select({ id: teams.id })
         .from(teams)
@@ -90,6 +102,7 @@ export async function seedDev(db: Database): Promise<SeedDevResult> {
       ibgeCode: DEMO_IBGE_CODE,
       status: 'active',
     });
+    await tx.execute(setBoundary);
 
     // Usuários são globais e entram sem senha (login por telefone); os dados são só de desenvolvimento.
     const [agent] = await tx

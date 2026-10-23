@@ -322,6 +322,8 @@ export const occurrences = pgTable(
     }),
     index().on(t.tenantId, t.status),
     index('occurrences_location_idx').using('gist', t.location),
+    // Busca por raio em metros (ST_DWithin sobre geography), usada para achar ocorrências parecidas.
+    index('occurrences_location_geog_idx').using('gist', sql`(${t.location}::geography)`),
   ],
 );
 

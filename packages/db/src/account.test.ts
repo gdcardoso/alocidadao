@@ -20,6 +20,7 @@ import {
   sessions,
   tenants,
   users,
+  verificationCodes,
 } from './schema.js';
 import { TEST_APP_URL, TEST_OWNER_URL } from './test/urls.js';
 
@@ -224,6 +225,25 @@ describe('exclusão de conta', () => {
       return request!.id;
     });
 
+    // Códigos enviados ao telefone e ao e-mail (com e sem conta ligada) e um de outra pessoa.
+    const code = (target: string, userId: string | null) => ({
+      id: randomUUID(),
+      purpose: 'phone_login' as const,
+      target,
+      userId,
+      codeHash: 'hash',
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+    });
+    const otherCode = code('+5511960000399', null);
+    await owner.db
+      .insert(verificationCodes)
+      .values([
+        code('+5511960000301', null),
+        code('+5511960000302', id),
+        code('Vai.Sair@conta.dev', null),
+        otherCode,
+      ]);
+
     await withContext(app.db, { userId: id }, (tx) => deleteAccount(tx));
 
     const [user] = await owner.db.select().from(users).where(eq(users.id, id));
@@ -244,6 +264,16 @@ describe('exclusão de conta', () => {
     const kept = await owner.db.select().from(requests).where(eq(requests.id, requestId));
     expect(kept).toHaveLength(1);
     expect(kept[0]!.citizenId).toBe(id);
+
+    // Nenhum código liga a conta excluída ao telefone ou ao e-mail dela.
+    const codes = await owner.db.select().from(verificationCodes);
+    expect(codes.filter((c) => c.userId === id)).toEqual([]);
+    expect(
+      codes.filter((c) =>
+        ['+5511960000301', 'vai.sair@conta.dev'].includes(c.target.toLowerCase()),
+      ),
+    ).toEqual([]);
+    expect(codes.map((c) => c.id)).toContain(otherCode.id);
   });
 
   it('excluir conta exige usuário no contexto', async () => {

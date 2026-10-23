@@ -51,7 +51,8 @@ GRANT EXECUTE ON FUNCTION account_change_phone(text) TO app_user;
 
 -- ── Exclusão da própria conta ──
 -- A linha fica (as solicitações continuam com a prefeitura): congelada, com deleted_at e
--- sem dados pessoais. Sessões revogadas, aparelhos apagados, vínculos inativos.
+-- sem dados pessoais. Sessões revogadas, aparelhos apagados, vínculos inativos. Os códigos
+-- de verificação também saem: o destino (telefone ou e-mail) reidentificaria a conta.
 
 CREATE FUNCTION account_delete()
   RETURNS void
@@ -60,11 +61,18 @@ CREATE FUNCTION account_delete()
   AS $$
   DECLARE
     v_user uuid := app_current_user();
+    v_phone text;
+    v_email text;
   BEGIN
     IF v_user IS NULL THEN
       RAISE EXCEPTION 'account_delete: sem usuário no contexto'
         USING ERRCODE = 'insufficient_privilege';
     END IF;
+
+    -- Guarda telefone e e-mail antes de apagá-los, para limpar os códigos enviados a eles.
+    SELECT u.phone, u.email INTO v_phone, v_email
+    FROM users u WHERE u.id = v_user AND u.deleted_at IS NULL
+    FOR UPDATE;
 
     UPDATE users u
     SET name = 'Conta excluída',
@@ -83,6 +91,11 @@ CREATE FUNCTION account_delete()
     WHERE s.user_id = v_user AND s.revoked_at IS NULL;
 
     DELETE FROM devices d WHERE d.user_id = v_user;
+
+    DELETE FROM verification_codes vc
+    WHERE vc.user_id = v_user
+      OR (v_phone IS NOT NULL AND vc.target = v_phone)
+      OR (v_email IS NOT NULL AND lower(vc.target) = lower(v_email));
 
     UPDATE memberships m SET status = 'inactive'
     WHERE m.user_id = v_user AND m.status <> 'inactive';

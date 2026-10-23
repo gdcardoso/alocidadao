@@ -85,6 +85,20 @@
       "when": 1792761638975,
       "tag": "0011_support_cannot_edit_staff",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1792780620869,
+      "tag": "0012_sessions_and_devices",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1792780624631,
+      "tag": "0013_auth_functions",
+      "breakpoints": true
     }
   ]
 }

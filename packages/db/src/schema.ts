@@ -95,6 +95,11 @@ export const users = pgTable(
     lastActiveAt: timestamp('last_active_at', { withTimezone: true }),
     /** Papel na equipe interna da plataforma; nulo para quem não é da equipe. */
     platformRole: platformRole('platform_role'),
+    /** Versão dos Termos aceita no cadastro (TERMS_VERSION) e quando. */
+    termsVersion: text('terms_version'),
+    termsAcceptedAt: timestamp('terms_accepted_at', { withTimezone: true }),
+    /** Conta excluída: fica `frozen`, com os dados pessoais apagados. */
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
     createdAt: createdAt(),
   },
   (t) => [
@@ -106,6 +111,84 @@ export const users = pgTable(
     check('users_phone_check', sql`${t.phone} ~ '^\\+[1-9][0-9]{7,14}$'`),
     check('users_cpf_check', sql`${t.cpf} ~ '^[0-9]{11}$'`),
     check('users_phone_or_cpf_check', sql`${t.phone} is not null or ${t.cpf} is not null`),
+  ],
+);
+
+// ── Acesso: códigos, sessões e aparelhos ──────────────────────────────────
+// Políticas e funções na migração auth_functions.
+
+/**
+ * Códigos enviados por SMS ou e-mail. Guarda só o hash; app_user não lê nem grava:
+ * tudo passa pelas funções auth_issue_code e auth_consume_code.
+ */
+export const verificationCodes = pgTable(
+  'verification_codes',
+  {
+    /** Gerado na API: entra no hash do código. */
+    id: uuid('id').primaryKey(),
+    purpose: text('purpose', {
+      enum: ['phone_login', 'phone_change', 'panel_login', 'account_recovery'],
+    }).notNull(),
+    /** Telefone (E.164) ou e-mail para onde o código foi. */
+    target: text('target').notNull(),
+    userId: uuid('user_id').references(() => users.id),
+    codeHash: text('code_hash').notNull(),
+    attempts: integer('attempts').notNull().default(0),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    consumedAt: timestamp('consumed_at', { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index().on(t.purpose, t.target, t.createdAt),
+    check(
+      'verification_codes_purpose_check',
+      sql`${t.purpose} in ('phone_login', 'phone_change', 'panel_login', 'account_recovery')`,
+    ),
+  ],
+);
+
+/** Sessões do app e do painel. O banco guarda só o sha256 do token de renovação. */
+export const sessions = pgTable(
+  'sessions',
+  {
+    id: id(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id),
+    audience: text('audience', { enum: ['app', 'panel'] }).notNull(),
+    refreshTokenHash: text('refresh_token_hash').notNull().unique(),
+    installationId: uuid('installation_id'),
+    /** Painel: a sessão vence após esse tempo sem renovação. Nulo no app (não expira). */
+    idleTimeoutSeconds: integer('idle_timeout_seconds'),
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+    lastUsedAt: timestamp('last_used_at', { withTimezone: true }).notNull().defaultNow(),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index().on(t.userId),
+    check('sessions_audience_check', sql`${t.audience} in ('app', 'panel')`),
+  ],
+);
+
+/** Aparelhos em que a conta já entrou; definem o "aparelho conhecido" no login. */
+export const devices = pgTable(
+  'devices',
+  {
+    id: id(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id),
+    installationId: uuid('installation_id').notNull(),
+    platform: text('platform', { enum: ['android', 'ios'] }).notNull(),
+    appVersion: text('app_version').notNull(),
+    pushToken: text('push_token'),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull().defaultNow(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique().on(t.userId, t.installationId),
+    check('devices_platform_check', sql`${t.platform} in ('android', 'ios')`),
   ],
 );
 

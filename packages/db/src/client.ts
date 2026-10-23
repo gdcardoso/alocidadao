@@ -1,4 +1,4 @@
-import type { GeoPoint } from '@alocidadao/shared';
+import type { GeoPoint, PlatformRole } from '@alocidadao/shared';
 import { sql } from 'drizzle-orm';
 import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
@@ -17,7 +17,8 @@ export function createDatabase(connectionString: string) {
 export interface DbContext {
   tenantId?: string;
   userId?: string;
-  platformAdmin?: boolean;
+  /** Papel na equipe interna, conferido pela API em users.platform_role antes de chegar aqui. */
+  platformRole?: PlatformRole;
 }
 
 /**
@@ -35,7 +36,7 @@ export function withContext<T>(
       select
         set_config('app.tenant_id', ${context.tenantId ?? ''}, true),
         set_config('app.user_id', ${context.userId ?? ''}, true),
-        set_config('app.platform_admin', ${context.platformAdmin ? 'on' : 'off'}, true)
+        set_config('app.platform_role', ${context.platformRole ?? ''}, true)
     `);
     return fn(tx);
   });

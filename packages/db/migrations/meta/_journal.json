@@ -29,6 +29,62 @@
       "when": 1792697775068,
       "tag": "0003_client_actions",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792759531213,
+      "tag": "0004_occurrences",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792759580864,
+      "tag": "0005_drop_request_links",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792759585361,
+      "tag": "0006_occurrences_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792760030560,
+      "tag": "0007_accounts_and_platform",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792760046866,
+      "tag": "0008_drop_passwords",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792760053262,
+      "tag": "0009_platform_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792760394631,
+      "tag": "0010_occurrence_geography_index",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1792761638975,
+      "tag": "0011_support_cannot_edit_staff",
+      "breakpoints": true
     }
   ]
 }

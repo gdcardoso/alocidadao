@@ -1,0 +1,1 @@
+CREATE INDEX "occurrences_location_geog_idx" ON "occurrences" USING gist (("location"::geography));

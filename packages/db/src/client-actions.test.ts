@@ -1,8 +1,18 @@
 import { randomUUID } from 'node:crypto';
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDatabase, withContext, type Database } from './client.js';
 import { seedDev } from './seed-dev-data.js';
-import { clientActions, tenants, users } from './schema.js';
+import {
+  clientActions,
+  occurrences,
+  photos,
+  requests,
+  statusEvents,
+  tenants,
+  users,
+  workOrders,
+} from './schema.js';
 import { TEST_APP_URL, TEST_OWNER_URL } from './test/urls.js';
 
 // O dono prepara os dados; os testes rodam como app_user (mesma conexão da API).
@@ -17,11 +27,22 @@ let b: { tenantId: string; userId: string };
 async function seedTenant(db: Database, label: string, ibgeCode: string) {
   const [tenant] = await db
     .insert(tenants)
-    .values({ name: `Prefeitura ${label}`, city: label, state: 'SP', ibgeCode, active: true })
+    .values({
+      name: `Município ${label}`,
+      displayName: `Prefeitura ${label}`,
+      city: label,
+      state: 'SP',
+      ibgeCode,
+      status: 'active',
+    })
     .returning();
   const [user] = await db
     .insert(users)
-    .values({ name: `Agente ${label}`, email: `agente.${label}@acoes.dev`, passwordHash: 'x' })
+    .values({
+      name: `Agente ${label}`,
+      email: `agente.${label}@acoes.dev`,
+      phone: `+551193${ibgeCode}`,
+    })
     .returning();
   return { tenantId: tenant!.id, userId: user!.id };
 }
@@ -61,19 +82,38 @@ afterAll(async () => {
 });
 
 describe('registro de ações do aparelho', () => {
-  it('rejects a repeated client action id', async () => {
+  it('recusa repetir o id de uma ação', async () => {
     await insertAction(a, ACTION_ID);
     expect(await dbError(insertAction(a, ACTION_ID))).toMatch(/duplicate key/);
   });
 
-  it('hides actions from another tenant', async () => {
-    const rows = await withContext(app.db, { tenantId: b.tenantId }, (tx) =>
-      tx.select().from(clientActions),
-    );
-    expect(rows).toHaveLength(0);
+  it('esconde ações de outra prefeitura', async () => {
+    const id = randomUUID();
+    await insertAction(a, id);
+    const visible = (tenantId: string) =>
+      withContext(app.db, { tenantId }, (tx) =>
+        tx.select({ id: clientActions.id }).from(clientActions),
+      );
+    expect((await visible(a.tenantId)).map((r) => r.id)).toContain(id);
+    expect((await visible(b.tenantId)).map((r) => r.id)).not.toContain(id);
   });
 
-  it('does not allow rewriting an action', async () =>
+  it('recusa gravar ação com tenant_id de outra prefeitura', async () => {
+    const message = await dbError(
+      withContext(app.db, { tenantId: a.tenantId, userId: a.userId }, (tx) =>
+        tx.insert(clientActions).values({
+          id: randomUUID(),
+          tenantId: b.tenantId,
+          userId: a.userId,
+          kind: 'work_order.start',
+          response: { ok: true },
+        }),
+      ),
+    );
+    expect(message).toMatch(/row-level security/);
+  });
+
+  it('não permite reescrever uma ação', async () =>
     expect(
       await dbError(
         withContext(app.db, { tenantId: a.tenantId }, (tx) =>
@@ -82,7 +122,7 @@ describe('registro de ações do aparelho', () => {
       ),
     ).toMatch(/permission denied/));
 
-  it('does not allow deleting an action', async () =>
+  it('não permite apagar uma ação', async () =>
     expect(
       await dbError(
         withContext(app.db, { tenantId: a.tenantId }, (tx) => tx.delete(clientActions)),
@@ -91,10 +131,31 @@ describe('registro de ações do aparelho', () => {
 });
 
 describe('dados de demonstração', () => {
-  it('seeds the demo tenant once', async () => {
+  it('cria a prefeitura de demonstração uma vez só', async () => {
     const first = await seedDev(owner.db);
     const second = await seedDev(owner.db);
     expect(second).toEqual(first);
     expect(first.workOrderIds).toHaveLength(3);
+  });
+
+  it('recria as atividades da demo quando foram apagadas', async () => {
+    const before = await seedDev(owner.db);
+    // Simula o TRUNCATE de uma migração: some o operacional, ficam prefeitura, equipe e pessoas.
+    const tenantId = before.tenantId;
+    await owner.db.delete(statusEvents).where(eq(statusEvents.tenantId, tenantId));
+    await owner.db.delete(photos).where(eq(photos.tenantId, tenantId));
+    await owner.db.delete(workOrders).where(eq(workOrders.tenantId, tenantId));
+    await owner.db.delete(requests).where(eq(requests.tenantId, tenantId));
+    await owner.db.delete(occurrences).where(eq(occurrences.tenantId, tenantId));
+
+    const after = await seedDev(owner.db);
+    expect(after).toMatchObject({
+      tenantId,
+      teamId: before.teamId,
+      agentId: before.agentId,
+    });
+    expect(after.workOrderIds).toHaveLength(3);
+    expect(after.workOrderIds).not.toEqual(before.workOrderIds);
+    expect(await seedDev(owner.db)).toEqual(after);
   });
 });

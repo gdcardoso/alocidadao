@@ -1,69 +1,83 @@
+import { existsSync, readFileSync } from 'node:fs';
 import { createDatabase } from '@alocidadao/db';
-import { buildApp } from './app.js';
-import { readFileSync } from 'node:fs';
 import { GoogleAuth } from 'google-auth-library';
+import { buildApp } from './app.js';
+import { parseEnv, type ApiEnv } from './env.js';
 import { createApnsSender } from './push/apns.js';
 import { createFcmSender } from './push/fcm.js';
 import { createStorage } from './storage/s3.js';
 
-const port = Number(process.env.PORT ?? 3333);
-const host = process.env.HOST ?? '0.0.0.0';
+// O servidor roda com o diretório de trabalho em apps/api. Variáveis já definidas no
+// ambiente vencem as do .env (loadEnvFile não sobrescreve).
+if (existsSync('.env')) process.loadEnvFile('.env');
 
-const env = process.env;
-const storage = env.S3_ENDPOINT
-  ? createStorage({
-      endpoint: env.S3_ENDPOINT,
-      publicEndpoint: env.S3_PUBLIC_ENDPOINT ?? env.S3_ENDPOINT,
-      region: env.S3_REGION ?? 'us-east-1',
-      bucket: env.S3_BUCKET ?? 'alocidadao-dev',
-      accessKeyId: env.S3_ACCESS_KEY_ID ?? '',
-      secretAccessKey: env.S3_SECRET_ACCESS_KEY ?? '',
+let env: ApiEnv;
+try {
+  env = parseEnv(process.env);
+} catch (error) {
+  console.error(`Ambiente inválido:\n${(error as Error).message}`);
+  process.exit(1);
+}
+
+const storage = env.s3 ? createStorage(env.s3) : undefined;
+
+const databaseHandle = env.databaseUrl ? createDatabase(env.databaseUrl) : undefined;
+
+// Os caminhos dos arquivos são relativos a apps/api (o diretório de trabalho do servidor).
+const fcm = env.fcm
+  ? (() => {
+      const { projectId, serviceAccountFile } = env.fcm;
+      const auth = new GoogleAuth({
+        keyFile: serviceAccountFile,
+        scopes: ['https://www.googleapis.com/auth/firebase.messaging'],
+      });
+      return createFcmSender({
+        projectId,
+        getAccessToken: async () => {
+          const token = await auth.getAccessToken();
+          if (!token) throw new Error('FCM: sem token de acesso');
+          return token;
+        },
+      });
+    })()
+  : undefined;
+
+const apns = env.apns
+  ? createApnsSender({
+      teamId: env.apns.teamId,
+      keyId: env.apns.keyId,
+      privateKeyPem: readFileSync(env.apns.keyFile, 'utf8'),
+      bundleId: 'br.com.alocidadao.app',
+      production: env.apns.production,
     })
   : undefined;
 
-const database = env.DATABASE_URL ? createDatabase(env.DATABASE_URL).db : undefined;
-
-// Os caminhos dos arquivos são relativos a apps/api (o diretório de trabalho do servidor).
-const fcm =
-  env.FCM_PROJECT_ID && env.FCM_SERVICE_ACCOUNT_FILE
-    ? (() => {
-        const auth = new GoogleAuth({
-          keyFile: env.FCM_SERVICE_ACCOUNT_FILE,
-          scopes: ['https://www.googleapis.com/auth/firebase.messaging'],
-        });
-        return createFcmSender({
-          projectId: env.FCM_PROJECT_ID,
-          getAccessToken: async () => {
-            const token = await auth.getAccessToken();
-            if (!token) throw new Error('FCM: sem token de acesso');
-            return token;
-          },
-        });
-      })()
-    : undefined;
-
-const apns =
-  env.APNS_TEAM_ID && env.APNS_KEY_ID && env.APNS_KEY_FILE
-    ? createApnsSender({
-        teamId: env.APNS_TEAM_ID,
-        keyId: env.APNS_KEY_ID,
-        privateKeyPem: readFileSync(env.APNS_KEY_FILE, 'utf8'),
-        bundleId: 'br.com.alocidadao.app',
-        production: env.APNS_PRODUCTION === 'true',
-      })
-    : undefined;
-
 const app = await buildApp({
   logger: true,
-  corsOrigin: env.CORS_ORIGIN,
+  corsOrigin: env.corsOrigin,
   storage,
-  database,
+  database: databaseHandle?.db,
   push: { android: fcm, ios: apns },
-  devRoutes: env.ENABLE_DEV_ROUTES === 'true' && env.NODE_ENV !== 'production',
+  devRoutes: env.devRoutes,
 });
 
+// Fecha o pool do banco junto com o servidor.
+if (databaseHandle) app.addHook('onClose', async () => databaseHandle.pool.end());
+
+for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+  process.once(signal, () => {
+    void app.close().then(
+      () => process.exit(0),
+      (error: unknown) => {
+        app.log.error(error);
+        process.exit(1);
+      },
+    );
+  });
+}
+
 try {
-  await app.listen({ port, host });
+  await app.listen({ port: env.port, host: env.host });
 } catch (error) {
   app.log.error(error);
   process.exit(1);

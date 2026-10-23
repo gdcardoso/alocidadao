@@ -2,3 +2,7 @@ export * from './roles.js';
 export * from './request-status.js';
 export * from './work-order-status.js';
 export * from './schemas.js';
+export * from './state-machine.js';
+export * from './occurrence-status.js';
+export * from './enums.js';
+export * from './geo.js';

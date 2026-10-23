@@ -1,17 +1,16 @@
 import { randomUUID } from 'node:crypto';
-import { eq, sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDatabase, geoPoint, withContext, type Database } from './client.js';
 import {
   categories,
   departments,
   memberships,
+  occurrences,
   requests,
   statusEvents,
-  teams,
   tenants,
   users,
-  workOrders,
 } from './schema.js';
 import { TEST_APP_URL, TEST_OWNER_URL } from './test/urls.js';
 
@@ -28,7 +27,7 @@ interface TenantSeed {
   tenantId: string;
   citizenId: string;
   categoryId: string;
-  teamId: string;
+  occurrenceId: string;
   requestId: string;
 }
 
@@ -39,13 +38,24 @@ let managerAId: string;
 async function seedTenant(db: Database, label: string, ibgeCode: string): Promise<TenantSeed> {
   const [tenant] = await db
     .insert(tenants)
-    .values({ name: `Prefeitura ${label}`, city: label, state: 'SP', ibgeCode, active: true })
+    .values({
+      name: `Município ${label}`,
+      displayName: `Prefeitura ${label}`,
+      city: label,
+      state: 'SP',
+      ibgeCode,
+      status: 'active',
+    })
     .returning();
   const tenantId = tenant!.id;
 
   const [citizen] = await db
     .insert(users)
-    .values({ name: `Cidadão ${label}`, email: `cidadao.${label}@teste.dev`, passwordHash: 'x' })
+    .values({
+      name: `Cidadão ${label}`,
+      email: `cidadao.${label}@teste.dev`,
+      phone: `+551191${ibgeCode}`,
+    })
     .returning();
   const citizenId = citizen!.id;
 
@@ -55,13 +65,13 @@ async function seedTenant(db: Database, label: string, ibgeCode: string): Promis
       .insert(departments)
       .values({ tenantId, name: 'Obras' })
       .returning();
-    const [team] = await tx
-      .insert(teams)
-      .values({ tenantId, departmentId: department!.id, name: 'Equipe 1' })
-      .returning();
     const [category] = await tx
       .insert(categories)
       .values({ tenantId, departmentId: department!.id, name: 'Buraco na via' })
+      .returning();
+    const [occurrence] = await tx
+      .insert(occurrences)
+      .values({ tenantId, categoryId: category!.id, location: geoPoint(LOCATION) })
       .returning();
     const [request] = await tx
       .insert(requests)
@@ -69,15 +79,17 @@ async function seedTenant(db: Database, label: string, ibgeCode: string): Promis
         tenantId,
         citizenId,
         categoryId: category!.id,
+        occurrenceId: occurrence!.id,
         description: `Buraco grande na rua principal de ${label}`,
         location: geoPoint(LOCATION),
+        gpsLocation: geoPoint(LOCATION),
       })
       .returning();
     return {
       tenantId,
       citizenId,
       categoryId: category!.id,
-      teamId: team!.id,
+      occurrenceId: occurrence!.id,
       requestId: request!.id,
     };
   });
@@ -100,7 +112,7 @@ beforeAll(async () => {
 
   const [manager] = await owner.db
     .insert(users)
-    .values({ name: 'Gestor A', email: 'gestor.a@teste.dev', passwordHash: 'x' })
+    .values({ name: 'Gestor A', email: 'gestor.a@teste.dev', phone: '+5511919999999' })
     .returning();
   managerAId = manager!.id;
   await withContext(owner.db, { tenantId: a.tenantId }, (tx) =>
@@ -180,8 +192,10 @@ describe('isolamento por prefeitura (RLS)', () => {
           tenantId: a.tenantId,
           citizenId: a.citizenId,
           categoryId: b.categoryId,
+          occurrenceId: a.occurrenceId,
           description: 'Categoria de outra prefeitura',
           location: geoPoint(LOCATION),
+          gpsLocation: geoPoint(LOCATION),
         }),
       ),
     );
@@ -199,8 +213,10 @@ describe('regras no banco', () => {
             tenantId: seed.tenantId,
             citizenId: seed.citizenId,
             categoryId: seed.categoryId,
+            occurrenceId: seed.occurrenceId,
             description: 'Lâmpada queimada no poste',
             location: geoPoint(LOCATION),
+            gpsLocation: geoPoint(LOCATION),
           })
           .returning({ protocol: requests.protocol });
         return row!.protocol;
@@ -214,9 +230,12 @@ describe('regras no banco', () => {
 
   it('histórico de status não pode ser alterado nem apagado', async () => {
     await withContext(app.db, { tenantId: a.tenantId }, (tx) =>
-      tx
-        .insert(statusEvents)
-        .values({ tenantId: a.tenantId, requestId: a.requestId, toStatus: 'open' }),
+      tx.insert(statusEvents).values({
+        tenantId: a.tenantId,
+        occurrenceId: a.occurrenceId,
+        requestId: a.requestId,
+        toStatus: 'open',
+      }),
     );
     const updateError = await dbError(
       withContext(app.db, { tenantId: a.tenantId }, (tx) =>
@@ -228,17 +247,6 @@ describe('regras no banco', () => {
     );
     expect(updateError).toMatch(/permission denied/);
     expect(deleteError).toMatch(/permission denied/);
-  });
-
-  it('permite só uma atividade ativa por solicitação', async () => {
-    const assign = () =>
-      withContext(app.db, { tenantId: a.tenantId }, (tx) =>
-        tx
-          .insert(workOrders)
-          .values({ tenantId: a.tenantId, requestId: a.requestId, teamId: a.teamId }),
-      );
-    await assign();
-    expect(await dbError(assign())).toMatch(/work_orders_one_active_per_request_idx/);
   });
 });
 
@@ -255,7 +263,7 @@ describe('usuários e prefeituras', () => {
   it('o usuário não consegue se promover a admin da plataforma', async () => {
     const message = await dbError(
       withContext(app.db, { userId: a.citizenId }, (tx) =>
-        tx.update(users).set({ isPlatformAdmin: true }).where(eq(users.id, a.citizenId)),
+        tx.update(users).set({ platformRole: 'admin' }).where(eq(users.id, a.citizenId)),
       ),
     );
     expect(message).toMatch(/permission denied/);
@@ -268,16 +276,10 @@ describe('usuários e prefeituras', () => {
     expect(rows.map((r) => r.userId)).toEqual([a.citizenId]);
   });
 
-  it('o login encontra o usuário pelo e-mail sem contexto', async () => {
-    const rows = await withContext(app.db, {}, (tx) =>
-      tx.execute(sql`select id from auth_find_user_by_email(${'CIDADAO.A@teste.dev'})`),
-    );
-    expect(rows.rows).toEqual([{ id: a.citizenId }]);
-  });
-
   it('só o admin da plataforma cria prefeituras', async () => {
     const newTenant = () => ({
-      name: 'Prefeitura Nova',
+      name: 'Município Novo',
+      displayName: 'Prefeitura Nova',
       city: 'Nova',
       state: 'MG',
       ibgeCode: randomUUID(),
@@ -287,7 +289,7 @@ describe('usuários e prefeituras', () => {
     );
     expect(message).toMatch(/row-level security/);
 
-    const created = await withContext(app.db, { platformAdmin: true }, (tx) =>
+    const created = await withContext(app.db, { platformRole: 'admin' }, (tx) =>
       tx.insert(tenants).values(newTenant()).returning(),
     );
     expect(created).toHaveLength(1);

@@ -17,6 +17,11 @@ describe('storage (MinIO local)', () => {
       await createStorage(testStorageConfig).head(`${TENANT_ID}/uploads/nada.jpg`),
     ).toBeNull());
 
+  it('rethrows errors other than a missing key', async () => {
+    const storage = createStorage({ ...testStorageConfig, secretAccessKey: 'senha-errada' });
+    await expect(storage.head(`${TENANT_ID}/uploads/nada.jpg`)).rejects.toThrow();
+  });
+
   it('signs device urls with the public endpoint', async () => {
     const storage = createStorage({ ...testStorageConfig, publicEndpoint: 'http://10.0.2.2:9000' });
     const { url, headers } = await storage.presignUpload(newPhotoKey(TENANT_ID));

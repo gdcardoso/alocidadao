@@ -1,9 +1,24 @@
-import { REQUEST_STATUSES, TENANT_ROLES, WORK_ORDER_STATUSES } from '@alocidadao/shared';
+import {
+  ACCOUNT_STATUSES,
+  COMMERCIAL_STATUSES,
+  DEFAULT_CLUSTER_RADIUS_M,
+  ICON_GROUPS,
+  MEMBERSHIP_STATUSES,
+  OCCURRENCE_STATUSES,
+  PHOTO_REVIEWS,
+  PLATFORM_ROLES,
+  REQUEST_STATUSES,
+  TENANT_ROLES,
+  TENANT_STATUSES,
+  WORK_ORDER_STATUSES,
+} from '@alocidadao/shared';
 import { sql } from 'drizzle-orm';
 import {
   boolean,
   char,
+  check,
   customType,
+  date,
   foreignKey,
   geometry,
   index,
@@ -40,17 +55,29 @@ const updatedAt = () => timestamp('updated_at', { withTimezone: true }).notNull(
 export const tenantRole = pgEnum('tenant_role', TENANT_ROLES);
 export const requestStatus = pgEnum('request_status', REQUEST_STATUSES);
 export const workOrderStatus = pgEnum('work_order_status', WORK_ORDER_STATUSES);
+export const occurrenceStatus = pgEnum('occurrence_status', OCCURRENCE_STATUSES);
+export const photoReview = pgEnum('photo_review', PHOTO_REVIEWS);
+export const iconGroup = pgEnum('icon_group', ICON_GROUPS);
+export const tenantStatus = pgEnum('tenant_status', TENANT_STATUSES);
+export const membershipStatus = pgEnum('membership_status', MEMBERSHIP_STATUSES);
+export const accountStatus = pgEnum('account_status', ACCOUNT_STATUSES);
+export const platformRole = pgEnum('platform_role', PLATFORM_ROLES);
+export const commercialStatus = pgEnum('commercial_status', COMMERCIAL_STATUSES);
 
 // ── Tabelas globais (sem tenant_id) ────────────────────────────────────────
 
 export const tenants = pgTable('tenants', {
   id: id(),
   name: text('name').notNull(),
+  /** Nome mostrado no app e no painel. */
+  displayName: text('display_name').notNull(),
   city: text('city').notNull(),
   state: char('state', { length: 2 }).notNull(),
   ibgeCode: text('ibge_code').notNull().unique(),
   boundary: multiPolygon('boundary'),
-  active: boolean('active').notNull().default(false),
+  status: tenantStatus('status').notNull().default('onboarding'),
+  /** Telefone da central de atendimento da prefeitura. */
+  centralPhone: text('central_phone'),
   createdAt: createdAt(),
 });
 
@@ -59,14 +86,101 @@ export const users = pgTable(
   {
     id: id(),
     name: text('name').notNull(),
-    email: text('email').notNull(),
+    email: text('email'),
+    /** E.164. Identifica a conta no login; o número pode ser reaproveitado por outra pessoa. */
     phone: text('phone'),
+    /** Só os 11 dígitos. */
     cpf: text('cpf').unique(),
-    passwordHash: text('password_hash').notNull(),
-    isPlatformAdmin: boolean('is_platform_admin').notNull().default(false),
+    accountStatus: accountStatus('account_status').notNull().default('active'),
+    lastActiveAt: timestamp('last_active_at', { withTimezone: true }),
+    /** Papel na equipe interna da plataforma; nulo para quem não é da equipe. */
+    platformRole: platformRole('platform_role'),
     createdAt: createdAt(),
   },
-  (t) => [uniqueIndex('users_email_lower_idx').on(sql`lower(${t.email})`)],
+  (t) => [
+    uniqueIndex('users_email_lower_idx').on(sql`lower(${t.email})`),
+    // Número reaproveitado: a conta antiga é congelada e o telefone fica livre para a nova.
+    uniqueIndex('users_phone_active_idx')
+      .on(t.phone)
+      .where(sql`${t.accountStatus} = 'active'`),
+    check('users_phone_check', sql`${t.phone} ~ '^\\+[1-9][0-9]{7,14}$'`),
+    check('users_cpf_check', sql`${t.cpf} ~ '^[0-9]{11}$'`),
+    check('users_phone_or_cpf_check', sql`${t.phone} is not null or ${t.cpf} is not null`),
+  ],
+);
+
+// ── Tabelas da equipe interna da plataforma ────────────────────────────────
+// Políticas próprias (migração platform_rls), não a tenant_isolation: o contrato e a
+// auditoria têm tenant_id, mas quem escreve neles é a equipe interna, não a prefeitura.
+
+/** Contratos da prefeitura com a plataforma. Lidos pela equipe interna; escritos só pelo admin. */
+export const tenantContracts = pgTable(
+  'tenant_contracts',
+  {
+    id: id(),
+    tenantId: tenantId(),
+    plan: text('plan').notNull(),
+    startsOn: date('starts_on').notNull(),
+    endsOn: date('ends_on'),
+    includedPanelUsers: integer('included_panel_users').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index().on(t.tenantId),
+    check('tenant_contracts_ends_on_check', sql`${t.endsOn} >= ${t.startsOn}`),
+    check('tenant_contracts_included_panel_users_check', sql`${t.includedPanelUsers} > 0`),
+  ],
+);
+
+/**
+ * O que a equipe interna fez dentro de uma prefeitura. A prefeitura lê; só inserção
+ * (UPDATE e DELETE não são concedidos a app_user).
+ */
+export const staffAuditEvents = pgTable(
+  'staff_audit_events',
+  {
+    id: id(),
+    tenantId: tenantId(),
+    staffUserId: uuid('staff_user_id')
+      .notNull()
+      .references(() => users.id),
+    action: text('action').notNull(),
+    targetType: text('target_type'),
+    targetId: uuid('target_id'),
+    details: jsonb('details'),
+    createdAt: createdAt(),
+  },
+  (t) => [index().on(t.tenantId, t.createdAt)],
+);
+
+/** Cidadão de um município sem prefeitura cadastrada avisando que quer o app lá. */
+export const cityInterest = pgTable(
+  'city_interest',
+  {
+    ibgeCode: char('ibge_code', { length: 7 }).notNull(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.ibgeCode, t.userId] }),
+    check('city_interest_ibge_code_check', sql`${t.ibgeCode} ~ '^[0-9]{7}$'`),
+  ],
+);
+
+/** Situação comercial de cada município, mantida pela equipe interna. */
+export const municipalityLeads = pgTable(
+  'municipality_leads',
+  {
+    ibgeCode: char('ibge_code', { length: 7 }).primaryKey(),
+    commercialStatus: commercialStatus('commercial_status').notNull().default('new'),
+    updatedAt: updatedAt(),
+    updatedBy: uuid('updated_by')
+      .notNull()
+      .references(() => users.id),
+  },
+  (t) => [check('municipality_leads_ibge_code_check', sql`${t.ibgeCode} ~ '^[0-9]{7}$'`)],
 );
 
 // ── Tabelas da prefeitura ──────────────────────────────────────────────────
@@ -80,6 +194,7 @@ export const memberships = pgTable(
       .notNull()
       .references(() => users.id),
     role: tenantRole('role').notNull(),
+    status: membershipStatus('status').notNull().default('active'),
     createdAt: createdAt(),
   },
   (t) => [unique().on(t.tenantId, t.userId, t.role), index().on(t.userId)],
@@ -155,6 +270,9 @@ export const categories = pgTable(
     departmentId: uuid('department_id').notNull(),
     name: text('name').notNull(),
     icon: text('icon'),
+    iconGroup: iconGroup('icon_group').notNull().default('infrastructure'),
+    // Distância máxima para agrupar uma solicitação nova numa ocorrência aberta da categoria.
+    clusterRadiusM: integer('cluster_radius_m').notNull().default(DEFAULT_CLUSTER_RADIUS_M),
     defaultDeadlineDays: integer('default_deadline_days').notNull().default(7),
     extraFields: jsonb('extra_fields').notNull().default([]),
     active: boolean('active').notNull().default(true),
@@ -167,6 +285,45 @@ export const categories = pgTable(
       columns: [t.tenantId, t.departmentId],
       foreignColumns: [departments.tenantId, departments.id],
     }),
+    check('categories_cluster_radius_m_check', sql`${t.clusterRadiusM} between 1 and 500`),
+  ],
+);
+
+/**
+ * O problema no local (o buraco, o poste): agrupa as solicitações de vários cidadãos.
+ * A gestão trabalha sobre a ocorrência; cada cidadão acompanha a própria solicitação.
+ */
+export const occurrences = pgTable(
+  'occurrences',
+  {
+    id: id(),
+    tenantId: tenantId(),
+    categoryId: uuid('category_id').notNull(),
+    /** Ponto central da ocorrência. */
+    location: geometry('location', { type: 'point', mode: 'xy', srid: 4326 }).notNull(),
+    status: occurrenceStatus('status').notNull().default('triage'),
+    mergedIntoId: uuid('merged_into_id'),
+    /** Motivo da recusa, visto pelo cidadão. */
+    rejectionReason: text('rejection_reason'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    unique().on(t.tenantId, t.id),
+    // Alvo da FK das solicitações: garante que a solicitação tem a categoria da ocorrência.
+    unique().on(t.tenantId, t.id, t.categoryId),
+    foreignKey({
+      columns: [t.tenantId, t.categoryId],
+      foreignColumns: [categories.tenantId, categories.id],
+    }),
+    foreignKey({
+      columns: [t.tenantId, t.mergedIntoId],
+      foreignColumns: [t.tenantId, t.id],
+    }),
+    index().on(t.tenantId, t.status),
+    index('occurrences_location_idx').using('gist', t.location),
+    // Busca por raio em metros (ST_DWithin sobre geography), usada para achar ocorrências parecidas.
+    index('occurrences_location_geog_idx').using('gist', sql`(${t.location}::geography)`),
   ],
 );
 
@@ -193,30 +350,43 @@ export const requests = pgTable(
       .notNull()
       .references(() => users.id),
     categoryId: uuid('category_id').notNull(),
+    occurrenceId: uuid('occurrence_id').notNull(),
     status: requestStatus('status').notNull().default('open'),
     description: text('description').notNull(),
+    /** Local do relato, ajustado pelo cidadão (no máximo 200 m do GPS, ver MAX_LOCATION_ADJUST_M). */
     location: geometry('location', { type: 'point', mode: 'xy', srid: 4326 }).notNull(),
+    /** Posição do GPS do aparelho no momento do relato. */
+    gpsLocation: geometry('gps_location', { type: 'point', mode: 'xy', srid: 4326 }).notNull(),
     address: text('address'),
     extra: jsonb('extra').notNull().default({}),
-    duplicateOfId: uuid('duplicate_of_id'),
     dueAt: timestamp('due_at', { withTimezone: true }),
+    statusChangedAt: timestamp('status_changed_at', { withTimezone: true }).notNull().defaultNow(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   (t) => [
     unique().on(t.tenantId, t.id),
     unique().on(t.tenantId, t.protocol),
+    // A categoria da solicitação é sempre a da ocorrência: reclassificar a ocorrência
+    // leva as solicitações junto (ON UPDATE CASCADE).
+    foreignKey({
+      columns: [t.tenantId, t.occurrenceId, t.categoryId],
+      foreignColumns: [occurrences.tenantId, occurrences.id, occurrences.categoryId],
+    }).onUpdate('cascade'),
     foreignKey({
       columns: [t.tenantId, t.categoryId],
       foreignColumns: [categories.tenantId, categories.id],
     }),
-    foreignKey({
-      columns: [t.tenantId, t.duplicateOfId],
-      foreignColumns: [t.tenantId, t.id],
-    }),
     index().on(t.tenantId, t.status),
     index().on(t.citizenId),
     index('requests_location_idx').using('gist', t.location),
+    index().on(t.occurrenceId),
+    // O shared recusa ajuste acima de 200 m (haversine); a trava do banco tem folga de 5 m
+    // para não recusar o que o shared aceitou por diferença de cálculo.
+    check(
+      'requests_location_adjust_check',
+      sql`ST_DWithin(${t.location}::geography, ${t.gpsLocation}::geography, 205)`,
+    ),
   ],
 );
 
@@ -225,11 +395,17 @@ export const workOrders = pgTable(
   {
     id: id(),
     tenantId: tenantId(),
-    requestId: uuid('request_id').notNull(),
+    occurrenceId: uuid('occurrence_id').notNull(),
     teamId: uuid('team_id').notNull(),
     status: workOrderStatus('status').notNull().default('assigned'),
     dueAt: timestamp('due_at', { withTimezone: true }),
-    completionNote: text('completion_note'),
+    /** Orientações do gestor para a equipe. */
+    managerInstructions: text('manager_instructions'),
+    /** Relato original do agente ao concluir; não é mostrado ao cidadão. */
+    agentNote: text('agent_note'),
+    /** Texto revisado pelo gestor e publicado para o cidadão. */
+    publicNote: text('public_note'),
+    publishedAt: timestamp('published_at', { withTimezone: true }),
     impedimentReason: text('impediment_reason'),
     completedAt: timestamp('completed_at', { withTimezone: true }),
     createdAt: createdAt(),
@@ -238,14 +414,15 @@ export const workOrders = pgTable(
   (t) => [
     unique().on(t.tenantId, t.id),
     foreignKey({
-      columns: [t.tenantId, t.requestId],
-      foreignColumns: [requests.tenantId, requests.id],
+      columns: [t.tenantId, t.occurrenceId],
+      foreignColumns: [occurrences.tenantId, occurrences.id],
     }),
     foreignKey({ columns: [t.tenantId, t.teamId], foreignColumns: [teams.tenantId, teams.id] }),
-    // No máximo uma atividade ativa por solicitação.
-    uniqueIndex('work_orders_one_active_per_request_idx')
-      .on(t.requestId)
-      .where(sql`${t.status} in ('assigned', 'in_execution')`),
+    // No máximo uma atividade ativa por ocorrência. Impedida conta como ativa:
+    // o gestor ainda decide se reagenda ou cancela.
+    uniqueIndex('work_orders_one_active_per_occurrence_idx')
+      .on(t.occurrenceId)
+      .where(sql`${t.status} not in ('completed', 'cancelled')`),
     index().on(t.tenantId, t.teamId, t.status),
   ],
 );
@@ -256,16 +433,23 @@ export const statusEvents = pgTable(
   {
     id: id(),
     tenantId: tenantId(),
-    requestId: uuid('request_id').notNull(),
+    occurrenceId: uuid('occurrence_id').notNull(),
+    requestId: uuid('request_id'),
     workOrderId: uuid('work_order_id'),
     fromStatus: text('from_status'),
     toStatus: text('to_status').notNull(),
     actorUserId: uuid('actor_user_id').references(() => users.id),
     comment: text('comment'),
     connection: jsonb('connection'),
+    /** Dados do evento além do comentário: motivos da devolução, fotos descartadas. */
+    details: jsonb('details'),
     createdAt: createdAt(),
   },
   (t) => [
+    foreignKey({
+      columns: [t.tenantId, t.occurrenceId],
+      foreignColumns: [occurrences.tenantId, occurrences.id],
+    }),
     foreignKey({
       columns: [t.tenantId, t.requestId],
       foreignColumns: [requests.tenantId, requests.id],
@@ -275,6 +459,42 @@ export const statusEvents = pgTable(
       foreignColumns: [workOrders.tenantId, workOrders.id],
     }),
     index().on(t.requestId, t.createdAt),
+    index().on(t.occurrenceId, t.createdAt),
+  ],
+);
+
+/**
+ * Fotos de uma solicitação (enviadas pelo cidadão) ou de uma atividade (enviadas pelo agente).
+ * Só as fotos da atividade passam pela revisão do gestor antes de chegar ao cidadão.
+ */
+export const photos = pgTable(
+  'photos',
+  {
+    id: id(),
+    tenantId: tenantId(),
+    requestId: uuid('request_id'),
+    workOrderId: uuid('work_order_id'),
+    storageKey: text('storage_key').notNull().unique(),
+    uploadedBy: uuid('uploaded_by')
+      .notNull()
+      .references(() => users.id),
+    review: photoReview('review'),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique().on(t.tenantId, t.id),
+    foreignKey({
+      columns: [t.tenantId, t.requestId],
+      foreignColumns: [requests.tenantId, requests.id],
+    }),
+    foreignKey({
+      columns: [t.tenantId, t.workOrderId],
+      foreignColumns: [workOrders.tenantId, workOrders.id],
+    }),
+    index().on(t.requestId),
+    index().on(t.workOrderId),
+    check('photos_owner_check', sql`num_nonnulls(${t.requestId}, ${t.workOrderId}) = 1`),
+    check('photos_review_check', sql`(${t.workOrderId} is null) = (${t.review} is null)`),
   ],
 );
 

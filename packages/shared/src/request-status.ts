@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { Actor } from './roles.js';
+import { createStateMachine, type Transition } from './state-machine.js';
 
 export const REQUEST_STATUSES = [
   'open',
@@ -8,7 +8,6 @@ export const REQUEST_STATUSES = [
   'completed',
   'cancelled',
   'rejected',
-  'duplicate',
 ] as const;
 
 export const requestStatusSchema = z.enum(REQUEST_STATUSES);
@@ -21,66 +20,50 @@ export const REQUEST_STATUS_LABELS: Record<RequestStatus, string> = {
   completed: 'Concluída',
   cancelled: 'Cancelada',
   rejected: 'Recusada',
-  duplicate: 'Duplicada',
 };
 
 export const FINAL_REQUEST_STATUSES: readonly RequestStatus[] = [
   'completed',
   'cancelled',
   'rejected',
-  'duplicate',
 ];
 
 export const REQUEST_ACTIONS = [
   'cancel',
-  'reject',
-  'mark_duplicate',
   'assign',
-  'complete_work',
-  'report_impediment',
+  'publish',
   'confirm',
   'auto_confirm',
   'contest',
+  'reopen',
+  'reject',
 ] as const;
 
 export type RequestAction = (typeof REQUEST_ACTIONS)[number];
 
-interface Transition {
-  from: RequestStatus;
-  to: RequestStatus;
-  actors: readonly Actor[];
-}
-
 /** Ciclo de status da solicitação — ver docs/planejamento-mvp.md, seção "Ciclo de status". */
-export const REQUEST_TRANSITIONS: Record<RequestAction, Transition> = {
-  cancel: { from: 'open', to: 'cancelled', actors: ['citizen'] },
-  reject: { from: 'open', to: 'rejected', actors: ['manager', 'tenant_admin'] },
-  mark_duplicate: { from: 'open', to: 'duplicate', actors: ['manager', 'tenant_admin'] },
-  assign: { from: 'open', to: 'in_progress', actors: ['manager', 'tenant_admin'] },
-  complete_work: { from: 'in_progress', to: 'awaiting_confirmation', actors: ['field_agent'] },
-  report_impediment: { from: 'in_progress', to: 'open', actors: ['field_agent'] },
-  confirm: { from: 'awaiting_confirmation', to: 'completed', actors: ['citizen'] },
-  auto_confirm: { from: 'awaiting_confirmation', to: 'completed', actors: ['system'] },
-  contest: { from: 'awaiting_confirmation', to: 'open', actors: ['citizen'] },
+export const REQUEST_TRANSITIONS: Record<RequestAction, Transition<RequestStatus>> = {
+  cancel: { from: ['open'], to: 'cancelled', actors: ['citizen'] },
+  assign: { from: ['open'], to: 'in_progress', actors: ['manager', 'tenant_admin'] },
+  publish: {
+    from: ['in_progress'],
+    to: 'awaiting_confirmation',
+    actors: ['manager', 'tenant_admin'],
+  },
+  confirm: { from: ['awaiting_confirmation'], to: 'completed', actors: ['citizen'] },
+  auto_confirm: { from: ['awaiting_confirmation'], to: 'completed', actors: ['system'] },
+  contest: { from: ['awaiting_confirmation'], to: 'open', actors: ['citizen'] },
+  reopen: { from: ['awaiting_confirmation'], to: 'open', actors: ['system'] },
+  reject: { from: ['open', 'in_progress'], to: 'rejected', actors: ['manager', 'tenant_admin'] },
 };
 
-/** Days without citizen response before a completed request is auto-confirmed. */
+/**
+ * Days without citizen response before a request awaiting confirmation is auto-confirmed.
+ * See docs/superpowers/specs/2026-10-22-telas-e-regras-mvp-design.md, section 6.1.
+ */
 export const AUTO_CONFIRM_AFTER_DAYS = 7;
 
-export type TransitionResult =
-  { ok: true; to: RequestStatus } | { ok: false; reason: 'invalid_status' | 'forbidden' };
+const machine = createStateMachine(REQUEST_ACTIONS, REQUEST_TRANSITIONS);
 
-export function applyRequestAction(
-  current: RequestStatus,
-  action: RequestAction,
-  actor: Actor,
-): TransitionResult {
-  const transition = REQUEST_TRANSITIONS[action];
-  if (transition.from !== current) return { ok: false, reason: 'invalid_status' };
-  if (!transition.actors.includes(actor)) return { ok: false, reason: 'forbidden' };
-  return { ok: true, to: transition.to };
-}
-
-export function availableRequestActions(current: RequestStatus, actor: Actor): RequestAction[] {
-  return REQUEST_ACTIONS.filter((action) => applyRequestAction(current, action, actor).ok);
-}
+export const applyRequestAction = machine.apply;
+export const availableRequestActions = machine.available;

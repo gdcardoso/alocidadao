@@ -6,6 +6,7 @@ export const ROLES = [
   'manager',
   'tenant_admin',
   'platform_admin',
+  'platform_support',
 ] as const;
 
 export const roleSchema = z.enum(ROLES);
@@ -18,6 +19,10 @@ export const TENANT_ROLES = [
   'manager',
   'tenant_admin',
 ] as const satisfies readonly Role[];
+
+/** Papéis da plataforma, fora de qualquer prefeitura. */
+export const PLATFORM_ROLES = ['admin', 'support'] as const;
+export type PlatformRole = (typeof PLATFORM_ROLES)[number];
 
 /** Actor that can trigger a transition: a role, or the system itself (scheduled jobs). */
 export type Actor = Role | 'system';

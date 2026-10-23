@@ -8,26 +8,35 @@ Itens menores achados nas revisões dos spikes (`2026-10-22-spikes-de-risco.md`)
 
 ## Plano 1 — Modelo de dados
 
-- Teste do `WITH CHECK` de `client_actions` (inserir com `tenant_id` de outra prefeitura); teste "esconde ações de outra prefeitura" depende da ordem.
-- `seedDev`: checagem de existência fora da transação; exige superusuário.
-- Rotas reais substituem `/dev/*`: usar schemas de resposta (`workOrderSummarySchema` está sem uso), fechar o pool do banco no desligamento, cancelamento idempotente.
-- Testes que faltam: `completedAt` = `occurredAt`, `comment` = relato, contagem exata de eventos, 503 sem armazenamento, tipo de arquivo errado; ramo 23505 sem teste próprio.
-- `storage.head` roda com a linha travada; `head()` sem teste do erro repassado; `test-fixtures.ts` vai para o `dist`.
-- Variáveis de ambiente da API validadas na subida (hoje as chaves S3 caem em `''`); a API não lê `.env`.
+- [x] Teste do `WITH CHECK` de `client_actions` (inserir com `tenant_id` de outra prefeitura); teste "esconde ações de outra prefeitura" depende da ordem.
+- [x] `seedDev`: checagem de existência fora da transação; exige superusuário.
+- [x] `/dev/*` no modelo novo: a lista de atividades declara `workOrderSummarySchema` como resposta; cancelamento idempotente.
+- [x] Testes que faltam: `completedAt` = `occurredAt`, `comment` = relato, contagem exata de eventos, 503 sem armazenamento, tipo de arquivo errado; ramo 23505 sem teste próprio.
+- [x] `storage.head` roda com a linha travada; `head()` sem teste do erro repassado; `test-fixtures.ts` vai para o `dist`.
+- [x] Variáveis de ambiente da API validadas na subida (hoje as chaves S3 caem em `''`)
+- [x] A API não lê `.env`
+- [x] Fechar o pool do banco no desligamento da API
 
 ## Plano 2 — Acesso
 
 - `client_actions`: amarrar `user_id = app_current_user()` na política quando houver login real.
 - `getInstallationId`: duas primeiras chamadas simultâneas podem gerar ids diferentes (entra no trabalho de `devices`).
 - Identidade por cabeçalho `x-dev-*` some com o login real.
+- Suporte ainda pode alterar telefone, e-mail e CPF de qualquer conta que não seja da equipe interna: trocar por funções que exigem verificação e estreitar o `UPDATE` direto.
+- `auth_find_user_by_cpf` devolve o e-mail completo e permite enumerar telefones e CPFs: a API mascara o e-mail e limita tentativas.
+- Exigir e-mail e CPF para gestor e admin é regra da API (o banco só exige telefone ou CPF).
 
 ## Plano 3 — App do cidadão
 
 - `src/lib/api.ts` usa `10.0.2.2` como padrão (só vale no emulador Android): trocar por configuração de build.
 - Título repetido no cabeçalho.
+- O evento de conclusão guarda o relato interno do agente em `status_events.comment`: não mostrar ao cidadão (ou mover para `details`).
+- Solicitação que apoia ocorrência já em atendimento nasce "Em atendimento" (6.1): regra ainda não codificada.
 
 ## Plano 4 — App do agente
 
+- Rotas reais substituem `/dev/*`: schema de resposta em todas as rotas (hoje só a lista de atividades declara o seu).
+- Chave de foto já usada em outra conclusão responde 409 `client_action_conflict`: o 23505 de `photos.storage_key` cai no mesmo ramo do id de ação repetido.
 - `useOutboxSync` está só na tela do Laboratório: mover para o layout raiz.
 - 408 e 429 no envio de foto viram falha definitiva: tratar como nova tentativa.
 - Foto de conclusão recusada por conflito fica órfã no armazenamento; pastas de itens em conflito ou falha não são apagadas; `dir.delete` com erro interrompe a passada.
@@ -38,6 +47,18 @@ Itens menores achados nas revisões dos spikes (`2026-10-22-spikes-de-risco.md`)
 - Estado `online` começa verdadeiro antes do primeiro evento do NetInfo; cartão em conflito mostra o status otimista até atualizar; lista do servidor sem validação; `fetchChain` frágil; `reloadLocal` sem `catch`; sem testes do hook.
 - Câmera: decodifica a foto duas vezes; pode passar de 1 MB sem aviso; JPEGs intermediários não são apagados; temporizador da localização não é limpo; mensagem técnica mostrada ao usuário; `PhotoCapture` mora num arquivo de rota.
 - iOS: desligar os textos de microfone e de localização "sempre" antes do primeiro TestFlight.
+- Decidir quais status o agente vê na lista (hoje `/dev` lista todos os ativos, inclusive `awaiting_review` e `impeded`).
+
+## Plano 5 — Painel
+
+- Restringir a leitura de `staff_audit_events` a admin e gestor da prefeitura e à equipe interna (hoje qualquer contexto da prefeitura lê); não gravar dados pessoais em `details`.
+- Admin e gestor da prefeitura ainda não conseguem cadastrar nem achar pelo telefone um usuário de fora: precisa de função `SECURITY DEFINER`.
+- `merged_into_id` sem `CHECK` ligando ao status `merged` (e diferente do próprio id).
+- `status_events.request_id` não é amarrado à mesma ocorrência (precisa acompanhar a junção).
+
+## Plano 6 — Backoffice
+
+- `municipality_leads.updated_by` não é forçado a `app_current_user()` e `updated_at` não muda no `UPDATE`.
 
 ## Plano 7 — Notificações
 
@@ -50,3 +71,4 @@ Itens menores achados nas revisões dos spikes (`2026-10-22-spikes-de-risco.md`)
 - Imagens do MinIO (Chainguard) em `:latest`: fixar por digest; conferir no primeiro CI que o `cgr.dev` é acessível.
 - Script `dev` da API só funciona em macOS/Linux.
 - Produção: nunca definir `ENABLE_DEV_ROUTES`; definir `NODE_ENV=production`.
+- Índice GiST em `tenants.boundary` quando houver muitas prefeituras.

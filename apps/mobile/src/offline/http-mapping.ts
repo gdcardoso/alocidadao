@@ -26,6 +26,8 @@ export function mapActionResponse(status: number, bodyText: string): SendActionR
   if (status === 409 && body.code === 'work_order_unavailable') {
     return { kind: 'conflict', status: body.status ?? 'unknown' };
   }
+  // Token recusado (vencido ou sessão encerrada): o item espera um novo login na fila.
+  if (status === 401) throw new NetworkError('unauthorized');
   // Qualquer outro 4xx não melhora com nova tentativa: recusa e segue a fila.
   if (status >= 400 && status < 500) {
     const fallback =
@@ -43,6 +45,7 @@ export interface Presign {
 }
 
 export function parsePresignResponse(status: number, bodyText: string): Presign {
+  if (status === 401) throw new NetworkError('unauthorized');
   if (status >= 400 && status < 500) {
     const json = parseJson(bodyText);
     const code =

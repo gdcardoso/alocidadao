@@ -6,3 +6,5 @@ export * from './state-machine.js';
 export * from './occurrence-status.js';
 export * from './enums.js';
 export * from './geo.js';
+export * from './cpf.js';
+export * from './auth.js';

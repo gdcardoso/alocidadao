@@ -7,18 +7,11 @@ const TIMEOUT_MS = 30_000;
 
 export interface HttpTransportOptions {
   baseUrl: string;
-  devUserId: string;
-  devTenantId: string;
+  /** Token de acesso da sessão; `null` sem sessão. Falha de rede rejeita com `NetworkError`. */
+  getAccessToken: () => Promise<string | null>;
+  /** Prefeitura em que o agente atua (`x-tenant-id`); `null` antes do login. */
+  tenantId: string | null;
   timeoutMs?: number;
-}
-
-/** Lê as variáveis EXPO_PUBLIC_* (identidade de dev, até existir login). */
-export function createHttpTransportFromEnv(baseUrl: string): HttpTransport {
-  return new HttpTransport({
-    baseUrl,
-    devUserId: process.env.EXPO_PUBLIC_DEV_USER_ID ?? '',
-    devTenantId: process.env.EXPO_PUBLIC_DEV_TENANT_ID ?? '',
-  });
 }
 
 export class HttpTransport implements Transport {
@@ -36,11 +29,12 @@ export class HttpTransport implements Transport {
     }
   }
 
-  private devHeaders(): Record<string, string> {
-    return {
-      'x-dev-user-id': this.options.devUserId,
-      'x-dev-tenant-id': this.options.devTenantId,
-    };
+  /** Sem sessão o item continua na fila (`NetworkError`) até um novo login. */
+  private async authHeaders(): Promise<Record<string, string>> {
+    const { tenantId } = this.options;
+    const token = await this.options.getAccessToken();
+    if (!token || !tenantId) throw new NetworkError('signed_out');
+    return { authorization: `Bearer ${token}`, 'x-tenant-id': tenantId };
   }
 
   async uploadPhoto(path: string): Promise<{ key: string; durationMs: number }> {
@@ -49,7 +43,7 @@ export class HttpTransport implements Transport {
 
     const presign = await this.request(`${this.options.baseUrl}/dev/uploads`, {
       method: 'POST',
-      headers: this.devHeaders(),
+      headers: await this.authHeaders(),
     });
     const { key, url, headers } = parsePresignResponse(presign.status, await presign.text());
 
@@ -62,7 +56,7 @@ export class HttpTransport implements Transport {
   /** Lista as atividades do agente (GET /dev/work-orders). */
   async listWorkOrders(): Promise<unknown> {
     const response = await this.request(`${this.options.baseUrl}/dev/work-orders`, {
-      headers: this.devHeaders(),
+      headers: await this.authHeaders(),
     });
     if (response.status !== 200) throw new NetworkError(`work_orders_${response.status}`);
     try {
@@ -77,7 +71,7 @@ export class HttpTransport implements Transport {
       `${this.options.baseUrl}/dev/work-orders/${workOrderId}/actions`,
       {
         method: 'POST',
-        headers: { ...this.devHeaders(), 'content-type': 'application/json' },
+        headers: { ...(await this.authHeaders()), 'content-type': 'application/json' },
         body: JSON.stringify(input),
       },
     );

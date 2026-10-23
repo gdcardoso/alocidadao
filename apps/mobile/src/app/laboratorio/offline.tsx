@@ -1,7 +1,7 @@
 import NetInfo from '@react-native-community/netinfo';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { createHttpTransportFromEnv } from '../../offline/http-transport';
+import { createSessionTransport } from '../../auth/native-session';
 import type { OutboxItem } from '../../offline/outbox';
 import { enqueueNative, openAppDatabase } from '../../offline/sqlite-outbox-store';
 import { useOutboxSync } from '../../offline/use-outbox-sync';
@@ -12,7 +12,6 @@ const CONFLICT_MESSAGE =
   'Esta atividade foi reatribuída ou cancelada pela prefeitura. O que você registrou ficou guardado no aparelho.';
 const MAX_PHOTOS = 3;
 const MIN_NOTE_LENGTH = 3;
-const baseUrl = process.env.EXPO_PUBLIC_API_URL ?? 'http://10.0.2.2:3333';
 
 function Button({
   label,
@@ -95,7 +94,7 @@ export default function OfflineLab() {
       // no servidor quando a lista foi pedida; item não terminal pode não estar, então o
       // status otimista dele prevalece sobre o do servidor (sem corrida com a sincronização).
       const queue = await store.list();
-      const transport = createHttpTransportFromEnv(baseUrl);
+      const transport = await createSessionTransport();
       const list = (await transport.listWorkOrders()) as CachedWorkOrder[];
       await cache.replaceAll(list);
       for (const item of queue) {

@@ -13,7 +13,37 @@ describe('parseEnv', () => {
       s3: undefined,
       fcm: undefined,
       apns: undefined,
+      auth: undefined,
+      email: { resendApiKey: undefined, from: 'Alô Cidadão <nao-responda@alocidadao.com.br>' },
       devRoutes: false,
+    });
+  });
+
+  it('requires a long AUTH_SECRET with DATABASE_URL', () => {
+    const databaseUrl = 'postgres://app_user:app_user@localhost:5433/alocidadao';
+    expect(() => parseEnv({ DATABASE_URL: databaseUrl })).toThrow(/AUTH_SECRET/);
+    expect(() => parseEnv({ DATABASE_URL: databaseUrl, AUTH_SECRET: 'curto' })).toThrow(
+      /AUTH_SECRET/,
+    );
+    const secret = 'x'.repeat(32);
+    expect(parseEnv({ DATABASE_URL: databaseUrl, AUTH_SECRET: secret }).auth).toEqual({
+      secret,
+      devFixedCode: undefined,
+    });
+  });
+
+  it('refuses AUTH_DEV_FIXED_CODE in production', () => {
+    expect(() =>
+      parseEnv({ AUTH_DEV_FIXED_CODE: '123456', NODE_ENV: 'production', RESEND_API_KEY: 'k' }),
+    ).toThrow(/AUTH_DEV_FIXED_CODE/);
+    expect(() => parseEnv({ AUTH_DEV_FIXED_CODE: '12345' })).toThrow(/AUTH_DEV_FIXED_CODE/);
+  });
+
+  it('requires RESEND_API_KEY in production', () => {
+    expect(() => parseEnv({ NODE_ENV: 'production' })).toThrow(/RESEND_API_KEY/);
+    expect(parseEnv({ NODE_ENV: 'production', RESEND_API_KEY: 're_123' }).email).toEqual({
+      resendApiKey: 're_123',
+      from: 'Alô Cidadão <nao-responda@alocidadao.com.br>',
     });
   });
 
@@ -68,6 +98,8 @@ describe('parseEnv', () => {
     expect(env.fcm).toBeUndefined();
     expect(env.apns).toBeUndefined();
     expect(env.devRoutes).toBe(true);
+    expect(env.auth).toMatchObject({ devFixedCode: '123456' });
+    expect(env.auth!.secret.length).toBeGreaterThanOrEqual(32);
   });
 
   it('rejects a non numeric PORT', () => {
@@ -77,7 +109,10 @@ describe('parseEnv', () => {
   });
 
   it('never enables dev routes in production', () => {
-    expect(parseEnv({ ENABLE_DEV_ROUTES: 'true', NODE_ENV: 'production' }).devRoutes).toBe(false);
+    expect(
+      parseEnv({ ENABLE_DEV_ROUTES: 'true', NODE_ENV: 'production', RESEND_API_KEY: 're_123' })
+        .devRoutes,
+    ).toBe(false);
     expect(parseEnv({ ENABLE_DEV_ROUTES: 'true' }).devRoutes).toBe(true);
   });
 });

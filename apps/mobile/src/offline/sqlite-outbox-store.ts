@@ -7,6 +7,7 @@ import {
   type OutboxItem,
   type OutboxStore,
 } from './outbox';
+import { WorkOrderCache } from './work-order-cache';
 
 const DB_NAME = 'alocidadao.db';
 
@@ -95,6 +96,7 @@ function fromRow(row: Row): OutboxItem {
   };
 }
 
+const outboxRoot = () => new Directory(Paths.document, 'outbox');
 const outboxDir = (id: string) => new Directory(Paths.document, 'outbox', id);
 
 /** Copia a foto para `Paths.document/outbox/<id>/` e devolve o novo caminho. */
@@ -153,6 +155,22 @@ export class SqliteOutboxStore implements OutboxStore {
     );
     return rows.map(fromRow);
   }
+}
+
+/**
+ * Apaga o que o agente deixou no aparelho ao sair: fila, cache de atividades e fotos
+ * guardadas. O id da instalação (SecureStore) fica.
+ */
+export async function clearOfflineData(): Promise<void> {
+  const db = await openAppDatabase();
+  // Garante a tabela do cache, que só existe depois da primeira abertura da lista.
+  await new WorkOrderCache(db).init();
+  await db.withTransactionAsync(async () => {
+    await db.runAsync('DELETE FROM outbox');
+    await db.runAsync('DELETE FROM work_orders_cache');
+  });
+  const photos = outboxRoot();
+  if (photos.exists) photos.delete();
 }
 
 export async function openOutboxStore(): Promise<SqliteOutboxStore> {

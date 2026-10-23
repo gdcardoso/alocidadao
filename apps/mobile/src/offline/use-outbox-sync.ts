@@ -1,15 +1,13 @@
 import NetInfo from '@react-native-community/netinfo';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
+import { createSessionTransport } from '../auth/native-session';
 import { api } from '../lib/api';
 import { measureApiLatency, toConnectionContext } from '../lib/connection';
 import { readNetSnapshot } from '../lib/net-info';
-import { createHttpTransportFromEnv } from './http-transport';
 import { processOutbox, type OutboxItem, type ProcessOutboxDeps } from './outbox';
 import { createSingleFlight } from './single-flight';
 import { openOutboxStore, type SqliteOutboxStore } from './sqlite-outbox-store';
-
-const baseUrl = process.env.EXPO_PUBLIC_API_URL ?? 'http://10.0.2.2:3333';
 
 /** Monta o contexto de conexão de cada ação enviada (rede, latência até a API, upload, offline). */
 const connection: ProcessOutboxDeps['connection'] = async (m) => {
@@ -45,11 +43,12 @@ export function useOutboxSync(onSynced?: () => void) {
     let cancelled = false;
     void openOutboxStore().then((s) => {
       if (cancelled) return;
-      const transport = createHttpTransportFromEnv(baseUrl);
       const flight: () => Promise<unknown> = createSingleFlight(async () => {
         if (cancelled) return;
         setSyncing(true);
         try {
+          // Montado a cada passada: pega a sessão e a prefeitura do login atual.
+          const transport = await createSessionTransport();
           await processOutbox({ store: s, transport, connection });
           if (!cancelled) setLastSyncError(null);
         } catch (error) {

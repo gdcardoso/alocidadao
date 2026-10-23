@@ -16,6 +16,10 @@ export interface ApiEnv {
   // Os caminhos dos arquivos ficam como texto; quem lê o arquivo é o server.ts.
   fcm?: { projectId: string; serviceAccountFile: string };
   apns?: { teamId: string; keyId: string; keyFile: string; production: boolean };
+  /** Login sem senha. Presente quando AUTH_SECRET está definida. */
+  auth?: { secret: string; devFixedCode?: string };
+  /** Sem chave do Resend, o e-mail sai no log (só fora de produção). */
+  email: { resendApiKey?: string; from: string };
   devRoutes: boolean;
 }
 
@@ -47,6 +51,19 @@ const schema = z.object({
   APNS_KEY_ID: optionalText,
   APNS_KEY_FILE: optionalText,
   APNS_PRODUCTION: optionalText,
+  AUTH_SECRET: z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z.string().min(32, 'deve ter no mínimo 32 caracteres').optional(),
+  ),
+  AUTH_DEV_FIXED_CODE: z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z
+      .string()
+      .regex(/^[0-9]{6}$/, 'deve ter 6 dígitos')
+      .optional(),
+  ),
+  RESEND_API_KEY: optionalText,
+  EMAIL_FROM: optionalText,
   ENABLE_DEV_ROUTES: optionalText,
   NODE_ENV: optionalText,
 });
@@ -75,6 +92,15 @@ export function parseEnv(source: Record<string, string | undefined>): ApiEnv {
       'obrigatória quando S3_ENDPOINT está definida',
     );
   }
+
+  const production = e.NODE_ENV === 'production';
+  if (e.DATABASE_URL) {
+    missing('AUTH_SECRET', e.AUTH_SECRET, 'obrigatória quando DATABASE_URL está definida');
+  }
+  if (production && e.AUTH_DEV_FIXED_CODE) {
+    problems.push('AUTH_DEV_FIXED_CODE: proibida em produção');
+  }
+  if (production) missing('RESEND_API_KEY', e.RESEND_API_KEY, 'obrigatória em produção');
 
   const together = (group: Record<string, string | undefined>) => {
     const names = Object.keys(group);
@@ -125,6 +151,13 @@ export function parseEnv(source: Record<string, string | undefined>): ApiEnv {
             production: e.APNS_PRODUCTION === 'true',
           }
         : undefined,
-    devRoutes: e.ENABLE_DEV_ROUTES === 'true' && e.NODE_ENV !== 'production',
+    auth: e.AUTH_SECRET
+      ? { secret: e.AUTH_SECRET, devFixedCode: e.AUTH_DEV_FIXED_CODE }
+      : undefined,
+    email: {
+      resendApiKey: e.RESEND_API_KEY,
+      from: e.EMAIL_FROM ?? 'Alô Cidadão <nao-responda@alocidadao.com.br>',
+    },
+    devRoutes: e.ENABLE_DEV_ROUTES === 'true' && !production,
   };
 }

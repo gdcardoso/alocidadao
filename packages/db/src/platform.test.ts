@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDatabase, withContext, type Database } from './client.js';
@@ -130,20 +131,22 @@ describe('contas', () => {
 
   it('login acha a conta ativa pelo telefone e pelo CPF, sem contexto', async () => {
     const byPhone = await withContext(app.db, {}, (tx) =>
-      tx.execute(sql`select * from auth_find_user_by_phone(${'+5511940000001'})`),
+      tx.execute(sql`select * from auth_find_user_by_phone(${'+5511940000001'}, ${randomUUID()})`),
     );
-    expect(byPhone.rows).toEqual([{ id: citizenId, last_active_at: null, has_email: true }]);
+    expect(byPhone.rows).toEqual([
+      { id: citizenId, email: 'cidada@plataforma.dev', stale: false, known_device: false },
+    ]);
 
     const byCpf = await withContext(app.db, {}, (tx) =>
       tx.execute(sql`select * from auth_find_user_by_cpf(${'12345678903'})`),
     );
-    expect(byCpf.rows).toEqual([{ id: supportId, email: null, platform_role: 'support' }]);
+    expect(byCpf.rows).toEqual([{ id: supportId, email: null, has_panel_access: true }]);
 
     const frozenPhone = '+5511940000097';
     const frozenId = await createUser(owner.db, { name: 'Congelado', phone: frozenPhone });
     await owner.db.update(users).set({ accountStatus: 'frozen' }).where(eq(users.id, frozenId));
     const frozen = await withContext(app.db, {}, (tx) =>
-      tx.execute(sql`select * from auth_find_user_by_phone(${frozenPhone})`),
+      tx.execute(sql`select * from auth_find_user_by_phone(${frozenPhone}, ${randomUUID()})`),
     );
     expect(frozen.rows).toEqual([]);
   });
@@ -209,7 +212,7 @@ describe('equipe interna', () => {
     expect(hidden).toHaveLength(0);
   });
 
-  it('suporte não altera conta da equipe interna', async () => {
+  it('equipe interna só altera a própria conta', async () => {
     const support = { userId: supportId, platformRole: 'support' } as const;
     const admin = { userId: adminId, platformRole: 'admin' } as const;
 
@@ -243,14 +246,20 @@ describe('equipe interna', () => {
     );
     expect(changed).toHaveLength(1);
 
-    const citizen = await withContext(app.db, support, (tx) =>
-      tx
-        .update(users)
-        .set({ name: 'Cidadã Atendida' })
-        .where(eq(users.id, citizenId))
-        .returning({ id: users.id }),
-    );
-    expect(citizen).toHaveLength(1);
+    // Regra nova (substitui a da 0011): nem suporte nem admin alteram conta de cidadão por
+    // UPDATE direto; as correções terão funções próprias.
+    for (const staff of [support, admin]) {
+      const citizen = await withContext(app.db, staff, (tx) =>
+        tx
+          .update(users)
+          .set({ name: 'Cidadã Atendida' })
+          .where(eq(users.id, citizenId))
+          .returning({ id: users.id }),
+      );
+      expect(citizen).toHaveLength(0);
+    }
+    const [citizenRow] = await owner.db.select().from(users).where(eq(users.id, citizenId));
+    expect(citizenRow!.name).toBe('Cidadã');
   });
 
   it('suporte não altera contrato', async () => {

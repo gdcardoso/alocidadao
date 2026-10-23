@@ -1,10 +1,12 @@
 import { randomUUID } from 'node:crypto';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDatabase, withContext, type Database } from './client.js';
 import { seedDev } from './seed-dev-data.js';
 import {
   clientActions,
+  departmentManagers,
+  memberships,
   occurrences,
   photos,
   requests,
@@ -136,6 +138,64 @@ describe('dados de demonstração', () => {
     const second = await seedDev(owner.db);
     expect(second).toEqual(first);
     expect(first.workOrderIds).toHaveLength(3);
+  });
+
+  it('cria o gestor demo e o admin interno, sem duplicar', async () => {
+    const first = await seedDev(owner.db);
+    await seedDev(owner.db);
+    const [manager] = await owner.db.select().from(users).where(eq(users.id, first.managerId));
+    expect(manager).toMatchObject({
+      cpf: '52998224725',
+      email: 'gestor.demo@alocidadao.dev',
+      platformRole: null,
+    });
+    const links = await owner.db
+      .select()
+      .from(memberships)
+      .where(
+        and(eq(memberships.userId, first.managerId), eq(memberships.tenantId, first.tenantId)),
+      );
+    expect(links).toHaveLength(1);
+    expect(links[0]).toMatchObject({ role: 'manager', status: 'active' });
+    const managed = await owner.db
+      .select()
+      .from(departmentManagers)
+      .where(eq(departmentManagers.userId, first.managerId));
+    expect(managed).toHaveLength(1);
+    expect(managed[0]?.tenantId).toBe(first.tenantId);
+
+    const [admin] = await owner.db.select().from(users).where(eq(users.id, first.platformAdminId));
+    expect(admin).toMatchObject({
+      cpf: '11144477735',
+      email: 'admin.demo@alocidadao.dev',
+      platformRole: 'admin',
+    });
+    for (const cpf of ['52998224725', '11144477735']) {
+      expect(await owner.db.select().from(users).where(eq(users.cpf, cpf))).toHaveLength(1);
+    }
+  });
+
+  it('completa o gestor e o admin numa prefeitura demo criada antes deles', async () => {
+    const before = await seedDev(owner.db);
+    await owner.db
+      .delete(departmentManagers)
+      .where(eq(departmentManagers.userId, before.managerId));
+    await owner.db.delete(memberships).where(eq(memberships.userId, before.managerId));
+    await owner.db.delete(users).where(eq(users.id, before.managerId));
+    await owner.db.delete(users).where(eq(users.id, before.platformAdminId));
+    const after = await seedDev(owner.db);
+    expect(after.managerId).not.toBe(before.managerId);
+    const links = await owner.db
+      .select()
+      .from(memberships)
+      .where(eq(memberships.userId, after.managerId));
+    expect(links).toHaveLength(1);
+    expect(
+      await owner.db
+        .select()
+        .from(departmentManagers)
+        .where(eq(departmentManagers.userId, after.managerId)),
+    ).toHaveLength(1);
   });
 
   it('recria as atividades da demo quando foram apagadas', async () => {

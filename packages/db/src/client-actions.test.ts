@@ -1,8 +1,18 @@
 import { randomUUID } from 'node:crypto';
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDatabase, withContext, type Database } from './client.js';
 import { seedDev } from './seed-dev-data.js';
-import { clientActions, tenants, users } from './schema.js';
+import {
+  clientActions,
+  occurrences,
+  photos,
+  requests,
+  statusEvents,
+  tenants,
+  users,
+  workOrders,
+} from './schema.js';
 import { TEST_APP_URL, TEST_OWNER_URL } from './test/urls.js';
 
 // O dono prepara os dados; os testes rodam como app_user (mesma conexão da API).
@@ -126,5 +136,26 @@ describe('dados de demonstração', () => {
     const second = await seedDev(owner.db);
     expect(second).toEqual(first);
     expect(first.workOrderIds).toHaveLength(3);
+  });
+
+  it('recria as atividades da demo quando foram apagadas', async () => {
+    const before = await seedDev(owner.db);
+    // Simula o TRUNCATE de uma migração: some o operacional, ficam prefeitura, equipe e pessoas.
+    const tenantId = before.tenantId;
+    await owner.db.delete(statusEvents).where(eq(statusEvents.tenantId, tenantId));
+    await owner.db.delete(photos).where(eq(photos.tenantId, tenantId));
+    await owner.db.delete(workOrders).where(eq(workOrders.tenantId, tenantId));
+    await owner.db.delete(requests).where(eq(requests.tenantId, tenantId));
+    await owner.db.delete(occurrences).where(eq(occurrences.tenantId, tenantId));
+
+    const after = await seedDev(owner.db);
+    expect(after).toMatchObject({
+      tenantId,
+      teamId: before.teamId,
+      agentId: before.agentId,
+    });
+    expect(after.workOrderIds).toHaveLength(3);
+    expect(after.workOrderIds).not.toEqual(before.workOrderIds);
+    expect(await seedDev(owner.db)).toEqual(after);
   });
 });

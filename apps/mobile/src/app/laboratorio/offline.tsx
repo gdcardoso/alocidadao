@@ -37,7 +37,7 @@ function Button({
 
 const LOCAL_STATUS: Record<'start' | 'complete', string> = {
   start: 'in_execution',
-  complete: 'completed',
+  complete: 'awaiting_review',
 };
 
 export default function OfflineLab() {

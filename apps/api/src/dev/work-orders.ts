@@ -1,9 +1,11 @@
 import { schema, withContext, type Database, type Transaction } from '@alocidadao/db';
 import {
+  ACTIVE_WORK_ORDER_STATUSES,
   PHOTO_MAX_BYTES,
-  canTransitionWorkOrder,
+  applyWorkOrderAction,
   workOrderActionInputSchema,
   workOrderActionResultSchema,
+  workOrderSummarySchema,
   type WorkOrderActionInput,
   type WorkOrderActionResult,
   type WorkOrderStatus,
@@ -15,10 +17,18 @@ import { z } from 'zod';
 import type { Storage } from '../storage/s3.js';
 import { requireDevIdentity, type DevIdentity } from './identity.js';
 
-const { workOrders, requests, categories, teamMembers, statusEvents, clientActions } = schema;
+const {
+  workOrders,
+  occurrences,
+  requests,
+  categories,
+  teamMembers,
+  statusEvents,
+  clientActions,
+  photos,
+} = schema;
 
 const idParams = z.object({ id: z.uuid() });
-const ACTIVE_STATUSES: WorkOrderStatus[] = ['assigned', 'in_execution'];
 
 type Outcome =
   | { kind: 'ok'; result: WorkOrderActionResult }
@@ -28,7 +38,7 @@ type Outcome =
   | { kind: 'photo_invalid'; key: string };
 
 /** Drizzle embrulha o erro do Postgres em `cause`; procura o código nos dois níveis. */
-function isUniqueViolation(error: unknown): boolean {
+export function isUniqueViolation(error: unknown): boolean {
   const e = error as { code?: string; cause?: { code?: string } };
   return e.code === '23505' || e.cause?.code === '23505';
 }
@@ -81,6 +91,15 @@ async function applyAction(
   input: WorkOrderActionInput,
 ): Promise<Outcome | { kind: 'storage_not_configured' }> {
   const { tenantId, userId } = identity;
+
+  // As fotos são conferidas no armazenamento antes da transação: assim a chamada de rede
+  // não acontece com a atividade travada. O status continua sendo checado lá dentro.
+  if (input.photoKeys.length > 0) {
+    if (!storage) return { kind: 'storage_not_configured' as const };
+    const bad = await checkPhotos(storage, tenantId, input.photoKeys);
+    if (bad !== undefined) return { kind: 'photo_invalid' as const, key: bad };
+  }
+
   return withContext(db, { tenantId, userId }, async (tx) => {
     // Trava a atividade: ações concorrentes sobre ela são serializadas.
     const [order] = await tx
@@ -100,16 +119,9 @@ async function applyAction(
     const stored = await findStoredAction(tx, input, order.id, userId);
     if (stored) return stored;
 
-    const target: WorkOrderStatus = input.action === 'start' ? 'in_execution' : 'completed';
-    if (!canTransitionWorkOrder(order.status, target)) {
-      return { kind: 'unavailable' as const, status: order.status };
-    }
-
-    if (input.photoKeys.length > 0) {
-      if (!storage) return { kind: 'storage_not_configured' as const };
-      const bad = await checkPhotos(storage, tenantId, input.photoKeys);
-      if (bad !== undefined) return { kind: 'photo_invalid' as const, key: bad };
-    }
+    const transition = applyWorkOrderAction(order.status, input.action, 'field_agent');
+    if (!transition.ok) return { kind: 'unavailable' as const, status: order.status };
+    const target = transition.to;
 
     const isComplete = input.action === 'complete';
     await tx
@@ -118,13 +130,25 @@ async function applyAction(
         status: target,
         updatedAt: new Date(),
         ...(isComplete
-          ? { completionNote: input.note ?? null, completedAt: new Date(input.occurredAt) }
+          ? { agentNote: input.note ?? null, completedAt: new Date(input.occurredAt) }
           : {}),
       })
       .where(eq(workOrders.id, order.id));
+    if (isComplete) {
+      // As fotos da atividade só chegam ao cidadão depois da revisão do gestor.
+      await tx.insert(photos).values(
+        input.photoKeys.map((storageKey) => ({
+          tenantId,
+          workOrderId: order.id,
+          storageKey,
+          uploadedBy: userId,
+          review: 'pending' as const,
+        })),
+      );
+    }
     await tx.insert(statusEvents).values({
       tenantId,
-      requestId: order.requestId,
+      occurrenceId: order.occurrenceId,
       workOrderId: order.id,
       fromStatus: order.status,
       toStatus: target,
@@ -156,40 +180,63 @@ export function registerDevWorkOrders(
 ) {
   const app = instance.withTypeProvider<ZodTypeProvider>();
 
-  app.get('/dev/work-orders', async (request, reply) => {
-    const identity = requireDevIdentity(request, reply);
-    if (!identity) return reply;
-    if (!database) return reply.code(503).send({ code: 'database_not_configured' });
+  app.get(
+    '/dev/work-orders',
+    {
+      schema: {
+        response: {
+          200: z.array(workOrderSummarySchema),
+          503: z.object({ code: z.literal('database_not_configured') }),
+        },
+      },
+    },
+    async (request, reply) => {
+      const identity = requireDevIdentity(request, reply);
+      if (!identity) return reply;
+      if (!database) return reply.code(503).send({ code: 'database_not_configured' });
 
-    const rows = await withContext(database, identity, (tx) =>
-      tx
-        .select({
-          id: workOrders.id,
-          status: workOrders.status,
-          protocol: requests.protocol,
-          description: requests.description,
-          categoryName: categories.name,
-          address: requests.address,
-          location: requests.location,
-          dueAt: workOrders.dueAt,
-        })
-        .from(workOrders)
-        .innerJoin(
-          teamMembers,
-          and(eq(teamMembers.teamId, workOrders.teamId), eq(teamMembers.userId, identity.userId)),
-        )
-        .innerJoin(requests, eq(requests.id, workOrders.requestId))
-        .innerJoin(categories, eq(categories.id, requests.categoryId))
-        .where(inArray(workOrders.status, ACTIVE_STATUSES))
-        .orderBy(asc(workOrders.createdAt)),
-    );
-    // geometry em modo xy: x = longitude, y = latitude.
-    return rows.map(({ location, dueAt, ...row }) => ({
-      ...row,
-      location: { lat: location.y, lng: location.x },
-      dueAt: dueAt?.toISOString() ?? null,
-    }));
-  });
+      const rows = await withContext(database, identity, (tx) => {
+        // Protocolo, descrição e endereço vêm da solicitação mais antiga de cada ocorrência.
+        const firstRequest = tx
+          .selectDistinctOn([requests.occurrenceId], {
+            occurrenceId: requests.occurrenceId,
+            protocol: requests.protocol,
+            description: requests.description,
+            address: requests.address,
+          })
+          .from(requests)
+          .orderBy(requests.occurrenceId, asc(requests.createdAt), asc(requests.id))
+          .as('first_request');
+        return tx
+          .select({
+            id: workOrders.id,
+            status: workOrders.status,
+            protocol: firstRequest.protocol,
+            description: firstRequest.description,
+            categoryName: categories.name,
+            address: firstRequest.address,
+            location: occurrences.location,
+            dueAt: workOrders.dueAt,
+          })
+          .from(workOrders)
+          .innerJoin(
+            teamMembers,
+            and(eq(teamMembers.teamId, workOrders.teamId), eq(teamMembers.userId, identity.userId)),
+          )
+          .innerJoin(occurrences, eq(occurrences.id, workOrders.occurrenceId))
+          .innerJoin(firstRequest, eq(firstRequest.occurrenceId, occurrences.id))
+          .innerJoin(categories, eq(categories.id, occurrences.categoryId))
+          .where(inArray(workOrders.status, [...ACTIVE_WORK_ORDER_STATUSES]))
+          .orderBy(asc(workOrders.createdAt));
+      });
+      // geometry em modo xy: x = longitude, y = latitude.
+      return rows.map(({ location, dueAt, ...row }) => ({
+        ...row,
+        location: { lat: location.y, lng: location.x },
+        dueAt: dueAt?.toISOString() ?? null,
+      }));
+    },
+  );
 
   app.post(
     '/dev/work-orders/:id/actions',
@@ -247,19 +294,20 @@ export function registerDevWorkOrders(
           .where(eq(workOrders.id, request.params.id))
           .for('update');
         if (!order) return { kind: 'not_found' as const };
-        if (!canTransitionWorkOrder(order.status, 'cancelled')) {
-          return { kind: 'unavailable' as const, status: order.status };
-        }
+        // Cancelar de novo devolve a mesma resposta, sem outro evento.
+        if (order.status === 'cancelled') return { kind: 'ok' as const };
+        const transition = applyWorkOrderAction(order.status, 'cancel', 'manager');
+        if (!transition.ok) return { kind: 'unavailable' as const, status: order.status };
         await tx
           .update(workOrders)
-          .set({ status: 'cancelled', updatedAt: new Date() })
+          .set({ status: transition.to, updatedAt: new Date() })
           .where(eq(workOrders.id, order.id));
         await tx.insert(statusEvents).values({
           tenantId: identity.tenantId,
-          requestId: order.requestId,
+          occurrenceId: order.occurrenceId,
           workOrderId: order.id,
           fromStatus: order.status,
-          toStatus: 'cancelled',
+          toStatus: transition.to,
           actorUserId: identity.userId,
           comment: 'Reatribuída pelo gestor (simulação)',
         });

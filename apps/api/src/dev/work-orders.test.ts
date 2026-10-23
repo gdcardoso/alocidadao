@@ -1,20 +1,43 @@
 import { randomUUID } from 'node:crypto';
 import { createDatabase, geoPoint, schema, withContext } from '@alocidadao/db';
 import { seedDev } from '@alocidadao/db/seed';
-import type { ConnectionContext } from '@alocidadao/shared';
-import { and, eq } from 'drizzle-orm';
+import { ACTIVE_WORK_ORDER_STATUSES, type ConnectionContext } from '@alocidadao/shared';
+import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { asc, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp } from '../app.js';
 import { createStorage, newPhotoKey } from '../storage/s3.js';
 import { testStorageConfig } from '../storage/test-fixtures.js';
 import { API_TEST_APP_URL, API_TEST_OWNER_URL } from '../test/urls.js';
+import { isUniqueViolation } from './work-orders.js';
 
-const { tenants, users, memberships, departments, teams, teamMembers, categories, requests } =
-  schema;
+const {
+  tenants,
+  users,
+  memberships,
+  departments,
+  teams,
+  teamMembers,
+  categories,
+  occurrences,
+  requests,
+  photos,
+  statusEvents,
+} = schema;
 
 const owner = createDatabase(API_TEST_OWNER_URL);
 const appDb = createDatabase(API_TEST_APP_URL);
 const storage = createStorage(testStorageConfig);
+// Cliente direto do MinIO, para gravar um objeto com outro tipo de conteúdo.
+const s3 = new S3Client({
+  endpoint: testStorageConfig.endpoint,
+  region: testStorageConfig.region,
+  forcePathStyle: true,
+  credentials: {
+    accessKeyId: testStorageConfig.accessKeyId,
+    secretAccessKey: testStorageConfig.secretAccessKey,
+  },
+});
 
 const connection: ConnectionContext = {
   networkType: 'cellular',
@@ -40,15 +63,22 @@ let categoryId: string;
 async function seedTenant(label: string, ibgeCode: string) {
   const [tenant] = await owner.db
     .insert(tenants)
-    .values({ name: `Prefeitura ${label}`, city: label, state: 'SP', ibgeCode, active: true })
+    .values({
+      name: `Município ${label}`,
+      displayName: `Prefeitura ${label}`,
+      city: label,
+      state: 'SP',
+      ibgeCode,
+      status: 'active',
+    })
     .returning();
   const [agent] = await owner.db
     .insert(users)
-    .values({ name: `Agente ${label}`, email: `agente.${label}@obras.dev`, passwordHash: 'x' })
+    .values({ name: `Agente ${label}`, phone: '+5511980000001' })
     .returning();
   const [citizen] = await owner.db
     .insert(users)
-    .values({ name: `Cidadão ${label}`, email: `cidadao.${label}@obras.dev`, passwordHash: 'x' })
+    .values({ name: `Cidadão ${label}`, phone: '+5511980000002' })
     .returning();
   await owner.db.insert(memberships).values({
     tenantId: tenant!.id,
@@ -74,22 +104,28 @@ async function seedTenant(label: string, ibgeCode: string) {
   return { tenantId: tenant!.id, agentId: agent!.id, workOrderId };
 }
 
+/** Cria ocorrência, a solicitação dela e a atividade atribuída à equipe. */
 async function newWorkOrder(tid: string, teamIdArg: string, citizen: string, category: string) {
   // O protocolo sai de next_request_protocol(), que lê a prefeitura do contexto.
   return withContext(owner.db, { tenantId: tid }, async (tx) => {
-    const [request] = await tx
-      .insert(requests)
-      .values({
-        tenantId: tid,
-        citizenId: citizen,
-        categoryId: category,
-        description: 'Buraco na via, teste de atividade',
-        location: geoPoint({ lat: -23.55, lng: -46.63 }),
-      })
+    const location = geoPoint({ lat: -23.55, lng: -46.63 });
+    const [occurrence] = await tx
+      .insert(occurrences)
+      .values({ tenantId: tid, categoryId: category, location, status: 'in_progress' })
       .returning();
+    await tx.insert(requests).values({
+      tenantId: tid,
+      citizenId: citizen,
+      categoryId: category,
+      occurrenceId: occurrence!.id,
+      status: 'in_progress',
+      description: 'Buraco na via, teste de atividade',
+      location,
+      gpsLocation: location,
+    });
     const [order] = await tx
       .insert(schema.workOrders)
-      .values({ tenantId: tid, requestId: request!.id, teamId: teamIdArg })
+      .values({ tenantId: tid, occurrenceId: occurrence!.id, teamId: teamIdArg })
       .returning();
     return order!.id;
   });
@@ -139,8 +175,8 @@ async function uploadPhoto({
 async function countStatusEvents(workOrderId: string) {
   const rows = await owner.db
     .select()
-    .from(schema.statusEvents)
-    .where(eq(schema.statusEvents.workOrderId, workOrderId));
+    .from(statusEvents)
+    .where(eq(statusEvents.workOrderId, workOrderId));
   return rows.length;
 }
 
@@ -158,7 +194,7 @@ beforeAll(async () => {
 
   const [stranger] = await owner.db
     .insert(users)
-    .values({ name: 'Sem equipe', email: 'sem.equipe@obras.dev', passwordHash: 'x' })
+    .values({ name: 'Sem equipe', phone: '+5511980000003' })
     .returning();
   outsiderId = stranger!.id;
   outsider = { tenantId, userId: outsiderId };
@@ -172,38 +208,130 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  s3.destroy();
   await app?.close();
   await appDb.pool.end();
   await owner.pool.end();
 });
 
 describe('work order actions', () => {
-  it('starts and completes a work order', async () => {
-    const started = await act(wo[0]!, start());
-    expect(started.statusCode).toBe(200);
+  it('complete moves the work order to awaiting_review and keeps it in the list', async () => {
+    expect((await act(wo[0]!, start())).statusCode).toBe(200);
     const res = await act(wo[0]!, complete({ photoKeys: [await uploadPhoto()] }));
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toMatchObject({ status: 'completed', duplicate: false });
+    expect(res.json()).toEqual({ workOrderId: wo[0], status: 'awaiting_review', duplicate: false });
+    const list = (await inject('GET', '/dev/work-orders')).json();
+    expect(list.find((w: { id: string }) => w.id === wo[0])).toMatchObject({
+      status: 'awaiting_review',
+    });
+  });
+
+  it('stores the agent note, completedAt equal to occurredAt and one pending photo per key', async () => {
+    const id = await freshWorkOrder();
+    await act(id, start());
+    const keys = [await uploadPhoto(), await uploadPhoto()];
+    const body = complete({ photoKeys: keys });
+    expect((await act(id, body)).statusCode).toBe(200);
     const [row] = await owner.db
       .select()
       .from(schema.workOrders)
-      .where(eq(schema.workOrders.id, wo[0]!));
-    expect(row?.completionNote).toBe('Buraco tapado com massa asfáltica');
-    expect(row?.completedAt).toBeInstanceOf(Date);
+      .where(eq(schema.workOrders.id, id));
+    expect(row?.agentNote).toBe('Buraco tapado com massa asfáltica');
+    expect(row?.completedAt?.toISOString()).toBe(body.occurredAt);
+    const stored = await owner.db.select().from(photos).where(eq(photos.workOrderId, id));
+    expect(stored.map((p) => p.storageKey).toSorted()).toEqual(keys.toSorted());
+    for (const photo of stored) {
+      expect(photo).toMatchObject({
+        tenantId,
+        requestId: null,
+        review: 'pending',
+        uploadedBy: agentId,
+      });
+    }
+  });
+
+  it('records exactly one status event per action, linked to the occurrence', async () => {
+    const id = await freshWorkOrder();
+    const [order] = await owner.db
+      .select({ occurrenceId: schema.workOrders.occurrenceId })
+      .from(schema.workOrders)
+      .where(eq(schema.workOrders.id, id));
+    await act(id, start());
+    await act(id, complete({ photoKeys: [await uploadPhoto()] }));
     const events = await owner.db
       .select()
-      .from(schema.statusEvents)
-      .where(
-        and(
-          eq(schema.statusEvents.workOrderId, wo[0]!),
-          eq(schema.statusEvents.toStatus, 'completed'),
-        ),
-      );
+      .from(statusEvents)
+      .where(eq(statusEvents.workOrderId, id))
+      .orderBy(asc(statusEvents.createdAt));
+    expect(events).toHaveLength(2);
     expect(events[0]).toMatchObject({
-      fromStatus: 'in_execution',
+      occurrenceId: order!.occurrenceId,
+      requestId: null,
+      fromStatus: 'assigned',
+      toStatus: 'in_execution',
       actorUserId: agentId,
+      comment: null,
       connection,
     });
+    expect(events[1]).toMatchObject({
+      occurrenceId: order!.occurrenceId,
+      fromStatus: 'in_execution',
+      toStatus: 'awaiting_review',
+      actorUserId: agentId,
+      comment: 'Buraco tapado com massa asfáltica',
+    });
+  });
+
+  it('responds 503 storage_not_configured when completing without storage', async () => {
+    const bare = await buildApp({ devRoutes: true, database: appDb.db });
+    const id = await freshWorkOrder();
+    await act(id, start());
+    const res = await bare.inject({
+      method: 'POST',
+      url: `/dev/work-orders/${id}/actions`,
+      headers: headers(),
+      payload: complete({ photoKeys: [newPhotoKey(tenantId)] }),
+    });
+    await bare.close();
+    expect(res.statusCode).toBe(503);
+    expect(res.json()).toEqual({ code: 'storage_not_configured' });
+    expect(await countStatusEvents(id)).toBe(1);
+  });
+
+  it('rejects a photo whose content type is not image/jpeg', async () => {
+    const key = newPhotoKey(tenantId);
+    await s3.send(
+      new PutObjectCommand({
+        Bucket: testStorageConfig.bucket,
+        Key: key,
+        Body: new Uint8Array(1000),
+        ContentType: 'image/png',
+      }),
+    );
+    const id = await freshWorkOrder();
+    await act(id, start());
+    const res = await act(id, complete({ photoKeys: [key] }));
+    expect(res.statusCode).toBe(422);
+    expect(res.json()).toEqual({ code: 'photo_invalid', key });
+    expect(await countStatusEvents(id)).toBe(1);
+  });
+
+  it('cancelling an already cancelled work order is idempotent', async () => {
+    const id = await freshWorkOrder();
+    const first = await inject('POST', `/dev/work-orders/${id}/cancel`);
+    expect(first.statusCode).toBe(200);
+    const events = await countStatusEvents(id);
+    const second = await inject('POST', `/dev/work-orders/${id}/cancel`);
+    expect(second.statusCode).toBe(200);
+    expect(second.json()).toEqual(first.json());
+    expect(second.json()).toEqual({ workOrderId: id, status: 'cancelled' });
+    expect(await countStatusEvents(id)).toBe(events);
+  });
+
+  it('isUniqueViolation recognizes the code on the error and on its cause', () => {
+    expect(isUniqueViolation({ code: '23505' })).toBe(true);
+    expect(isUniqueViolation({ cause: { code: '23505' } })).toBe(true);
+    expect(isUniqueViolation(new Error())).toBe(false);
   });
 
   it('refuses complete on an assigned work order', async () => {
@@ -315,10 +443,10 @@ describe('GET /dev/work-orders', () => {
     const list = res.json();
     expect(list.length).toBeGreaterThan(0);
     expect(
-      list.every((w: { status: string }) => ['assigned', 'in_execution'].includes(w.status)),
+      list.every((w: { status: string }) => ACTIVE_WORK_ORDER_STATUSES.includes(w.status as never)),
     ).toBe(true);
     expect(list.map((w: { id: string }) => w.id)).not.toContain(otherTenantWorkOrder);
-    expect(list.map((w: { id: string }) => w.id)).not.toContain(wo[0]);
+    expect(list.map((w: { id: string }) => w.id)).not.toContain(wo[2]);
     expect(list[0]).toMatchObject({
       categoryName: expect.any(String),
       protocol: expect.any(String),
@@ -326,6 +454,11 @@ describe('GET /dev/work-orders', () => {
     });
     expect(list[0].location.lat).toBeLessThan(-23);
     expect(list[0].location.lng).toBeLessThan(-46);
+    // Protocolo, descrição e endereço vêm da solicitação mais antiga da ocorrência.
+    expect(list[0]).toMatchObject({
+      description: 'Buraco na via em frente ao número 100',
+      categoryName: 'Buraco na via',
+    });
   });
 
   it('lists nothing for a person without teams', async () => {

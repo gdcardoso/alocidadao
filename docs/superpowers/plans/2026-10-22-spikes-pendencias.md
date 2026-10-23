@@ -8,12 +8,14 @@ Itens menores achados nas revisões dos spikes (`2026-10-22-spikes-de-risco.md`)
 
 ## Plano 1 — Modelo de dados
 
-- Teste do `WITH CHECK` de `client_actions` (inserir com `tenant_id` de outra prefeitura); teste "esconde ações de outra prefeitura" depende da ordem.
-- `seedDev`: checagem de existência fora da transação; exige superusuário.
-- Rotas reais substituem `/dev/*`: usar schemas de resposta (`workOrderSummarySchema` está sem uso), fechar o pool do banco no desligamento, cancelamento idempotente.
-- Testes que faltam: `completedAt` = `occurredAt`, `comment` = relato, contagem exata de eventos, 503 sem armazenamento, tipo de arquivo errado; ramo 23505 sem teste próprio.
-- `storage.head` roda com a linha travada; `head()` sem teste do erro repassado; `test-fixtures.ts` vai para o `dist`.
-- Variáveis de ambiente da API validadas na subida (hoje as chaves S3 caem em `''`); a API não lê `.env`.
+- [x] Teste do `WITH CHECK` de `client_actions` (inserir com `tenant_id` de outra prefeitura); teste "esconde ações de outra prefeitura" depende da ordem.
+- [x] `seedDev`: checagem de existência fora da transação; exige superusuário.
+- [x] `/dev/*` no modelo novo: a lista de atividades declara `workOrderSummarySchema` como resposta; cancelamento idempotente.
+- [x] Testes que faltam: `completedAt` = `occurredAt`, `comment` = relato, contagem exata de eventos, 503 sem armazenamento, tipo de arquivo errado; ramo 23505 sem teste próprio.
+- [x] `storage.head` roda com a linha travada; `head()` sem teste do erro repassado; `test-fixtures.ts` vai para o `dist`.
+- [ ] Variáveis de ambiente da API validadas na subida (hoje as chaves S3 caem em `''`) — Task 6 do plano 2026-10-23.
+- [ ] A API não lê `.env` — Task 6 do plano 2026-10-23.
+- [ ] Fechar o pool do banco no desligamento da API — Task 6 do plano 2026-10-23.
 
 ## Plano 2 — Acesso
 
@@ -28,6 +30,8 @@ Itens menores achados nas revisões dos spikes (`2026-10-22-spikes-de-risco.md`)
 
 ## Plano 4 — App do agente
 
+- Rotas reais substituem `/dev/*`: schema de resposta em todas as rotas (hoje só a lista de atividades declara o seu).
+- Chave de foto já usada em outra conclusão responde 409 `client_action_conflict`: o 23505 de `photos.storage_key` cai no mesmo ramo do id de ação repetido.
 - `useOutboxSync` está só na tela do Laboratório: mover para o layout raiz.
 - 408 e 429 no envio de foto viram falha definitiva: tratar como nova tentativa.
 - Foto de conclusão recusada por conflito fica órfã no armazenamento; pastas de itens em conflito ou falha não são apagadas; `dir.delete` com erro interrompe a passada.

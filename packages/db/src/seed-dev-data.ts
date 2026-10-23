@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { and, asc, eq, sql } from 'drizzle-orm';
-import { geoPoint, type Database } from './client.js';
+import { geoPoint, type Database, type Transaction } from './client.js';
 import {
   categories,
   departments,
@@ -20,6 +20,7 @@ const AGENT_PHONE = '+5511900000001';
 const CITIZEN_EMAIL = 'cidadao.demo@alocidadao.dev';
 const CITIZEN_PHONE = '+5511900000002';
 const TEAM_NAME = 'Equipe Obras – Centro';
+const CATEGORY_NAME = 'Buraco na via';
 
 /** Ponto de referência (centro de São Paulo) em torno do qual ficam as solicitações. */
 const CENTER = { lat: -23.5505, lng: -46.6333 };
@@ -43,9 +44,50 @@ export interface SeedDevResult {
 }
 
 /**
+ * Cria as 3 solicitações da demo, cada uma na sua ocorrência, com a atividade atribuída à equipe.
+ * Devolve os ids das atividades na ordem de REQUESTS.
+ */
+async function createDemoWorkOrders(
+  tx: Transaction,
+  ids: { tenantId: string; teamId: string; categoryId: string; citizenId: string },
+): Promise<string[]> {
+  const { tenantId, teamId, categoryId, citizenId } = ids;
+  // created_at explícito e crescente: dentro de uma transação now() é igual para todas as
+  // linhas, e a ordem por created_at é o que reencontra as atividades na segunda execução.
+  const base = Date.now();
+  const workOrderIds: string[] = [];
+  for (const [index, item] of REQUESTS.entries()) {
+    const createdAt = new Date(base + index * 1000);
+    const location = geoPoint({ lat: CENTER.lat + item.dLat, lng: CENTER.lng + item.dLng });
+    const [occurrence] = await tx
+      .insert(occurrences)
+      .values({ tenantId, categoryId, location, status: 'in_progress', createdAt })
+      .returning({ id: occurrences.id });
+    await tx.insert(requests).values({
+      tenantId,
+      citizenId,
+      categoryId,
+      occurrenceId: occurrence!.id,
+      status: 'in_progress',
+      description: item.description,
+      location,
+      gpsLocation: location,
+      createdAt,
+    });
+    const [order] = await tx
+      .insert(workOrders)
+      .values({ tenantId, occurrenceId: occurrence!.id, teamId, status: 'assigned', createdAt })
+      .returning({ id: workOrders.id });
+    workOrderIds.push(order!.id);
+  }
+  return workOrderIds;
+}
+
+/**
  * Cria a prefeitura de demonstração (IBGE 9999901) com equipe, agente, cidadão e 3 solicitações,
  * cada uma na sua ocorrência, com a atividade da ocorrência atribuída à equipe.
- * Idempotente: se a prefeitura já existe, devolve os ids existentes.
+ * Idempotente: se a prefeitura já existe, devolve os ids existentes. Se ela existe mas a equipe
+ * ficou sem atividades (uma migração apagou os dados operacionais), recria as 3 solicitações.
  * Exige a conexão do dono do banco (superusuário): ele cria a prefeitura e os usuários, que são
  * globais, e não passa pelo RLS.
  */
@@ -85,12 +127,31 @@ export async function seedDev(db: Database): Promise<SeedDevResult> {
         .from(workOrders)
         .where(and(eq(workOrders.tenantId, tenantId), eq(workOrders.teamId, team.id)))
         .orderBy(asc(workOrders.createdAt));
-      return {
+      if (orders.length > 0) {
+        return {
+          tenantId,
+          teamId: team.id,
+          agentId: agent.id,
+          workOrderIds: orders.map((o) => o.id),
+        };
+      }
+      // Uma migração apagou os dados operacionais: recria as solicitações e as atividades.
+      const [category] = await tx
+        .select({ id: categories.id })
+        .from(categories)
+        .where(and(eq(categories.tenantId, tenantId), eq(categories.name, CATEGORY_NAME)));
+      const [citizen] = await tx
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.email, CITIZEN_EMAIL));
+      if (!category || !citizen) throw new Error('A prefeitura demo existe mas está incompleta');
+      const workOrderIds = await createDemoWorkOrders(tx, {
         tenantId,
         teamId: team.id,
-        agentId: agent.id,
-        workOrderIds: orders.map((o) => o.id),
-      };
+        categoryId: category.id,
+        citizenId: citizen.id,
+      });
+      return { tenantId, teamId: team.id, agentId: agent.id, workOrderIds };
     }
 
     await tx.insert(tenants).values({
@@ -134,44 +195,15 @@ export async function seedDev(db: Database): Promise<SeedDevResult> {
     await tx.insert(teamMembers).values({ tenantId, teamId: team!.id, userId: agent!.id });
     const [category] = await tx
       .insert(categories)
-      .values({ tenantId, departmentId: department!.id, name: 'Buraco na via' })
+      .values({ tenantId, departmentId: department!.id, name: CATEGORY_NAME })
       .returning({ id: categories.id });
 
-    // created_at explícito e crescente: dentro de uma transação now() é igual para todas as
-    // linhas, e a ordem por created_at é o que reencontra as atividades na segunda execução.
-    const base = Date.now();
-    const workOrderIds: string[] = [];
-    for (const [index, item] of REQUESTS.entries()) {
-      const createdAt = new Date(base + index * 1000);
-      const location = geoPoint({ lat: CENTER.lat + item.dLat, lng: CENTER.lng + item.dLng });
-      const [occurrence] = await tx
-        .insert(occurrences)
-        .values({ tenantId, categoryId: category!.id, location, status: 'in_progress', createdAt })
-        .returning({ id: occurrences.id });
-      await tx.insert(requests).values({
-        tenantId,
-        citizenId: citizen!.id,
-        categoryId: category!.id,
-        occurrenceId: occurrence!.id,
-        status: 'in_progress',
-        description: item.description,
-        location,
-        gpsLocation: location,
-        createdAt,
-      });
-      const [order] = await tx
-        .insert(workOrders)
-        .values({
-          tenantId,
-          occurrenceId: occurrence!.id,
-          teamId: team!.id,
-          status: 'assigned',
-          createdAt,
-        })
-        .returning({ id: workOrders.id });
-      workOrderIds.push(order!.id);
-    }
-
+    const workOrderIds = await createDemoWorkOrders(tx, {
+      tenantId,
+      teamId: team!.id,
+      categoryId: category!.id,
+      citizenId: citizen!.id,
+    });
     return { tenantId, teamId: team!.id, agentId: agent!.id, workOrderIds };
   });
 }

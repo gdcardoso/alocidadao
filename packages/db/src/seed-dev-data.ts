@@ -16,7 +16,9 @@ import {
 
 export const DEMO_IBGE_CODE = '9999901';
 const AGENT_EMAIL = 'agente.demo@alocidadao.dev';
+const AGENT_PHONE = '+5511900000001';
 const CITIZEN_EMAIL = 'cidadao.demo@alocidadao.dev';
+const CITIZEN_PHONE = '+5511900000002';
 const TEAM_NAME = 'Equipe Obras – Centro';
 
 /** Ponto de referência (centro de São Paulo) em torno do qual ficam as solicitações. */
@@ -81,26 +83,26 @@ export async function seedDev(db: Database): Promise<SeedDevResult> {
 
     await tx.insert(tenants).values({
       id: tenantId,
-      name: 'Prefeitura Demo A',
+      name: 'Município Demo A',
+      displayName: 'Prefeitura Demo A',
       city: 'Demo A',
       state: 'SP',
       ibgeCode: DEMO_IBGE_CODE,
-      active: true,
+      status: 'active',
     });
 
-    // Usuários são globais; os dados de acesso são só de desenvolvimento.
+    // Usuários são globais e entram sem senha (login por telefone); os dados são só de desenvolvimento.
     const [agent] = await tx
       .insert(users)
       .values({
         name: 'Agente Demo',
         email: AGENT_EMAIL,
-        phone: '+5511900000001',
-        passwordHash: 'dev',
+        phone: AGENT_PHONE,
       })
       .returning({ id: users.id });
     const [citizen] = await tx
       .insert(users)
-      .values({ name: 'Cidadão Demo', email: CITIZEN_EMAIL, passwordHash: 'dev' })
+      .values({ name: 'Cidadão Demo', email: CITIZEN_EMAIL, phone: CITIZEN_PHONE })
       .returning({ id: users.id });
 
     await tx.insert(memberships).values([

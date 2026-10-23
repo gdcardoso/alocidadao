@@ -17,11 +17,22 @@ let b: { tenantId: string; userId: string };
 async function seedTenant(db: Database, label: string, ibgeCode: string) {
   const [tenant] = await db
     .insert(tenants)
-    .values({ name: `Prefeitura ${label}`, city: label, state: 'SP', ibgeCode, active: true })
+    .values({
+      name: `Município ${label}`,
+      displayName: `Prefeitura ${label}`,
+      city: label,
+      state: 'SP',
+      ibgeCode,
+      status: 'active',
+    })
     .returning();
   const [user] = await db
     .insert(users)
-    .values({ name: `Agente ${label}`, email: `agente.${label}@acoes.dev`, passwordHash: 'x' })
+    .values({
+      name: `Agente ${label}`,
+      email: `agente.${label}@acoes.dev`,
+      phone: `+551193${ibgeCode}`,
+    })
     .returning();
   return { tenantId: tenant!.id, userId: user!.id };
 }

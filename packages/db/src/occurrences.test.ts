@@ -48,7 +48,14 @@ function north(point: GeoPoint, meters: number): GeoPoint {
 async function seedTenant(db: Database, label: string, ibgeCode: string): Promise<TenantSeed> {
   const [tenant] = await db
     .insert(tenants)
-    .values({ name: `Prefeitura ${label}`, city: label, state: 'SP', ibgeCode, active: true })
+    .values({
+      name: `Município ${label}`,
+      displayName: `Prefeitura ${label}`,
+      city: label,
+      state: 'SP',
+      ibgeCode,
+      status: 'active',
+    })
     .returning();
   const tenantId = tenant!.id;
   const [citizen] = await db
@@ -56,7 +63,7 @@ async function seedTenant(db: Database, label: string, ibgeCode: string): Promis
     .values({
       name: `Cidadão ${label}`,
       email: `cidadao.${label}@ocorrencias.dev`,
-      passwordHash: 'x',
+      phone: `+551192${ibgeCode}`,
     })
     .returning();
   const citizenId = citizen!.id;

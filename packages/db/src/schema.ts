@@ -1,10 +1,15 @@
 import {
+  ACCOUNT_STATUSES,
+  COMMERCIAL_STATUSES,
   DEFAULT_CLUSTER_RADIUS_M,
   ICON_GROUPS,
+  MEMBERSHIP_STATUSES,
   OCCURRENCE_STATUSES,
   PHOTO_REVIEWS,
+  PLATFORM_ROLES,
   REQUEST_STATUSES,
   TENANT_ROLES,
+  TENANT_STATUSES,
   WORK_ORDER_STATUSES,
 } from '@alocidadao/shared';
 import { sql } from 'drizzle-orm';
@@ -13,6 +18,7 @@ import {
   char,
   check,
   customType,
+  date,
   foreignKey,
   geometry,
   index,
@@ -52,17 +58,26 @@ export const workOrderStatus = pgEnum('work_order_status', WORK_ORDER_STATUSES);
 export const occurrenceStatus = pgEnum('occurrence_status', OCCURRENCE_STATUSES);
 export const photoReview = pgEnum('photo_review', PHOTO_REVIEWS);
 export const iconGroup = pgEnum('icon_group', ICON_GROUPS);
+export const tenantStatus = pgEnum('tenant_status', TENANT_STATUSES);
+export const membershipStatus = pgEnum('membership_status', MEMBERSHIP_STATUSES);
+export const accountStatus = pgEnum('account_status', ACCOUNT_STATUSES);
+export const platformRole = pgEnum('platform_role', PLATFORM_ROLES);
+export const commercialStatus = pgEnum('commercial_status', COMMERCIAL_STATUSES);
 
 // ── Tabelas globais (sem tenant_id) ────────────────────────────────────────
 
 export const tenants = pgTable('tenants', {
   id: id(),
   name: text('name').notNull(),
+  /** Nome mostrado no app e no painel. */
+  displayName: text('display_name').notNull(),
   city: text('city').notNull(),
   state: char('state', { length: 2 }).notNull(),
   ibgeCode: text('ibge_code').notNull().unique(),
   boundary: multiPolygon('boundary'),
-  active: boolean('active').notNull().default(false),
+  status: tenantStatus('status').notNull().default('onboarding'),
+  /** Telefone da central de atendimento da prefeitura. */
+  centralPhone: text('central_phone'),
   createdAt: createdAt(),
 });
 
@@ -71,14 +86,101 @@ export const users = pgTable(
   {
     id: id(),
     name: text('name').notNull(),
-    email: text('email').notNull(),
+    email: text('email'),
+    /** E.164. Identifica a conta no login; o número pode ser reaproveitado por outra pessoa. */
     phone: text('phone'),
+    /** Só os 11 dígitos. */
     cpf: text('cpf').unique(),
-    passwordHash: text('password_hash').notNull(),
-    isPlatformAdmin: boolean('is_platform_admin').notNull().default(false),
+    accountStatus: accountStatus('account_status').notNull().default('active'),
+    lastActiveAt: timestamp('last_active_at', { withTimezone: true }),
+    /** Papel na equipe interna da plataforma; nulo para quem não é da equipe. */
+    platformRole: platformRole('platform_role'),
     createdAt: createdAt(),
   },
-  (t) => [uniqueIndex('users_email_lower_idx').on(sql`lower(${t.email})`)],
+  (t) => [
+    uniqueIndex('users_email_lower_idx').on(sql`lower(${t.email})`),
+    // Número reaproveitado: a conta antiga é congelada e o telefone fica livre para a nova.
+    uniqueIndex('users_phone_active_idx')
+      .on(t.phone)
+      .where(sql`${t.accountStatus} = 'active'`),
+    check('users_phone_check', sql`${t.phone} ~ '^\\+[1-9][0-9]{7,14}$'`),
+    check('users_cpf_check', sql`${t.cpf} ~ '^[0-9]{11}$'`),
+    check('users_phone_or_cpf_check', sql`${t.phone} is not null or ${t.cpf} is not null`),
+  ],
+);
+
+// ── Tabelas da equipe interna da plataforma ────────────────────────────────
+// Políticas próprias (migração platform_rls), não a tenant_isolation: o contrato e a
+// auditoria têm tenant_id, mas quem escreve neles é a equipe interna, não a prefeitura.
+
+/** Contratos da prefeitura com a plataforma. Lidos pela equipe interna; escritos só pelo admin. */
+export const tenantContracts = pgTable(
+  'tenant_contracts',
+  {
+    id: id(),
+    tenantId: tenantId(),
+    plan: text('plan').notNull(),
+    startsOn: date('starts_on').notNull(),
+    endsOn: date('ends_on'),
+    includedPanelUsers: integer('included_panel_users').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index().on(t.tenantId),
+    check('tenant_contracts_ends_on_check', sql`${t.endsOn} >= ${t.startsOn}`),
+    check('tenant_contracts_included_panel_users_check', sql`${t.includedPanelUsers} > 0`),
+  ],
+);
+
+/**
+ * O que a equipe interna fez dentro de uma prefeitura. A prefeitura lê; só inserção
+ * (UPDATE e DELETE não são concedidos a app_user).
+ */
+export const staffAuditEvents = pgTable(
+  'staff_audit_events',
+  {
+    id: id(),
+    tenantId: tenantId(),
+    staffUserId: uuid('staff_user_id')
+      .notNull()
+      .references(() => users.id),
+    action: text('action').notNull(),
+    targetType: text('target_type'),
+    targetId: uuid('target_id'),
+    details: jsonb('details'),
+    createdAt: createdAt(),
+  },
+  (t) => [index().on(t.tenantId, t.createdAt)],
+);
+
+/** Cidadão de um município sem prefeitura cadastrada avisando que quer o app lá. */
+export const cityInterest = pgTable(
+  'city_interest',
+  {
+    ibgeCode: char('ibge_code', { length: 7 }).notNull(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.ibgeCode, t.userId] }),
+    check('city_interest_ibge_code_check', sql`${t.ibgeCode} ~ '^[0-9]{7}$'`),
+  ],
+);
+
+/** Situação comercial de cada município, mantida pela equipe interna. */
+export const municipalityLeads = pgTable(
+  'municipality_leads',
+  {
+    ibgeCode: char('ibge_code', { length: 7 }).primaryKey(),
+    commercialStatus: commercialStatus('commercial_status').notNull().default('new'),
+    updatedAt: updatedAt(),
+    updatedBy: uuid('updated_by')
+      .notNull()
+      .references(() => users.id),
+  },
+  (t) => [check('municipality_leads_ibge_code_check', sql`${t.ibgeCode} ~ '^[0-9]{7}$'`)],
 );
 
 // ── Tabelas da prefeitura ──────────────────────────────────────────────────
@@ -92,6 +194,7 @@ export const memberships = pgTable(
       .notNull()
       .references(() => users.id),
     role: tenantRole('role').notNull(),
+    status: membershipStatus('status').notNull().default('active'),
     createdAt: createdAt(),
   },
   (t) => [unique().on(t.tenantId, t.userId, t.role), index().on(t.userId)],

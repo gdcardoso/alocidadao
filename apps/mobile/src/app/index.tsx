@@ -22,6 +22,11 @@ export default function Home() {
       <Link href="/laboratorio" style={styles.link}>
         Laboratório
       </Link>
+      {__DEV__ ? (
+        <Link href="/dev/kit" style={styles.link}>
+          Kit de componentes
+        </Link>
+      ) : null}
       <Text style={styles.subtitle}>Status de solicitação</Text>
       {REQUEST_STATUSES.map((status) => (
         <Text key={status}>• {REQUEST_STATUS_LABELS[status]}</Text>

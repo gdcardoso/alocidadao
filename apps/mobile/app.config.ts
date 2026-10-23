@@ -16,6 +16,22 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       ...config.android,
       ...(hasGoogleServices ? { googleServicesFile } : {}),
     },
-    plugins: [...(config.plugins ?? []), 'expo-notifications'],
+    plugins: [
+      ...(config.plugins ?? []),
+      'expo-notifications',
+      'expo-font',
+      // Abertura nativa: logo da marca sobre fundo branco (a tela 0 do Pencil usa a mesma logo).
+      [
+        'expo-splash-screen',
+        {
+          image: './assets/logo.png',
+          imageWidth: 240,
+          resizeMode: 'contain',
+          backgroundColor: '#FFFFFF',
+        },
+      ],
+      // Mapa do "Ajustar" (Task 9); entra agora para um único build nativo.
+      '@maplibre/maplibre-react-native',
+    ],
   };
 };

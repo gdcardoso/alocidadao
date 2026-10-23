@@ -12,16 +12,10 @@ CREATE POLICY municipalities_select ON municipalities FOR SELECT TO app_user USI
 GRANT SELECT ON municipalities TO app_user;
 --> statement-breakpoint
 
--- ── requests: o cidadão lê as próprias solicitações em qualquer prefeitura ──
--- Permissiva: soma-se à tenant_isolation só na leitura. Gravar continua exigindo a prefeitura
--- do contexto.
-
-CREATE POLICY requests_citizen_select ON requests FOR SELECT TO app_user
-  USING (citizen_id = app_current_user());
---> statement-breakpoint
-
 -- ── Lista "Minhas solicitações": todas as prefeituras, com a categoria de cada uma ──
--- As categorias são da prefeitura (RLS por tenant), por isso a função roda como o dono.
+-- Solicitações e categorias são da prefeitura (RLS por tenant), por isso a função roda como o
+-- dono. Não há política de leitura direta das próprias solicitações: ela somaria linhas de
+-- outras prefeituras às leituras feitas no contexto de uma prefeitura.
 -- Sem usuário no contexto, app_current_user() é nulo e nada é devolvido.
 
 CREATE FUNCTION citizen_list_requests(p_statuses text[])

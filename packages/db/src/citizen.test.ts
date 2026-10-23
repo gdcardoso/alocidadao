@@ -197,25 +197,22 @@ describe('ownRequestTenant', () => {
   });
 });
 
-describe('requests_citizen_select', () => {
-  it('o cidadão lê as próprias solicitações sem contexto de prefeitura, e só as dele', async () => {
+describe('isolamento de requests', () => {
+  it('contexto da prefeitura não mostra solicitações do próprio usuário em outra prefeitura', async () => {
+    const rows = await withContext(app.db, { tenantId: x.tenantId, userId: citizenA }, (tx) =>
+      tx.select({ id: requests.id, tenantId: requests.tenantId }).from(requests),
+    );
+    const found = rows.map((r) => r.id);
+    expect(found).not.toContain(ids.aAwaitingY);
+    expect(found).not.toContain(ids.aProgressY);
+    expect(rows.every((r) => r.tenantId === x.tenantId)).toBe(true);
+  });
+
+  it('sem contexto de prefeitura, a leitura direta não devolve nada', async () => {
     const rows = await withContext(app.db, { userId: citizenA }, (tx) =>
       tx.select({ id: requests.id }).from(requests),
     );
-    expect(rows.map((r) => r.id).toSorted()).toEqual(
-      [ids.aOpenX, ids.aDoneX, ids.aAwaitingY, ids.aProgressY].toSorted(),
-    );
-  });
-
-  it('não permite alterar solicitação de outra prefeitura', async () => {
-    const updated = await withContext(app.db, { tenantId: x.tenantId, userId: citizenA }, (tx) =>
-      tx
-        .update(requests)
-        .set({ address: 'Outro endereço' })
-        .where(sql`${requests.id} = ${ids.aProgressY}`)
-        .returning({ id: requests.id }),
-    );
-    expect(updated).toEqual([]);
+    expect(rows).toEqual([]);
   });
 });
 

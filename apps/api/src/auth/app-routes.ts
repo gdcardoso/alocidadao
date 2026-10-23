@@ -152,11 +152,9 @@ export function registerAppAuthRoutes(instance: FastifyInstance, deps: AuthDeps)
         target: user.email,
         userId: user.id,
       });
-      if (!recovery.issued) {
-        return reply
-          .code(429)
-          .send({ code: 'code_rate_limited', retryAfterSeconds: recovery.retryAfterSeconds });
-      }
+      // Sem novo código por e-mail agora: o do celular já foi gasto, então a pessoa segue
+      // para o cadastro (o token congela a conta parada) em vez de ficar presa num 429.
+      if (!recovery.issued) return { status: 'needs_profile' as const, signupToken };
       await email.send(codeEmail(user.email.toLowerCase(), recovery.code));
       return {
         status: 'email_check' as const,
@@ -181,6 +179,8 @@ export function registerAppAuthRoutes(instance: FastifyInstance, deps: AuthDeps)
       if (!claims) return reply.code(401).send({ code: 'signup_token_invalid' });
 
       const userId = randomUUID();
+      // Como no PATCH /me: e-mail gravado sem espaços e em minúsculas.
+      const normalizedEmail = userEmail?.trim().toLowerCase() ?? null;
       try {
         const session = await withContext(db, { userId }, async (tx) => {
           // Congela antes de inserir: o índice de telefone ativo recusaria a conta nova.
@@ -193,7 +193,7 @@ export function registerAppAuthRoutes(instance: FastifyInstance, deps: AuthDeps)
           await tx.execute(sql`
             insert into users (id, name, email, phone, terms_version, terms_accepted_at)
             values (
-              ${userId}, ${name}, ${userEmail ?? null}, ${claims.phone},
+              ${userId}, ${name}, ${normalizedEmail}, ${claims.phone},
               ${acceptedTermsVersion}, now()
             )
           `);

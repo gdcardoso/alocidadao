@@ -2,6 +2,8 @@ import {
   changePhone,
   consumeCode,
   deleteAccount,
+  findUserByPhone,
+  freezeStaleAccount,
   schema,
   withContext,
   type Database,
@@ -29,6 +31,12 @@ import { requireAuth } from '../auth/plugin.js';
 import { smsCodeText } from '../messaging/sms.js';
 
 const { users, memberships, tenants, devices } = schema;
+
+/**
+ * Aparelho que não existe: na troca de número só importa se a conta dona do número está
+ * parada; aparelho conhecido nunca é motivo para deixar de congelá-la.
+ */
+const NO_DEVICE = '00000000-0000-0000-0000-000000000000';
 
 export type MeDeps = Pick<AuthDeps, 'db' | 'secret' | 'devFixedCode' | 'sms'> & {
   /**
@@ -289,6 +297,13 @@ export function registerMeRoutes(instance: FastifyInstance, deps: MeDeps) {
       }
       try {
         const me = await asActiveUser(db, userId, async (tx) => {
+          // Mesma regra do login: o código provou a posse do número; se ele é de outra conta
+          // parada há 90 dias, ela é congelada. Conta em uso continua dona do número, e o
+          // índice de telefone ativo recusa a troca (409).
+          const holder = await findUserByPhone(tx, consumed.target, NO_DEVICE);
+          if (holder && holder.id !== userId && holder.stale) {
+            await freezeStaleAccount(tx, holder.id, consumed.target);
+          }
           await changePhone(tx, consumed.target);
           return loadMe(tx, userId);
         });

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { eq, sql } from 'drizzle-orm';
+import type { PgInsertValue } from 'drizzle-orm/pg-core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   consumeCode,
@@ -30,10 +31,19 @@ let tenantId: string;
 let userA: string;
 let userB: string;
 
-const daysAgo = (days: number) => new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60 * 1000);
+// Datas calculadas pelo relógio do banco: o relógio do contêiner pode estar defasado em relação
+// ao do host, e as funções comparam tudo com `now()` do banco.
+const daysAgo = (days: number) => sql<Date>`now() - make_interval(days => ${days}::int)`;
+const minutesAgo = (minutes: number) => sql<Date>`now() - make_interval(mins => ${minutes}::int)`;
+const minutesAhead = (minutes: number) => sql<Date>`now() + make_interval(mins => ${minutes}::int)`;
 
-async function createUser(db: Database, values: typeof users.$inferInsert) {
+/** `now()` do banco, para comparar com datas gravadas por ele. */
+async function dbNow(): Promise<number> {
+  const result = await owner.pool.query<{ now: Date }>('select now() as now');
+  return result.rows[0]!.now.getTime();
+}
+
+async function createUser(db: Database, values: PgInsertValue<typeof users>) {
   const [user] = await db.insert(users).values(values).returning();
   return user!.id;
 }
@@ -110,7 +120,7 @@ describe('códigos de verificação', () => {
         purpose: 'phone_login' as const,
         target,
         codeHash: 'antigo',
-        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+        expiresAt: minutesAhead(10),
         createdAt: minutesAgo(minutes),
       })),
     );
@@ -287,7 +297,7 @@ describe('login por telefone e por CPF', () => {
 });
 
 describe('sessões e aparelhos', () => {
-  async function createSession(values: Partial<typeof sessions.$inferInsert> = {}) {
+  async function createSession(values: Partial<PgInsertValue<typeof sessions>> = {}) {
     const tokenHash = randomUUID();
     const [session] = await owner.db
       .insert(sessions)
@@ -309,17 +319,17 @@ describe('sessões e aparelhos', () => {
       audience: 'app',
     });
     const [user] = await owner.db.select().from(users).where(eq(users.id, userA));
-    expect(user!.lastActiveAt!.getTime()).toBeGreaterThan(Date.now() - 60 * 1000);
+    expect(user!.lastActiveAt!.getTime()).toBeGreaterThan((await dbNow()) - 60 * 1000);
 
     // Painel: o prazo se renova a cada uso.
     const panel = await createSession({
       audience: 'panel',
       idleTimeoutSeconds: 12 * 60 * 60,
-      expiresAt: new Date(Date.now() + 60 * 1000),
+      expiresAt: minutesAhead(1),
     });
     expect(await sessionForRefresh(app.db, panel.tokenHash)).toMatchObject({ audience: 'panel' });
     const [renewed] = await owner.db.select().from(sessions).where(eq(sessions.id, panel.id));
-    expect(renewed!.expiresAt!.getTime()).toBeGreaterThan(Date.now() + 11 * 60 * 60 * 1000);
+    expect(renewed!.expiresAt!.getTime()).toBeGreaterThan((await dbNow()) + 11 * 60 * 60 * 1000);
 
     // Ignora sessão revogada.
     const revoked = await createSession({ revokedAt: new Date() });

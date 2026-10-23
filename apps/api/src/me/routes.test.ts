@@ -6,7 +6,7 @@ import type {
   PhoneVerifyResponse,
   SessionTokens,
 } from '@alocidadao/shared';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp } from '../app.js';
 import type { EmailSender } from '../messaging/email.js';
@@ -29,7 +29,7 @@ const email: EmailSender = { send: async () => {} };
 
 let app: Awaited<ReturnType<typeof buildApp>>;
 
-const newPhone = () => `+5521${String(randomInt(0, 1_000_000_000)).padStart(9, '0')}`;
+const newPhone = () => `+55219${String(randomInt(0, 100_000_000)).padStart(8, '0')}`;
 
 async function createUser(values: Partial<typeof users.$inferInsert> = {}) {
   const phone = values.phone ?? newPhone();
@@ -416,6 +416,46 @@ describe('me routes', () => {
     expect(res.statusCode).toBe(409);
     expect(res.json()).toEqual({ code: 'phone_in_use' });
     expect((await getMe(session)).json<MeResponse>().phone).toBe(user.phone);
+  });
+
+  it('phone change takes a number from a stale account', async () => {
+    const user = await createUser();
+    const stale = await createUser();
+    const session = await signIn(user.phone);
+    const staleSession = await signIn(stale.phone);
+    // Parada há mais de 90 dias, pelo relógio do banco.
+    await owner.db
+      .update(users)
+      .set({
+        lastActiveAt: sql`now() - interval '100 days'`,
+        createdAt: sql`now() - interval '200 days'`,
+      })
+      .where(eq(users.id, stale.id));
+
+    const start = await app.inject({
+      method: 'POST',
+      url: '/me/phone/start',
+      headers: bearer(session),
+      payload: { phone: stale.phone },
+    });
+    expect(start.statusCode).toBe(200);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/me/phone/verify',
+      headers: bearer(session),
+      payload: { challengeId: start.json<ChallengeResponse>().challengeId, code: '123456' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json<MeResponse>().phone).toBe(stale.phone);
+
+    const [old] = await owner.db.select().from(users).where(eq(users.id, stale.id));
+    expect(old).toMatchObject({ accountStatus: 'frozen', phone: stale.phone });
+    const refresh = await app.inject({
+      method: 'POST',
+      url: '/auth/refresh',
+      payload: { refreshToken: staleSession.refreshToken },
+    });
+    expect(refresh.statusCode).toBe(401);
   });
 
   it('refresh and me fail after account deletion', async () => {

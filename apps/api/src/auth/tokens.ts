@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { ACCESS_TOKEN_TTL_SECONDS, deviceInfoSchema, phoneSchema } from '@alocidadao/shared';
+import { ACCESS_TOKEN_TTL_SECONDS, deviceInfoSchema, storedPhoneSchema } from '@alocidadao/shared';
 import { jwtVerify, SignJWT } from 'jose';
 import { z } from 'zod';
 
@@ -16,7 +16,7 @@ export interface AccessClaims {
 }
 
 const signupClaimsSchema = z.object({
-  phone: phoneSchema,
+  phone: storedPhoneSchema,
   device: deviceInfoSchema,
   /** Conta parada com o mesmo telefone, congelada quando a conta nova for criada. */
   freezeUserId: z.uuid().nullable(),

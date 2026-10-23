@@ -39,7 +39,7 @@ function newCpf(): string {
   return first + checkDigit(first, 10);
 }
 
-const newPhone = () => `+5521${String(randomInt(0, 1_000_000_000)).padStart(9, '0')}`;
+const newPhone = () => `+55219${String(randomInt(0, 100_000_000)).padStart(8, '0')}`;
 
 async function createUser(values: Partial<typeof users.$inferInsert>) {
   const [user] = await owner.db

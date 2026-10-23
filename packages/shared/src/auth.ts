@@ -2,8 +2,13 @@ import { z } from 'zod';
 import { cpfSchema } from './cpf.js';
 import { PLATFORM_ROLES } from './roles.js';
 
-/** Telefone em E.164, como `+5511999998888`. */
-export const phoneSchema = z.string().regex(/^\+[1-9][0-9]{7,14}$/, 'Telefone inválido');
+/**
+ * Celular brasileiro em E.164, como `+5511999998888`: DDD sem zero e nove dígitos começando
+ * por 9. É o que a API aceita de quem digita um número.
+ */
+export const phoneSchema = z.string().regex(/^\+55[1-9]{2}9[0-9]{8}$/, 'Celular inválido');
+/** Qualquer telefone em E.164: descreve o que já está gravado (e o que a API devolve). */
+export const storedPhoneSchema = z.string().regex(/^\+[1-9][0-9]{7,14}$/, 'Telefone inválido');
 /** Código de verificação de 6 dígitos. */
 export const codeSchema = z.string().regex(/^[0-9]{6}$/, 'Código inválido');
 
@@ -108,7 +113,7 @@ export type SessionResponse = z.infer<typeof sessionResponseSchema>;
 export const meResponseSchema = z.object({
   id: z.uuid(),
   name: z.string(),
-  phone: z.string().nullable(),
+  phone: storedPhoneSchema.nullable(),
   email: z.string().nullable(),
   platformRole: z.enum(PLATFORM_ROLES).nullable(),
   agentTenants: z.array(z.object({ tenantId: z.uuid(), tenantName: z.string() })),

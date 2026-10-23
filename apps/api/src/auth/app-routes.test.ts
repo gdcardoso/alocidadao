@@ -8,7 +8,7 @@ import {
   type PhoneVerifyResponse,
   type SessionResponse,
 } from '@alocidadao/shared';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp, type AppOptions } from '../app.js';
 import type { EmailSender } from '../messaging/email.js';
@@ -16,7 +16,7 @@ import type { SmsSender } from '../messaging/sms.js';
 import { API_TEST_APP_URL, API_TEST_OWNER_URL } from '../test/urls.js';
 import { verifyAccessToken } from './tokens.js';
 
-const { users, devices, memberships, tenants, sessions } = schema;
+const { users, devices, memberships, tenants, sessions, verificationCodes } = schema;
 
 const owner = createDatabase(API_TEST_OWNER_URL);
 const appDb = createDatabase(API_TEST_APP_URL);
@@ -48,7 +48,7 @@ let app: Awaited<ReturnType<typeof build>>;
 const daysAgo = (days: number) => new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
 /** Telefone exclusivo do teste, para não esbarrar no limite de envio de outro caso. */
-const newPhone = () => `+5521${String(randomInt(0, 1_000_000_000)).padStart(9, '0')}`;
+const newPhone = () => `+55219${String(randomInt(0, 100_000_000)).padStart(8, '0')}`;
 
 const newDevice = (): DeviceInfo => ({
   installationId: randomUUID(),
@@ -143,6 +143,17 @@ describe('app auth routes', () => {
       payload: { phone: '11999998888' },
     });
     expect(res.statusCode).toBe(400);
+  });
+
+  it('phone start refuses non-Brazilian numbers and landlines', async () => {
+    for (const phone of ['+14155550123', '+551133334444']) {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/auth/phone/start',
+        payload: { phone },
+      });
+      expect(res.statusCode).toBe(400);
+    }
   });
 
   it('phone start rate limit', async () => {
@@ -298,6 +309,41 @@ describe('app auth routes', () => {
     const again = await signup(verified.signupToken, 'Outra Pessoa');
     expect(again.statusCode).toBe(409);
     expect(again.json()).toEqual({ code: 'phone_in_use' });
+  });
+
+  it('stale account goes to profile when the recovery e-mail is rate limited', async () => {
+    const phone = newPhone();
+    const mail = `limite.${randomInt(0, 1_000_000)}@exemplo.com`;
+    const oldId = await createUser({ phone, email: mail, lastActiveAt: daysAgo(100) });
+    // Um código de recuperação acabou de ir para esse e-mail: o próximo esbarra nos 60 s.
+    await owner.db.insert(verificationCodes).values({
+      id: randomUUID(),
+      purpose: 'account_recovery',
+      target: mail,
+      userId: oldId,
+      codeHash: 'anterior',
+      expiresAt: sql`now() + interval '10 minutes'`,
+    });
+
+    // O código do celular já foi gasto: a pessoa segue para o cadastro, sem 429.
+    const verified = await signInByPhone(phone, newDevice());
+    expect(verified.status).toBe('needs_profile');
+    if (verified.status !== 'needs_profile') return;
+    expect(emailsSent.some((m) => m.to === mail)).toBe(false);
+
+    const created = await signup(verified.signupToken, 'Pessoa Nova');
+    expect(created.statusCode).toBe(201);
+    expect(await accountStatusOf(oldId)).toBe('frozen');
+  });
+
+  it('signup stores the e-mail in lower case', async () => {
+    const verified = await signInByPhone(newPhone(), newDevice());
+    if (verified.status !== 'needs_profile') throw new Error(`status ${verified.status}`);
+    const res = await signup(verified.signupToken, 'Caixa Alta', 'Caixa.Alta@Exemplo.COM');
+    expect(res.statusCode).toBe(201);
+    const userId = await userIdOf(res.json<SessionResponse>().session.accessToken);
+    const [user] = await owner.db.select().from(users).where(eq(users.id, userId));
+    expect(user!.email).toBe('caixa.alta@exemplo.com');
   });
 
   it('recovery code only works for the account in the signup token', async () => {

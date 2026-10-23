@@ -3,8 +3,12 @@ import {
   TERMS_VERSION,
   maskEmail,
   panelStartBodySchema,
+  meResponseSchema,
+  phoneChangeStartBodySchema,
   phoneSchema,
+  phoneStartBodySchema,
   phoneVerifyResponseSchema,
+  storedPhoneSchema,
   signupBodySchema,
   updateMeBodySchema,
 } from './auth.js';
@@ -21,7 +25,44 @@ describe('maskEmail', () => {
 describe('phoneSchema', () => {
   it('accepts E.164 and rejects other formats', () => {
     expect(phoneSchema.safeParse('+5511999998888').success).toBe(true);
+    expect(phoneSchema.safeParse('+5511900000001').success).toBe(true);
     expect(phoneSchema.safeParse('11999998888').success).toBe(false);
+  });
+
+  it('rejects non-Brazilian numbers', () => {
+    expect(phoneSchema.safeParse('+14155550123').success).toBe(false);
+    expect(phoneSchema.safeParse('+351912345678').success).toBe(false);
+    expect(phoneStartBodySchema.safeParse({ phone: '+14155550123' }).success).toBe(false);
+    expect(phoneChangeStartBodySchema.safeParse({ phone: '+14155550123' }).success).toBe(false);
+  });
+
+  it('rejects landlines', () => {
+    expect(phoneSchema.safeParse('+551133334444').success).toBe(false);
+    expect(phoneSchema.safeParse('+5511833334444').success).toBe(false);
+    expect(phoneSchema.safeParse('+5501999998888').success).toBe(false);
+    expect(phoneStartBodySchema.safeParse({ phone: '+551133334444' }).success).toBe(false);
+  });
+});
+
+describe('storedPhoneSchema', () => {
+  it('accepts any E.164 number', () => {
+    expect(storedPhoneSchema.safeParse('+14155550123').success).toBe(true);
+    expect(storedPhoneSchema.safeParse('+551133334444').success).toBe(true);
+    expect(storedPhoneSchema.safeParse('11999998888').success).toBe(false);
+  });
+
+  it('describes the phone in the me response', () => {
+    const me = {
+      id: uuid,
+      name: 'Ana',
+      phone: '+14155550123',
+      email: null,
+      platformRole: null,
+      agentTenants: [],
+      panelTenants: [],
+    };
+    expect(meResponseSchema.safeParse(me).success).toBe(true);
+    expect(meResponseSchema.safeParse({ ...me, phone: 'abc' }).success).toBe(false);
   });
 });
 

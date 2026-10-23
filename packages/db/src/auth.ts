@@ -148,8 +148,8 @@ export async function deleteAccount(tx: Transaction): Promise<void> {
 
 /**
  * Número reaproveitado: congela a conta antiga, se ainda ativa com esse telefone e parada
- * há 90 dias, e revoga as sessões dela. O contexto é o da conta nova, criada na mesma
- * transação. Devolve se congelou.
+ * há 90 dias, e revoga as sessões dela. O contexto precisa ser de outra conta: a nova, no
+ * cadastro, ou a que está trocando de número. Devolve se congelou.
  */
 export async function freezeStaleAccount(
   tx: Transaction,

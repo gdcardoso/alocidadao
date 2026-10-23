@@ -17,7 +17,7 @@ const appDb = createDatabase(API_TEST_APP_URL);
 
 let app: FastifyInstance;
 
-const newPhone = () => `+5531${String(randomInt(0, 1_000_000_000)).padStart(9, '0')}`;
+const newPhone = () => `+55319${String(randomInt(0, 100_000_000)).padStart(8, '0')}`;
 
 async function createUser() {
   const [user] = await owner.db
@@ -148,5 +148,19 @@ describe('requireTenantMember', () => {
       'x-tenant-id': tenantId,
     });
     expect(res.statusCode).toBe(403);
+  });
+
+  it('frozen account is refused', async () => {
+    const userId = await createUser();
+    const tenantId = await createTenant();
+    await link(tenantId, userId);
+    const headers = { ...(await appAuthHeader(appDb.db, userId)), 'x-tenant-id': tenantId };
+    expect((await call(headers)).statusCode).toBe(200);
+
+    // O token continua válido; o vínculo ativo não basta com a conta congelada.
+    await owner.db.update(users).set({ accountStatus: 'frozen' }).where(eq(users.id, userId));
+    const res = await call(headers);
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toEqual({ code: 'not_a_member' });
   });
 });

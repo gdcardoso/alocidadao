@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { createDatabase, geoPoint, schema, withContext } from '@alocidadao/db';
 import { seedDev } from '@alocidadao/db/seed';
 import { ACTIVE_WORK_ORDER_STATUSES, type ConnectionContext } from '@alocidadao/shared';
-import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { DeleteObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { asc, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp } from '../app.js';
@@ -328,6 +328,19 @@ describe('work order actions', () => {
     expect(await countStatusEvents(id)).toBe(events);
   });
 
+  it('replays a completed action even after a photo left the storage', async () => {
+    const id = await freshWorkOrder();
+    await act(id, start());
+    const key = await uploadPhoto();
+    const body = complete({ photoKeys: [key] });
+    expect((await act(id, body)).statusCode).toBe(200);
+    await s3.send(new DeleteObjectCommand({ Bucket: testStorageConfig.bucket, Key: key }));
+    const again = await act(id, body);
+    expect(again.statusCode).toBe(200);
+    expect(again.json()).toEqual({ workOrderId: id, status: 'awaiting_review', duplicate: true });
+    expect(await countStatusEvents(id)).toBe(2);
+  });
+
   it('isUniqueViolation recognizes the code on the error and on its cause', () => {
     expect(isUniqueViolation({ code: '23505' })).toBe(true);
     expect(isUniqueViolation({ cause: { code: '23505' } })).toBe(true);
@@ -458,6 +471,41 @@ describe('GET /dev/work-orders', () => {
     expect(list[0]).toMatchObject({
       description: 'Buraco na via em frente ao número 100',
       categoryName: 'Buraco na via',
+    });
+  });
+
+  it('takes protocol and description from the earliest request of the occurrence', async () => {
+    const id = await freshWorkOrder();
+    const [order] = await owner.db
+      .select({ occurrenceId: schema.workOrders.occurrenceId })
+      .from(schema.workOrders)
+      .where(eq(schema.workOrders.id, id));
+    const [first] = await owner.db
+      .select()
+      .from(requests)
+      .where(eq(requests.occurrenceId, order!.occurrenceId));
+    // Outro cidadão apoia o relato depois: a lista continua mostrando o primeiro.
+    await withContext(owner.db, { tenantId }, (tx) =>
+      tx.insert(requests).values({
+        tenantId,
+        citizenId,
+        categoryId,
+        occurrenceId: order!.occurrenceId,
+        status: 'in_progress',
+        description: 'Relato posterior do mesmo buraco',
+        address: 'Rua de outro relato, 2',
+        location: first!.location,
+        gpsLocation: first!.gpsLocation,
+        createdAt: new Date(first!.createdAt.getTime() + 60_000),
+      }),
+    );
+    const list = (await inject('GET', '/dev/work-orders')).json();
+    const matches = list.filter((w: { id: string }) => w.id === id);
+    expect(matches).toHaveLength(1);
+    expect(matches[0]).toMatchObject({
+      protocol: first!.protocol,
+      description: first!.description,
+      address: first!.address,
     });
   });
 

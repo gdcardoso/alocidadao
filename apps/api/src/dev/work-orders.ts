@@ -92,6 +92,14 @@ async function applyAction(
 ): Promise<Outcome | { kind: 'storage_not_configured' }> {
   const { tenantId, userId } = identity;
 
+  // Repetição já gravada responde a resposta guardada antes de olhar o armazenamento: a foto
+  // pode ter sumido do bucket depois, e a ação já valeu. Leitura sem trava; a corrida é
+  // resolvida pela releitura dentro da transação.
+  const replay = await withContext(db, { tenantId, userId }, (tx) =>
+    findStoredAction(tx, input, workOrderId, userId),
+  );
+  if (replay) return replay;
+
   // As fotos são conferidas no armazenamento antes da transação: assim a chamada de rede
   // não acontece com a atividade travada. O status continua sendo checado lá dentro.
   if (input.photoKeys.length > 0) {

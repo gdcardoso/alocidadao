@@ -17,13 +17,13 @@ import {
 
 export const DEMO_IBGE_CODE = '9999901';
 const AGENT_EMAIL = 'agente.demo@alocidadao.dev';
-const AGENT_PHONE = '+5511900000001';
+export const AGENT_PHONE = '+5511900000001';
 const CITIZEN_EMAIL = 'cidadao.demo@alocidadao.dev';
-const CITIZEN_PHONE = '+5511900000002';
-const MANAGER_CPF = '52998224725';
-const MANAGER_EMAIL = 'gestor.demo@alocidadao.dev';
-const ADMIN_CPF = '11144477735';
-const ADMIN_EMAIL = 'admin.demo@alocidadao.dev';
+export const CITIZEN_PHONE = '+5511900000002';
+export const MANAGER_CPF = '52998224725';
+export const MANAGER_EMAIL = 'gestor.demo@alocidadao.dev';
+export const ADMIN_CPF = '11144477735';
+export const ADMIN_EMAIL = 'admin.demo@alocidadao.dev';
 const DEPARTMENT_NAME = 'Obras';
 const TEAM_NAME = 'Equipe Obras – Centro';
 const CATEGORY_NAME = 'Buraco na via';

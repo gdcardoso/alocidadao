@@ -36,7 +36,6 @@ describe('mapActionResponse', () => {
       code: 'photo_invalid',
     });
     expect(mapActionResponse(404, '')).toEqual({ kind: 'rejected', code: 'not_found' });
-    expect(mapActionResponse(401, '')).toEqual({ kind: 'rejected', code: 'http_401' });
     expect(mapActionResponse(400, JSON.stringify({ code: 'FST_ERR_VALIDATION' }))).toEqual({
       kind: 'rejected',
       code: 'FST_ERR_VALIDATION',
@@ -45,6 +44,9 @@ describe('mapActionResponse', () => {
   });
   it('retries 503 instead of rejecting', () => {
     expect(() => mapActionResponse(503, '{}')).toThrow(NetworkError);
+  });
+  it('keeps the item queued on 401', () => {
+    expect(() => mapActionResponse(401, '{"code":"unauthorized"}')).toThrow(NetworkError);
   });
 });
 
@@ -62,9 +64,12 @@ describe('parsePresignResponse', () => {
     expect(() => parsePresignResponse(503, '{}')).toThrow(NetworkError);
     expect(() => parsePresignResponse(500, '')).toThrow(NetworkError);
   });
+  it('keeps the item queued on 401', () => {
+    expect(() => parsePresignResponse(401, '')).toThrow(NetworkError);
+  });
   it('rejects 4xx for good', () => {
     expect(() => parsePresignResponse(400, '{}')).toThrow(UploadRejectedError);
-    expect(() => parsePresignResponse(401, '')).toThrow(UploadRejectedError);
+    expect(() => parsePresignResponse(403, '')).toThrow(UploadRejectedError);
     try {
       parsePresignResponse(400, JSON.stringify({ code: 'bad_content_type' }));
     } catch (e) {

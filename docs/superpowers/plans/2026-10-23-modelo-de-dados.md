@@ -46,11 +46,13 @@
 ### Task 1: Máquinas de estado e schemas no `shared`
 
 **Files:**
+
 - Create: `packages/shared/src/state-machine.ts`, `packages/shared/src/occurrence-status.ts`, `packages/shared/src/enums.ts`, `packages/shared/src/geo.ts`
 - Modify: `packages/shared/src/request-status.ts`, `packages/shared/src/work-order-status.ts`, `packages/shared/src/roles.ts`, `packages/shared/src/schemas.ts`, `packages/shared/src/index.ts`
 - Test: `packages/shared/src/request-status.test.ts` (reescrever), `packages/shared/src/occurrence-status.test.ts`, `packages/shared/src/work-order-status.test.ts`, `packages/shared/src/geo.test.ts`, `packages/shared/src/schemas.test.ts`
 
 **Interfaces:**
+
 - Produces:
   - `state-machine.ts`: `interface Transition<S> { from: readonly S[]; to: S; actors: readonly Actor[] }`; `type TransitionResult<S> = { ok: true; to: S } | { ok: false; reason: 'invalid_status' | 'forbidden' }`; `createStateMachine<S extends string, A extends string>(actions: readonly A[], transitions: Record<A, Transition<S>>): { apply(current: S, action: A, actor: Actor): TransitionResult<S>; available(current: S, actor: Actor): A[] }`. `invalid_status` tem precedência sobre `forbidden` (comportamento atual).
   - `request-status.ts`: `REQUEST_STATUSES = ['open','in_progress','awaiting_confirmation','completed','cancelled','rejected']` (sai `duplicate`), `REQUEST_STATUS_LABELS`, `FINAL_REQUEST_STATUSES = ['completed','cancelled','rejected']`, `REQUEST_ACTIONS = ['cancel','assign','publish','confirm','auto_confirm','contest','reopen','reject']`, `applyRequestAction`, `availableRequestActions`, `AUTO_CONFIRM_AFTER_DAYS = 7`.
@@ -63,44 +65,58 @@
 
 **Tabelas de transição (copiar exatamente):**
 
-| Máquina    | Ação                | De                                                           | Para                    | Atores                    |
-| ---------- | ------------------- | ------------------------------------------------------------ | ----------------------- | ------------------------- |
-| Solicitação | `cancel`           | open                                                         | cancelled               | citizen                   |
-| Solicitação | `assign`           | open                                                         | in_progress             | manager, tenant_admin     |
-| Solicitação | `publish`          | in_progress                                                  | awaiting_confirmation   | manager, tenant_admin     |
-| Solicitação | `confirm`          | awaiting_confirmation                                        | completed               | citizen                   |
-| Solicitação | `auto_confirm`     | awaiting_confirmation                                        | completed               | system                    |
-| Solicitação | `contest`          | awaiting_confirmation                                        | open                    | citizen                   |
-| Solicitação | `reopen`           | awaiting_confirmation                                        | open                    | system                    |
-| Solicitação | `reject`           | open, in_progress                                            | rejected                | manager, tenant_admin     |
-| Ocorrência | `assign`            | triage                                                       | in_progress             | manager, tenant_admin     |
-| Ocorrência | `publish`           | in_progress                                                  | awaiting_confirmation   | manager, tenant_admin     |
-| Ocorrência | `reopen`            | awaiting_confirmation                                        | triage                  | system                    |
-| Ocorrência | `close`             | awaiting_confirmation                                        | completed               | system                    |
-| Ocorrência | `reject`            | triage, in_progress                                          | rejected                | manager, tenant_admin     |
-| Ocorrência | `merge`             | triage, in_progress                                          | merged                  | manager, tenant_admin     |
-| Ocorrência | `cancel`            | triage                                                       | cancelled               | system                    |
-| Atividade  | `start`             | assigned                                                     | in_execution            | field_agent               |
-| Atividade  | `complete`          | in_execution, rework_requested                               | awaiting_review         | field_agent               |
-| Atividade  | `report_impediment` | assigned, in_execution, rework_requested                     | impeded                 | field_agent               |
-| Atividade  | `request_rework`    | awaiting_review                                              | rework_requested        | manager, tenant_admin     |
-| Atividade  | `publish`           | awaiting_review                                              | completed               | manager, tenant_admin     |
-| Atividade  | `reschedule`        | impeded                                                      | assigned                | manager, tenant_admin     |
-| Atividade  | `cancel`            | assigned, in_execution, awaiting_review, rework_requested, impeded | cancelled         | manager, tenant_admin     |
+| Máquina     | Ação                | De                                                                 | Para                  | Atores                |
+| ----------- | ------------------- | ------------------------------------------------------------------ | --------------------- | --------------------- |
+| Solicitação | `cancel`            | open                                                               | cancelled             | citizen               |
+| Solicitação | `assign`            | open                                                               | in_progress           | manager, tenant_admin |
+| Solicitação | `publish`           | in_progress                                                        | awaiting_confirmation | manager, tenant_admin |
+| Solicitação | `confirm`           | awaiting_confirmation                                              | completed             | citizen               |
+| Solicitação | `auto_confirm`      | awaiting_confirmation                                              | completed             | system                |
+| Solicitação | `contest`           | awaiting_confirmation                                              | open                  | citizen               |
+| Solicitação | `reopen`            | awaiting_confirmation                                              | open                  | system                |
+| Solicitação | `reject`            | open, in_progress                                                  | rejected              | manager, tenant_admin |
+| Ocorrência  | `assign`            | triage                                                             | in_progress           | manager, tenant_admin |
+| Ocorrência  | `publish`           | in_progress                                                        | awaiting_confirmation | manager, tenant_admin |
+| Ocorrência  | `reopen`            | awaiting_confirmation                                              | triage                | system                |
+| Ocorrência  | `close`             | awaiting_confirmation                                              | completed             | system                |
+| Ocorrência  | `reject`            | triage, in_progress                                                | rejected              | manager, tenant_admin |
+| Ocorrência  | `merge`             | triage, in_progress                                                | merged                | manager, tenant_admin |
+| Ocorrência  | `cancel`            | triage                                                             | cancelled             | system                |
+| Atividade   | `start`             | assigned                                                           | in_execution          | field_agent           |
+| Atividade   | `complete`          | in_execution, rework_requested                                     | awaiting_review       | field_agent           |
+| Atividade   | `report_impediment` | assigned, in_execution, rework_requested                           | impeded               | field_agent           |
+| Atividade   | `request_rework`    | awaiting_review                                                    | rework_requested      | manager, tenant_admin |
+| Atividade   | `publish`           | awaiting_review                                                    | completed             | manager, tenant_admin |
+| Atividade   | `reschedule`        | impeded                                                            | assigned              | manager, tenant_admin |
+| Atividade   | `cancel`            | assigned, in_execution, awaiting_review, rework_requested, impeded | cancelled             | manager, tenant_admin |
 
 - [ ] **Step 1: Escrever os testes que falham**
 
 `request-status.test.ts` (substitui o atual):
+
 ```ts
 expect(applyRequestAction('open', 'assign', 'manager')).toEqual({ ok: true, to: 'in_progress' });
-expect(applyRequestAction('in_progress', 'reject', 'manager')).toEqual({ ok: true, to: 'rejected' });
-expect(applyRequestAction('awaiting_confirmation', 'reopen', 'citizen')).toEqual({ ok: false, reason: 'forbidden' });
-expect(applyRequestAction('awaiting_confirmation', 'reopen', 'system')).toEqual({ ok: true, to: 'open' });
-expect(applyRequestAction('in_progress', 'cancel', 'citizen')).toEqual({ ok: false, reason: 'invalid_status' });
+expect(applyRequestAction('in_progress', 'reject', 'manager')).toEqual({
+  ok: true,
+  to: 'rejected',
+});
+expect(applyRequestAction('awaiting_confirmation', 'reopen', 'citizen')).toEqual({
+  ok: false,
+  reason: 'forbidden',
+});
+expect(applyRequestAction('awaiting_confirmation', 'reopen', 'system')).toEqual({
+  ok: true,
+  to: 'open',
+});
+expect(applyRequestAction('in_progress', 'cancel', 'citizen')).toEqual({
+  ok: false,
+  reason: 'invalid_status',
+});
 expect(availableRequestActions('awaiting_confirmation', 'citizen')).toEqual(['confirm', 'contest']);
 expect(availableRequestActions('completed', 'tenant_admin')).toEqual([]);
 expect(REQUEST_STATUSES).not.toContain('duplicate');
 ```
+
 `occurrence-status.test.ts`: `merge` vale de `triage` e de `in_progress` para manager; `reopen` só para system; `availableOccurrenceActions('triage', 'manager')` é `['assign','reject','merge']`; `CLUSTERABLE_OCCURRENCE_STATUSES` é `['triage','in_progress']`.
 `work-order-status.test.ts`: `complete` vale de `rework_requested` (agente); `publish` de `awaiting_review` (manager) dá `completed`; `reschedule` de `impeded` dá `assigned`; o agente não pode `publish` (`forbidden`); `ACTIVE_WORK_ORDER_STATUSES` contém `impeded` e não contém `completed` nem `cancelled`.
 `geo.test.ts`: `distanceMeters` de `(-23.5505, -46.6333)` a `(-23.5505 + 0.0018, -46.6333)` fica entre 199 e 201.
@@ -119,11 +135,13 @@ expect(REQUEST_STATUSES).not.toContain('duplicate');
 ### Task 2: Ocorrências, atividade sobre a ocorrência e fotos no banco
 
 **Files:**
+
 - Modify: `packages/db/src/schema.ts`, `packages/db/src/seed-dev-data.ts`, `packages/db/src/seed-dev.ts`, `packages/db/src/rls.test.ts`, `packages/db/src/client-actions.test.ts`
 - Create: migrações `0004_*` (estrutural, passada 1), `0005_*` (estrutural, passada 2), `0006_occurrences_rls.sql` (custom)
 - Test: `packages/db/src/occurrences.test.ts`
 
 **Interfaces:**
+
 - Consumes: `OCCURRENCE_STATUSES`, `WORK_ORDER_STATUSES`, `REQUEST_STATUSES`, `PHOTO_REVIEWS`, `ICON_GROUPS`, `DEFAULT_CLUSTER_RADIUS_M` da Task 1.
 - Produces (Drizzle, em `schema.ts`):
   - enums `occurrenceStatus`, `photoReview`, `iconGroup`.
@@ -148,11 +166,13 @@ expect(REQUEST_STATUSES).not.toContain('duplicate');
 - [ ] **Step 2: Rodar e ver falhar** — `pnpm --filter @alocidadao/db test` → FAIL.
 
 - [ ] **Step 3: Passada 1 (só o que é novo).** Em `schema.ts`, acrescentar tabelas, enums e colunas novas **sem remover nada**: `work_orders.request_id` passa a nulo; `requests.duplicate_of_id`, `work_orders.completion_note` e o índice antigo continuam. Rodar `pnpm --filter @alocidadao/db exec drizzle-kit generate --name occurrences`. Abrir o SQL gerado e inserir no topo:
+
 ```sql
 -- Ainda não há dados reais (spec, seção 9): apaga os dados operacionais para as colunas novas obrigatórias.
 TRUNCATE status_events, client_actions, work_orders, requests, request_counters;
 --> statement-breakpoint
 ```
+
 - [ ] **Step 4: Passada 2 (só o que sai).** Remover de `schema.ts` `requests.duplicateOfId`, `workOrders.requestId`, `workOrders.completionNote`, o índice `work_orders_one_active_per_request_idx` e o valor `duplicate` (já ausente do enum vindo do `shared`). Rodar `pnpm --filter @alocidadao/db exec drizzle-kit generate --name drop_request_links`. Conferir que o SQL troca o enum `request_status` sem `duplicate` e não recria tabelas.
 - [ ] **Step 5: Migração custom** — `pnpm --filter @alocidadao/db exec drizzle-kit generate --custom --name occurrences_rls` e escrever: `ENABLE`/`FORCE` + `tenant_isolation` em `occurrences` e `photos`; `GRANT SELECT, INSERT, UPDATE, DELETE ON occurrences TO app_user`; `GRANT SELECT, INSERT ON photos` + `GRANT UPDATE (review) ON photos TO app_user`; comentário explicando que a revisão é a única alteração permitida na foto.
 - [ ] **Step 6: Atualizar `seed-dev-data.ts`, `rls.test.ts` e `client-actions.test.ts`** para o modelo novo (ocorrência antes da solicitação, `gpsLocation` igual a `location`, atividade com `occurrenceId`). O teste `permite só uma atividade ativa por solicitação` sai (coberto pelo novo). Pendência do seed: a checagem de existência da prefeitura demo vai para dentro da transação, com `pg_advisory_xact_lock(hashtext('seed-dev'))` antes dela, e o comentário da função diz que ela exige o dono do banco.
@@ -164,11 +184,13 @@ TRUNCATE status_events, client_actions, work_orders, requests, request_counters;
 ### Task 3: Contas sem senha, prefeitura com status, contrato, papéis internos, auditoria e interesse
 
 **Files:**
+
 - Modify: `packages/db/src/schema.ts`, `packages/db/src/client.ts`, `packages/db/src/seed-dev-data.ts`, `packages/db/src/rls.test.ts`, `packages/db/src/client-actions.test.ts`, `packages/db/src/occurrences.test.ts`, `docs/decisoes/0001-isolamento-por-prefeitura.md`
 - Create: migrações `0007_*` (passada 1), `0008_*` (passada 2), `0009_platform_rls.sql` (custom)
 - Test: `packages/db/src/platform.test.ts`
 
 **Interfaces:**
+
 - Consumes: `TENANT_STATUSES`, `MEMBERSHIP_STATUSES`, `ACCOUNT_STATUSES`, `PLATFORM_ROLES`, `COMMERCIAL_STATUSES` (Task 1).
 - Produces:
   - `DbContext` passa a `{ tenantId?: string; userId?: string; platformRole?: PlatformRole }` (sai `platformAdmin`). `withContext` grava `app.platform_role` (`''` quando ausente).
@@ -184,14 +206,14 @@ TRUNCATE status_events, client_actions, work_orders, requests, request_counters;
 
 **Políticas (migração custom):**
 
-| Tabela               | Leitura                                         | Escrita                                                                                         |
-| -------------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `tenants`            | livre (sem mudança)                             | insert/update só `app_is_platform_admin()` (sem mudança de texto; muda a função)                 |
+| Tabela               | Leitura                                                                  | Escrita                                                                                                                                                                                                                |
+| -------------------- | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tenants`            | livre (sem mudança)                                                      | insert/update só `app_is_platform_admin()` (sem mudança de texto; muda a função)                                                                                                                                       |
 | `users`              | si mesmo, `app_is_platform_staff()` ou vínculo na prefeitura do contexto | insert/update: si mesmo ou `app_is_platform_staff()`. Grants de coluna: `INSERT (id, name, email, phone, cpf)`, `UPDATE (name, email, phone, cpf, last_active_at)`; `platform_role` e `account_status` fora dos grants |
-| `tenant_contracts`   | `app_is_platform_staff()`                       | insert/update só `app_is_platform_admin()`                                                     |
-| `staff_audit_events` | `tenant_id = app_current_tenant()`              | insert com `tenant_id = app_current_tenant() AND app_is_platform_staff() AND staff_user_id = app_current_user()`; grants `SELECT, INSERT` |
-| `city_interest`      | `user_id = app_current_user()` ou staff         | insert com `user_id = app_current_user()`; grants `SELECT, INSERT`                              |
-| `municipality_leads` | staff                                           | insert/update staff                                                                             |
+| `tenant_contracts`   | `app_is_platform_staff()`                                                | insert/update só `app_is_platform_admin()`                                                                                                                                                                             |
+| `staff_audit_events` | `tenant_id = app_current_tenant()`                                       | insert com `tenant_id = app_current_tenant() AND app_is_platform_staff() AND staff_user_id = app_current_user()`; grants `SELECT, INSERT`                                                                              |
+| `city_interest`      | `user_id = app_current_user()` ou staff                                  | insert com `user_id = app_current_user()`; grants `SELECT, INSERT`                                                                                                                                                     |
+| `municipality_leads` | staff                                                                    | insert/update staff                                                                                                                                                                                                    |
 
 - [ ] **Step 1: Escrever os testes que falham** em `platform.test.ts`:
   - `número reaproveitado`: duas contas `active` com o mesmo telefone → erro; com a primeira `frozen` (alterada pelo dono) → passa.
@@ -217,11 +239,13 @@ TRUNCATE status_events, client_actions, work_orders, requests, request_counters;
 ### Task 4: Consultas geográficas
 
 **Files:**
+
 - Create: `packages/db/src/geo.ts`, migração `0010_*` (gerada)
 - Modify: `packages/db/src/schema.ts` (índice), `packages/db/src/index.ts`, `packages/db/src/seed-dev-data.ts` (limite da demo)
 - Test: `packages/db/src/geo.test.ts`
 
 **Interfaces:**
+
 - Consumes: `GeoPoint`, `CLUSTERABLE_OCCURRENCE_STATUSES` (Task 1); `occurrences`, `requests`, `categories`, `tenants.status` (Tasks 2 e 3); `withContext`, `geoPoint` (`client.ts`).
 - Produces:
   - `findActiveTenantAt(tx: Transaction, point: GeoPoint): Promise<{ id: string; displayName: string } | undefined>`: prefeitura `active` cujo `boundary` contém o ponto (`ST_Contains`). Funciona sem contexto de prefeitura, porque `tenants` tem leitura livre.
@@ -234,7 +258,7 @@ TRUNCATE status_events, client_actions, work_orders, requests, request_counters;
   - `findSimilarOccurrences acha a ocorrência dentro do raio, mais perto primeiro, com a contagem de relatos` (duas ocorrências a 10 m e 18 m, raio 20; a segunda com 2 solicitações → `requestCount: 2`).
   - `findSimilarOccurrences ignora…`: ocorrência a 25 m com raio 20; status `merged`, `cancelled`, `rejected` e `completed`; outra categoria; ocorrência da prefeitura B no mesmo ponto (contexto da A).
 - [ ] **Step 2: Rodar e ver falhar** — `pnpm --filter @alocidadao/db test geo` → FAIL.
-- [ ] **Step 3: Implementar** `geo.ts`, o índice em `schema.ts` (`index('occurrences_location_geog_idx').using('gist', sql\`(${t.location}::geography)\`)`), `pnpm --filter @alocidadao/db exec drizzle-kit generate --name occurrence_geography_index` e o limite no seed. Exportar `geo.ts` em `index.ts`.
+- [ ] **Step 3: Implementar** `geo.ts`, o índice em `schema.ts` (`index('occurrences_location_geog_idx').using('gist', sql\`(${t.location}::geography)\`)`), `pnpm --filter @alocidadao/db exec drizzle-kit generate --name occurrence_geography_index`e o limite no seed. Exportar`geo.ts`em`index.ts`.
 - [ ] **Step 4: Rodar e ver passar** — `pnpm --filter @alocidadao/db test` e `typecheck` → PASS.
 - [ ] **Step 5: Commit** — `git commit -m "Prefeitura pelo ponto e ocorrências parecidas"`
 
@@ -243,14 +267,17 @@ TRUNCATE status_events, client_actions, work_orders, requests, request_counters;
 ### Task 5: Rotas `/dev` e Laboratório no modelo novo, com as pendências de teste
 
 **Files:**
+
 - Modify: `apps/api/src/dev/work-orders.ts`, `apps/api/src/dev/work-orders.test.ts`, `apps/api/tsconfig.build.json`, `apps/mobile/src/app/laboratorio/offline.tsx`, `docs/superpowers/plans/2026-10-22-spikes-pendencias.md`, `docs/decisoes/0002-recursos-nativos-offline-e-push.md` (só se citar `completed` como resultado da conclusão)
 - Test: `apps/api/src/dev/work-orders.test.ts`
 
 **Interfaces:**
+
 - Consumes: `applyWorkOrderAction`, `ACTIVE_WORK_ORDER_STATUSES`, `workOrderSummarySchema` (Task 1); `occurrences`, `photos`, `workOrders.agentNote`, `statusEvents.occurrenceId` (Task 2); `seedDev` (Tasks 2 a 4).
 - Produces: `export function isUniqueViolation(error: unknown): boolean` em `work-orders.ts`. Os contratos HTTP não mudam: mesmas rotas, corpos e códigos de erro. A única diferença visível é que `complete` agora devolve `status: 'awaiting_review'`.
 
 Comportamento:
+
 - `GET /dev/work-orders`: atividades com status em `ACTIVE_WORK_ORDER_STATUSES` (inclui `awaiting_review`). Local e categoria vêm da ocorrência; `protocol`, `description` e `address` vêm da solicitação mais antiga da ocorrência. Resposta declarada com `schema.response[200] = z.array(workOrderSummarySchema)`.
 - `POST /dev/work-orders/:id/actions`: transição por `applyWorkOrderAction(order.status, input.action, 'field_agent')`. `complete` grava `agentNote` e `completedAt = occurredAt` e insere uma linha em `photos` por chave (`workOrderId`, `review: 'pending'`, `uploadedBy`). O evento de status leva `occurrenceId` e `workOrderId`. **Pendência:** as fotos são conferidas no armazenamento **antes** de abrir a transação. Assim `storage.head` não roda com a linha travada; a checagem do status continua dentro da transação.
 - `POST /dev/work-orders/:id/cancel`: usa `applyWorkOrderAction(…, 'cancel', 'manager')`. Cancelar uma atividade já `cancelled` devolve 200 com o mesmo corpo, sem novo evento (pendência: cancelamento idempotente).
@@ -274,14 +301,17 @@ Comportamento:
 ### Task 6: Ambiente da API validado na subida
 
 **Files:**
+
 - Create: `apps/api/src/env.ts`
 - Modify: `apps/api/src/server.ts`, `apps/api/.env.example` (só se faltar variável)
 - Test: `apps/api/src/env.test.ts`
 
 **Interfaces:**
+
 - Produces: `parseEnv(source: Record<string, string | undefined>): ApiEnv`, que lança `Error` com uma linha por variável inválida, no formato `NOME: motivo`. `ApiEnv` tem `port`, `host`, `databaseUrl?`, `corsOrigin?`, `s3?` (objeto completo ou ausente), `fcm?`, `apns?`, `devRoutes: boolean`.
 
 Regras:
+
 - `PORT` inteiro de 1 a 65535 (padrão 3333); `HOST` padrão `0.0.0.0`.
 - S3: se `S3_ENDPOINT` existe, `S3_ACCESS_KEY_ID` e `S3_SECRET_ACCESS_KEY` são obrigatórios e não vazios. Hoje eles caem em `''`.
 - FCM: `FCM_PROJECT_ID` e `FCM_SERVICE_ACCOUNT_FILE` juntos ou nenhum. APNs: `APNS_TEAM_ID`, `APNS_KEY_ID` e `APNS_KEY_FILE` juntos ou nenhum.

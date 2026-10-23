@@ -13,9 +13,9 @@ Itens menores achados nas revisões dos spikes (`2026-10-22-spikes-de-risco.md`)
 - [x] `/dev/*` no modelo novo: a lista de atividades declara `workOrderSummarySchema` como resposta; cancelamento idempotente.
 - [x] Testes que faltam: `completedAt` = `occurredAt`, `comment` = relato, contagem exata de eventos, 503 sem armazenamento, tipo de arquivo errado; ramo 23505 sem teste próprio.
 - [x] `storage.head` roda com a linha travada; `head()` sem teste do erro repassado; `test-fixtures.ts` vai para o `dist`.
-- [ ] Variáveis de ambiente da API validadas na subida (hoje as chaves S3 caem em `''`) — Task 6 do plano 2026-10-23.
-- [ ] A API não lê `.env` — Task 6 do plano 2026-10-23.
-- [ ] Fechar o pool do banco no desligamento da API — Task 6 do plano 2026-10-23.
+- [x] Variáveis de ambiente da API validadas na subida (hoje as chaves S3 caem em `''`)
+- [x] A API não lê `.env`
+- [x] Fechar o pool do banco no desligamento da API
 
 ## Plano 2 — Acesso
 

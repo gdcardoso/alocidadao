@@ -7,6 +7,7 @@ import { requireAuth } from '../auth/plugin.js';
 import { newRequestPhotoKey, type Storage } from '../storage/s3.js';
 import { registerCreateRequestRoutes } from './create-request.js';
 import { registerLocateRoutes } from './locate.js';
+import { registerRequestRoutes } from './requests.js';
 
 export interface CitizenDeps {
   /** Banco como app_user (RLS). */
@@ -25,6 +26,7 @@ export function registerCitizenRoutes(instance: FastifyInstance, deps: CitizenDe
 
   registerLocateRoutes(instance, deps);
   registerCreateRequestRoutes(instance, deps);
+  registerRequestRoutes(instance, deps);
 
   app.post(
     '/citizen/uploads',

@@ -2,8 +2,10 @@ import { randomUUID } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDatabase, withContext, type Database } from './client.js';
-import { seedDev } from './seed-dev-data.js';
+import { DEMO_UNSERVED_CENTER, seedDev } from './seed-dev-data.js';
+import { findActiveTenantAt, findMunicipalityAt } from './geo.js';
 import {
+  categories,
   clientActions,
   departmentManagers,
   memberships,
@@ -173,6 +175,50 @@ describe('dados de demonstração', () => {
     for (const cpf of ['52998224725', '11144477735']) {
       expect(await owner.db.select().from(users).where(eq(users.cpf, cpf))).toHaveLength(1);
     }
+  });
+
+  it('cria os 9 tipos da demo com ícone e raio, e os dois municípios', async () => {
+    const { tenantId } = await seedDev(owner.db);
+    await seedDev(owner.db);
+    const rows = await owner.db
+      .select({
+        name: categories.name,
+        icon: categories.icon,
+        iconGroup: categories.iconGroup,
+        clusterRadiusM: categories.clusterRadiusM,
+      })
+      .from(categories)
+      .where(eq(categories.tenantId, tenantId));
+    expect(rows).toHaveLength(9);
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        {
+          name: 'Buraco na via',
+          icon: 'construction',
+          iconGroup: 'infrastructure',
+          clusterRadiusM: 15,
+        },
+        { name: 'Sinalização', icon: 'signpost', iconGroup: 'infrastructure', clusterRadiusM: 50 },
+        { name: 'Animal', icon: 'paw-print', iconGroup: 'public_services', clusterRadiusM: 50 },
+        {
+          name: 'Outro',
+          icon: 'circle-ellipsis',
+          iconGroup: 'public_services',
+          clusterRadiusM: 20,
+        },
+      ]),
+    );
+    for (const row of rows) expect(row.icon).toBeTruthy();
+
+    const demo = await app.db.transaction((tx) =>
+      findMunicipalityAt(tx, { lat: -23.5505, lng: -46.6333 }),
+    );
+    expect(demo).toEqual({ ibgeCode: '9999901', name: 'Cidade Demo', state: 'SP' });
+    const unserved = await app.db.transaction((tx) => findMunicipalityAt(tx, DEMO_UNSERVED_CENTER));
+    expect(unserved).toEqual({ ibgeCode: '9999902', name: 'Vila Sem Adesão', state: 'SP' });
+    expect(await app.db.transaction((tx) => findActiveTenantAt(tx, DEMO_UNSERVED_CENTER))).toBe(
+      undefined,
+    );
   });
 
   it('completa o gestor e o admin numa prefeitura demo criada antes deles', async () => {

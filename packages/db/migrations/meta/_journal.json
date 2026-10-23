@@ -113,6 +113,20 @@
       "when": 1792780979873,
       "tag": "0015_deleted_account_check",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1792788677149,
+      "tag": "0016_municipalities",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1792788677661,
+      "tag": "0017_citizen_functions",
+      "breakpoints": true
     }
   ]
 }

@@ -4,6 +4,7 @@ import {
   ADMIN_EMAIL,
   AGENT_PHONE,
   CITIZEN_PHONE,
+  DEMO_UNSERVED_CENTER,
   MANAGER_CPF,
   MANAGER_EMAIL,
   seedDev,
@@ -25,6 +26,10 @@ try {
       `  App, cidadão:  ${CITIZEN_PHONE}`,
       `  Painel, gestor: CPF ${MANAGER_CPF} (${MANAGER_EMAIL})`,
       `  Painel, admin:  CPF ${ADMIN_CPF} (${ADMIN_EMAIL})`,
+      '',
+      'Município sem prefeitura (tela 5c): Vila Sem Adesão (9999902)',
+      `  Centro: ${DEMO_UNSERVED_CENTER.lat}, ${DEMO_UNSERVED_CENTER.lng}`,
+      `  GPS do emulador Android: adb emu geo fix ${DEMO_UNSERVED_CENTER.lng} ${DEMO_UNSERVED_CENTER.lat}`,
     ].join('\n'),
   );
 } finally {

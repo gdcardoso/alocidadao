@@ -270,6 +270,25 @@ export const municipalityLeads = pgTable(
   (t) => [check('municipality_leads_ibge_code_check', sql`${t.ibgeCode} ~ '^[0-9]{7}$'`)],
 );
 
+/**
+ * Limites dos municípios do IBGE (dado público, leitura livre). Diz em que cidade o cidadão
+ * está mesmo onde não há prefeitura cliente. Carregada pelo dono do banco
+ * (`pnpm db:import:municipalities`); app_user só lê.
+ */
+export const municipalities = pgTable(
+  'municipalities',
+  {
+    ibgeCode: char('ibge_code', { length: 7 }).primaryKey(),
+    name: text('name').notNull(),
+    state: char('state', { length: 2 }).notNull(),
+    boundary: multiPolygon('boundary').notNull(),
+  },
+  (t) => [
+    index('municipalities_boundary_idx').using('gist', t.boundary),
+    check('municipalities_ibge_code_check', sql`${t.ibgeCode} ~ '^[0-9]{7}$'`),
+  ],
+);
+
 // ── Tabelas da prefeitura ──────────────────────────────────────────────────
 
 export const memberships = pgTable(

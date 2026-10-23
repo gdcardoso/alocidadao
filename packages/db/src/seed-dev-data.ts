@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { GeoPoint, IconGroup } from '@alocidadao/shared';
 import { and, asc, eq, sql } from 'drizzle-orm';
 import { geoPoint, type Database, type Transaction } from './client.js';
 import {
@@ -6,6 +7,7 @@ import {
   departmentManagers,
   departments,
   memberships,
+  municipalities,
   occurrences,
   requests,
   teamMembers,
@@ -33,6 +35,41 @@ const CENTER = { lat: -23.5505, lng: -46.6333 };
 
 /** Meia-largura, em graus, do limite quadrado da prefeitura demo em torno de CENTER (≈ 5,5 km). */
 const BOUNDARY_HALF_SIDE = 0.05;
+
+/**
+ * Centro do município vizinho inventado "Vila Sem Adesão" (9999902), sem prefeitura: um quadrado
+ * do mesmo tamanho, colado a leste do limite da demo. Serve para ver a tela 5c no emulador.
+ */
+export const DEMO_UNSERVED_CENTER: GeoPoint = {
+  lat: CENTER.lat,
+  lng: CENTER.lng + 2 * BOUNDARY_HALF_SIDE,
+};
+const DEMO_UNSERVED_IBGE_CODE = '9999902';
+
+/** Os 9 tipos da tela 5, com o ícone Lucide, o grupo e o raio de agrupamento (spec 5.2). */
+const DEMO_CATALOG: ReadonlyArray<{
+  name: string;
+  icon: string;
+  iconGroup: IconGroup;
+  clusterRadiusM: number;
+}> = [
+  { name: CATEGORY_NAME, icon: 'construction', iconGroup: 'infrastructure', clusterRadiusM: 15 },
+  { name: 'Iluminação', icon: 'lightbulb', iconGroup: 'infrastructure', clusterRadiusM: 25 },
+  { name: 'Lixo e entulho', icon: 'trash-2', iconGroup: 'environment', clusterRadiusM: 30 },
+  { name: 'Poda de árvore', icon: 'trees', iconGroup: 'environment', clusterRadiusM: 20 },
+  { name: 'Esgoto', icon: 'droplets', iconGroup: 'environment', clusterRadiusM: 20 },
+  { name: 'Calçada', icon: 'footprints', iconGroup: 'infrastructure', clusterRadiusM: 20 },
+  { name: 'Sinalização', icon: 'signpost', iconGroup: 'infrastructure', clusterRadiusM: 50 },
+  { name: 'Animal', icon: 'paw-print', iconGroup: 'public_services', clusterRadiusM: 50 },
+  { name: 'Outro', icon: 'circle-ellipsis', iconGroup: 'public_services', clusterRadiusM: 20 },
+];
+
+/** Quadrado de lado 2 × BOUNDARY_HALF_SIDE em torno de `center`, como MultiPolygon 4326. */
+function squareAround(center: GeoPoint) {
+  return sql`ST_Multi(ST_MakeEnvelope(
+    ${center.lng - BOUNDARY_HALF_SIDE}, ${center.lat - BOUNDARY_HALF_SIDE},
+    ${center.lng + BOUNDARY_HALF_SIDE}, ${center.lat + BOUNDARY_HALF_SIDE}, 4326))`;
+}
 
 // Deslocamentos fixos (1e-3 grau de latitude ≈ 111 m; de longitude ≈ 102 m nesta latitude),
 // todos a menos de 300 m do centro.
@@ -104,9 +141,65 @@ async function createDemoWorkOrders(
 export async function seedDev(db: Database): Promise<SeedDevResult> {
   return db.transaction(async (tx) => {
     const base = await seedTenantData(tx);
+    await seedCatalog(tx, base.tenantId);
+    await seedMunicipalities(tx);
     const staff = await seedStaff(tx, base.tenantId);
     return { ...base, ...staff };
   });
+}
+
+/**
+ * Os 9 tipos da demo no setor demo. Idempotente: cria o que falta e atualiza ícone, grupo e
+ * raio dos que já existem (o "Buraco na via" criado antes do catálogo ganha os campos novos).
+ */
+async function seedCatalog(tx: Transaction, tenantId: string): Promise<void> {
+  const [department] = await tx
+    .select({ id: departments.id })
+    .from(departments)
+    .where(and(eq(departments.tenantId, tenantId), eq(departments.name, DEPARTMENT_NAME)));
+  if (!department) throw new Error('A prefeitura demo existe mas está incompleta');
+  await tx
+    .insert(categories)
+    .values(DEMO_CATALOG.map((item) => ({ ...item, tenantId, departmentId: department.id })))
+    .onConflictDoUpdate({
+      target: [categories.tenantId, categories.name],
+      set: {
+        icon: sql`excluded.icon`,
+        iconGroup: sql`excluded.icon_group`,
+        clusterRadiusM: sql`excluded.cluster_radius_m`,
+      },
+    });
+}
+
+/**
+ * Municípios da demo: "Cidade Demo" (9999901), com o mesmo limite da prefeitura, e o vizinho
+ * "Vila Sem Adesão" (9999902), sem prefeitura. Idempotente.
+ */
+async function seedMunicipalities(tx: Transaction): Promise<void> {
+  await tx
+    .insert(municipalities)
+    .values([
+      {
+        ibgeCode: DEMO_IBGE_CODE,
+        name: 'Cidade Demo',
+        state: 'SP',
+        boundary: squareAround(CENTER),
+      },
+      {
+        ibgeCode: DEMO_UNSERVED_IBGE_CODE,
+        name: 'Vila Sem Adesão',
+        state: 'SP',
+        boundary: squareAround(DEMO_UNSERVED_CENTER),
+      },
+    ])
+    .onConflictDoUpdate({
+      target: municipalities.ibgeCode,
+      set: {
+        name: sql`excluded.name`,
+        state: sql`excluded.state`,
+        boundary: sql`excluded.boundary`,
+      },
+    });
 }
 
 /** Cria a conta pelo CPF se faltar; devolve o id (nova ou existente). */
@@ -183,9 +276,7 @@ async function seedTenantData(tx: Transaction): Promise<SeedBase> {
   // Limite quadrado em torno de CENTER; também preenche a prefeitura demo criada antes do limite.
   const setBoundary = sql`
       update tenants
-      set boundary = ST_Multi(ST_MakeEnvelope(
-        ${CENTER.lng - BOUNDARY_HALF_SIDE}, ${CENTER.lat - BOUNDARY_HALF_SIDE},
-        ${CENTER.lng + BOUNDARY_HALF_SIDE}, ${CENTER.lat + BOUNDARY_HALF_SIDE}, 4326))
+      set boundary = ${squareAround(CENTER)}
       where id = ${tenantId} and boundary is null`;
 
   if (existing) {

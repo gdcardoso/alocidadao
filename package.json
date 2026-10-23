@@ -17,6 +17,7 @@
     "db:down": "docker compose down",
     "db:migrate": "pnpm --filter @alocidadao/db db:migrate",
     "db:seed:dev": "pnpm --filter @alocidadao/db db:seed:dev",
+    "db:import:municipalities": "pnpm --filter @alocidadao/db db:import:municipalities",
     "db:generate": "pnpm --filter @alocidadao/db db:generate",
     "format:check": "prettier --check ."
   },

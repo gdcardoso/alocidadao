@@ -5,7 +5,7 @@ import {
 } from '@alocidadao/shared';
 import { and, asc, count, eq, inArray, sql } from 'drizzle-orm';
 import { geoPoint, type Transaction } from './client.js';
-import { categories, occurrences, requests, tenants } from './schema.js';
+import { categories, municipalities, occurrences, requests, tenants } from './schema.js';
 
 const DEFAULT_SIMILAR_LIMIT = 5;
 
@@ -25,6 +25,30 @@ export async function findActiveTenantAt(
     )
     .limit(1);
   return tenant;
+}
+
+/**
+ * Município do IBGE cujo limite contém o ponto, com ou sem prefeitura cliente. Funciona sem
+ * contexto, porque `municipalities` tem leitura livre. Sem a tabela carregada, devolve undefined.
+ * Se mais de um limite contém o ponto, devolve o menor.
+ */
+export async function findMunicipalityAt(
+  tx: Transaction,
+  point: GeoPoint,
+): Promise<{ ibgeCode: string; name: string; state: string } | undefined> {
+  const [municipality] = await tx
+    .select({
+      ibgeCode: municipalities.ibgeCode,
+      name: municipalities.name,
+      state: municipalities.state,
+    })
+    .from(municipalities)
+    .where(sql`ST_Contains(${municipalities.boundary}, ${geoPoint(point)})`)
+    // Limites do IBGE não se sobrepõem, mas os inventados da demo ficam dentro de São Paulo:
+    // vale o menor limite que contém o ponto.
+    .orderBy(sql`ST_Area(${municipalities.boundary})`)
+    .limit(1);
+  return municipality;
 }
 
 /**

@@ -1,11 +1,6 @@
 import { z } from 'zod';
+import { MAX_LOCATION_ADJUST_M, distanceMeters, geoPointSchema } from './geo.js';
 import { workOrderStatusSchema } from './work-order-status.js';
-
-export const geoPointSchema = z.object({
-  lat: z.number().min(-90).max(90),
-  lng: z.number().min(-180).max(180),
-});
-export type GeoPoint = z.infer<typeof geoPointSchema>;
 
 /** Network conditions recorded with every status event and attachment. */
 export const connectionContextSchema = z.object({
@@ -27,14 +22,29 @@ export const PHOTO_TARGET_BYTES = 300_000;
 /** Limite rígido aceito pelo servidor, em bytes. */
 export const PHOTO_MAX_BYTES = 1_000_000;
 
-export const createRequestInputSchema = z.object({
-  categoryId: z.uuid(),
-  description: z.string().trim().min(10).max(2000),
-  location: geoPointSchema,
-  address: z.string().trim().max(300).optional(),
-  photoKeys: z.array(z.string().min(1)).min(1).max(MAX_PHOTOS_PER_REQUEST),
-  connection: connectionContextSchema,
-});
+export const createRequestInputSchema = z
+  .object({
+    categoryId: z.uuid(),
+    description: z.string().trim().min(10).max(2000),
+    /** Posição lida do GPS no momento do relato. */
+    gpsLocation: geoPointSchema,
+    /** Ponto ajustado pelo cidadão; fica a no máximo MAX_LOCATION_ADJUST_M do GPS. */
+    location: geoPointSchema,
+    address: z.string().trim().max(300).optional(),
+    /** Ocorrência existente que o cidadão escolheu apoiar. */
+    occurrenceId: z.uuid().optional(),
+    photoKeys: z.array(z.string().min(1)).min(1).max(MAX_PHOTOS_PER_REQUEST),
+    connection: connectionContextSchema,
+  })
+  .superRefine((value, ctx) => {
+    if (distanceMeters(value.gpsLocation, value.location) > MAX_LOCATION_ADJUST_M) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['location'],
+        message: `O local não pode ficar a mais de ${MAX_LOCATION_ADJUST_M} m do GPS`,
+      });
+    }
+  });
 export type CreateRequestInput = z.infer<typeof createRequestInputSchema>;
 
 export const healthResponseSchema = z.object({

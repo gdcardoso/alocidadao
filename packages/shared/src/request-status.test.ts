@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyRequestAction, availableRequestActions } from './request-status.js';
+import { REQUEST_STATUSES, applyRequestAction, availableRequestActions } from './request-status.js';
 
 describe('applyRequestAction', () => {
   it('lets a manager assign an open request', () => {
@@ -9,8 +9,19 @@ describe('applyRequestAction', () => {
     });
   });
 
-  it('sends an impeded request back to open', () => {
-    expect(applyRequestAction('in_progress', 'report_impediment', 'field_agent')).toEqual({
+  it('lets a manager reject an in-progress request', () => {
+    expect(applyRequestAction('in_progress', 'reject', 'manager')).toEqual({
+      ok: true,
+      to: 'rejected',
+    });
+  });
+
+  it('only lets the system reopen after the confirmation window', () => {
+    expect(applyRequestAction('awaiting_confirmation', 'reopen', 'citizen')).toEqual({
+      ok: false,
+      reason: 'forbidden',
+    });
+    expect(applyRequestAction('awaiting_confirmation', 'reopen', 'system')).toEqual({
       ok: true,
       to: 'open',
     });
@@ -46,5 +57,11 @@ describe('availableRequestActions', () => {
 
   it('offers nothing on a final status', () => {
     expect(availableRequestActions('completed', 'tenant_admin')).toEqual([]);
+  });
+});
+
+describe('REQUEST_STATUSES', () => {
+  it('no longer has the duplicate status', () => {
+    expect(REQUEST_STATUSES).not.toContain('duplicate');
   });
 });

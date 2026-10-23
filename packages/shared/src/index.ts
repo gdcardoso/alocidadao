@@ -8,3 +8,4 @@ export * from './enums.js';
 export * from './geo.js';
 export * from './cpf.js';
 export * from './auth.js';
+export * from './citizen.js';

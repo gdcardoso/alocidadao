@@ -24,8 +24,13 @@ export const PHOTO_MAX_BYTES = 1_000_000;
 
 export const createRequestInputSchema = z
   .object({
+    /** Idempotência: o mesmo envio repetido não cria outra solicitação. */
+    clientActionId: z.uuid(),
     categoryId: z.uuid(),
-    description: z.string().trim().min(10).max(2000),
+    /** Observação opcional do cidadão. */
+    description: z.string().trim().max(2000).optional(),
+    /** Momento do relato no aparelho. */
+    occurredAt: z.iso.datetime(),
     /** Posição lida do GPS no momento do relato. */
     gpsLocation: geoPointSchema,
     /** Ponto ajustado pelo cidadão; fica a no máximo MAX_LOCATION_ADJUST_M do GPS. */

@@ -20,12 +20,12 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       ...(config.plugins ?? []),
       'expo-notifications',
       'expo-font',
-      // Abertura nativa: logo da marca sobre fundo branco (a tela 0 do Pencil usa a mesma logo).
+      // Abertura nativa: só o símbolo, inteiro dentro da máscara circular do Android 12+ (a logo larga aparece na tela 0).
       [
         'expo-splash-screen',
         {
-          image: './assets/logo.png',
-          imageWidth: 240,
+          image: './assets/splash-icon.png',
+          imageWidth: 200,
           resizeMode: 'contain',
           backgroundColor: '#FFFFFF',
         },

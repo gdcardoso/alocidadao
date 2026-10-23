@@ -35,6 +35,13 @@ Itens menores achados nas revisões dos spikes (`2026-10-22-spikes-de-risco.md`)
 - Telas 1, 2, 3 e "Quase lá" sobre a sessão desta etapa.
 - Registrar o token de push com `PUT /me/devices`.
 - Saída forçada (renovação recusada) não apaga os dados offline do usuário anterior: marcar a fila por usuário ou limpar ao trocar de conta; o token de acesso não é descartado quando uma rota responde 401.
+- O código é gasto mesmo quando enviado à rota errada (`consumeCode` roda antes de conferir finalidade e usuário).
+- Falha no envio de SMS ou e-mail ainda gasta a janela de 60 s e conta no limite por hora.
+- `409 email_in_use` com o e-mail de uma conta congelada impede o antigo dono de reaproveitar o próprio e-mail.
+- Dois códigos de 429: `rate_limited` (por IP ou conta) e `code_rate_limited` (por destino); as telas tratam os dois.
+- Login do Laboratório pode terminar sem prefeitura salva se `me` falhar.
+- `api-client` sobrescreve o `init.signal` de quem chama.
+- Testes que faltam: código de `phone_login` em `recovery/verify`; 503 `sms_not_configured`; `expires_at` da sessão do painel; RLS de `devices` e `sessions` entre usuários; nas rotas `/dev`, a validação do corpo responde 400 antes do 401.
 
 ## Plano 4 — App do agente
 
@@ -61,8 +68,11 @@ Itens menores achados nas revisões dos spikes (`2026-10-22-spikes-de-risco.md`)
 - Exigir e-mail e CPF para gestor e admin é regra da API (o banco só exige telefone ou CPF); vale também para o Plano 6.
 - Decidir onde o painel guarda o token de renovação (cookie `httpOnly` ou memória).
 - Cadastro de gestor com função `SECURITY DEFINER`.
-- O login do painel aceita gestor de prefeitura suspensa ou em implantação (`has_panel_access` não olha o status) e um token do painel continua valendo em `/me` depois de perder o vínculo: as rotas do painel conferem o vínculo a cada chamada.
+- O login do painel aceita gestor de prefeitura suspensa ou em implantação (`has_panel_access` não olha o status).
+- Um token do painel continua valendo em `/me` depois de perder o vínculo: as rotas do painel conferem o vínculo a cada chamada.
 - Troca de e-mail de quem tem acesso ao painel é feita pelo admin (hoje `PATCH /me` recusa com `email_managed_by_admin`).
+- A máscara do e-mail usa a caixa original, enquanto o envio usa minúsculas.
+- CPF com espaço ou `/` é recusado (só `.` e `-` são removidos); `PanelStartBody` é o tipo de saída (o cliente precisa de `z.input`).
 
 ## Plano 6 — Backoffice
 
@@ -70,6 +80,7 @@ Itens menores achados nas revisões dos spikes (`2026-10-22-spikes-de-risco.md`)
 - Exigir e-mail e CPF para gestor e admin (regra da API, ver Plano 5).
 - Correções de conta pelo suporte, com função própria e auditoria.
 - Excluir conta ainda não apaga `city_interest` nem tira `platform_role` da conta excluída.
+- Sessões revogadas de conta excluída guardam `installation_id`.
 
 ## Plano 7 — Notificações
 
@@ -84,7 +95,7 @@ Itens menores achados nas revisões dos spikes (`2026-10-22-spikes-de-risco.md`)
 - Script `dev` da API só funciona em macOS/Linux.
 - Produção: nunca definir `ENABLE_DEV_ROUTES`; definir `NODE_ENV=production`.
 - Índice GiST em `tenants.boundary` quando houver muitas prefeituras.
-- O dono das tabelas com `BYPASSRLS` em produção.
+- O dono das tabelas precisa de `BYPASSRLS` em produção (as funções `SECURITY DEFINER` dependem disso).
 - Escolher um provedor de SMS ou WhatsApp.
 - Verificar o domínio no Resend.
 - Um `AUTH_SECRET` forte e único.
@@ -93,3 +104,5 @@ Itens menores achados nas revisões dos spikes (`2026-10-22-spikes-de-risco.md`)
 - Erros 5xx devolvem a mensagem interna: falta resposta `{ code: 'internal_error' }`.
 - Limites de envio ficam na memória de cada instância da API.
 - `NODE_ENV=production` é a única trava do código fixo e do envio pelo log.
+- `/auth/refresh` está no limite por IP de `/auth/*` (o CGNAT das operadoras pode juntar muitos aparelhos num IP).
+- Falta limite diário de códigos por número.

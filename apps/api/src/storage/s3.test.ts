@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createStorage, newPhotoKey } from './s3.js';
+import { createStorage, newPhotoKey, newRequestPhotoKey } from './s3.js';
 import { TENANT_ID, testStorageConfig } from './test-fixtures.js';
 
 describe('storage (MinIO local)', () => {
@@ -34,4 +34,23 @@ describe('storage (MinIO local)', () => {
     expect(newPhotoKey(TENANT_ID, new Date('2026-10-22T12:00:00Z'))).toMatch(
       new RegExp(`^${TENANT_ID}/uploads/2026/10/[0-9a-f-]{36}\\.jpg$`),
     ));
+
+  it('prefixes request photo keys with the user', () => {
+    const userId = '22222222-2222-4222-8222-222222222222';
+    expect(newRequestPhotoKey(userId, new Date('2026-10-22T12:00:00Z'))).toMatch(
+      new RegExp(`^requests/${userId}/2026/[0-9a-f-]{36}\\.jpg$`),
+    );
+  });
+
+  it('reads an uploaded object through a presigned get url', async () => {
+    const storage = createStorage(testStorageConfig);
+    const key = newRequestPhotoKey('22222222-2222-4222-8222-222222222222');
+    const { url, headers } = await storage.presignUpload(key);
+    expect((await fetch(url, { method: 'PUT', headers, body: new Uint8Array(42) })).ok).toBe(true);
+    const getUrl = await storage.presignGet(key, 120);
+    expect(new URL(getUrl).searchParams.get('X-Amz-Expires')).toBe('120');
+    const res = await fetch(getUrl);
+    expect(res.ok).toBe(true);
+    expect((await res.arrayBuffer()).byteLength).toBe(42);
+  });
 });

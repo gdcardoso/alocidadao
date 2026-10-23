@@ -1,5 +1,10 @@
 import { randomUUID } from 'node:crypto';
-import { HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import {
+  GetObjectCommand,
+  HeadObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 export interface StorageConfig {
@@ -15,6 +20,8 @@ export interface StorageConfig {
 
 export interface Storage {
   presignUpload(key: string): Promise<{ url: string; headers: Record<string, string> }>;
+  /** URL assinada de leitura (GET) do objeto, válida por `seconds` segundos. */
+  presignGet(key: string, seconds: number): Promise<string>;
   head(key: string): Promise<{ bytes: number; contentType: string } | null>;
 }
 
@@ -47,6 +54,12 @@ export function createStorage(config: StorageConfig): Storage {
       return { url, headers: { 'Content-Type': UPLOAD_CONTENT_TYPE } };
     },
 
+    async presignGet(key, seconds) {
+      return getSignedUrl(signer, new GetObjectCommand({ Bucket: config.bucket, Key: key }), {
+        expiresIn: seconds,
+      });
+    },
+
     async head(key) {
       try {
         const out = await server.send(new HeadObjectCommand({ Bucket: config.bucket, Key: key }));
@@ -64,4 +77,9 @@ export function newPhotoKey(tenantId: string, now: Date = new Date()): string {
   const yyyy = now.getUTCFullYear();
   const mm = String(now.getUTCMonth() + 1).padStart(2, '0');
   return `${tenantId}/uploads/${yyyy}/${mm}/${randomUUID()}.jpg`;
+}
+
+/** Chave da foto de uma solicitação do cidadão: `requests/<userId>/<yyyy>/<uuid>.jpg`. */
+export function newRequestPhotoKey(userId: string, now: Date = new Date()): string {
+  return `requests/${userId}/${now.getUTCFullYear()}/${randomUUID()}.jpg`;
 }

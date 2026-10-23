@@ -11,6 +11,7 @@ import {
 import { registerAppAuthRoutes } from './auth/app-routes.js';
 import { registerPanelAuthRoutes } from './auth/panel-routes.js';
 import { registerAuth } from './auth/plugin.js';
+import { registerCitizenRoutes } from './citizen/routes.js';
 import { registerDevPush, type PushSenders } from './dev/push.js';
 import { registerDevUploads } from './dev/uploads.js';
 import { registerDevWorkOrders } from './dev/work-orders.js';
@@ -43,7 +44,7 @@ export interface AppOptions {
   push?: PushSenders;
   /** Registra as rotas /dev/*; nunca em produção. */
   devRoutes?: boolean;
-  /** Login sem senha. As rotas /auth/* (e /me*) só existem com `auth` e `database`. */
+  /** Login sem senha. As rotas /auth/*, /me* e /citizen/* só existem com `auth` e `database`. */
   auth?: AuthOptions;
 }
 
@@ -122,6 +123,10 @@ export async function buildApp({
           timeWindowMs: auth.phoneChangeRateLimit?.timeWindowMs ?? 60 * 60_000,
         },
       });
+    });
+    // Cidadão: escopo próprio, sem o limite por IP do /auth/*.
+    await app.register(async (scope) => {
+      registerCitizenRoutes(scope, { db: database, storage });
     });
   }
 

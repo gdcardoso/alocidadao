@@ -5,8 +5,6 @@ import {
   findUserByPhone,
   freezeStaleAccount,
   schema,
-  withContext,
-  type Database,
   type Transaction,
 } from '@alocidadao/db';
 import {
@@ -25,6 +23,7 @@ import { and, asc, eq, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
+import { asActiveUser, INACTIVE } from '../auth/active-user.js';
 import { codeError, usersUniqueConflict, type AuthDeps } from '../auth/app-routes.js';
 import { hashCode, issueChallenge } from '../auth/codes.js';
 import { requireAuth } from '../auth/plugin.js';
@@ -46,34 +45,8 @@ export type MeDeps = Pick<AuthDeps, 'db' | 'secret' | 'devFixedCode' | 'sms'> & 
   phoneChangeRateLimit: { max: number; timeWindowMs: number };
 };
 
-/** Conta congelada ou excluída: as rotas de perfil respondem 401. */
-const INACTIVE = Symbol('inactive');
 /** Conta com acesso ao painel tentando trocar o e-mail: 403. */
 const EMAIL_MANAGED = Symbol('email_managed');
-
-/**
- * Roda `fn` no contexto da própria conta, só se ela continua ativa. O token de acesso não
- * consulta o banco; é esta conferência que faz congelamento e exclusão valerem na hora.
- */
-function asActiveUser<T>(
-  db: Database,
-  userId: string,
-  fn: (tx: Transaction) => Promise<T>,
-): Promise<T | typeof INACTIVE> {
-  return withContext(db, { userId }, async (tx) => {
-    const [active] = await tx
-      .select({ id: users.id })
-      .from(users)
-      .where(
-        and(
-          eq(users.id, userId),
-          eq(users.accountStatus, 'active'),
-          sql`${users.deletedAt} is null`,
-        ),
-      );
-    return active ? fn(tx) : INACTIVE;
-  });
-}
 
 /** A própria conta e os próprios vínculos (own_memberships_select; prefeituras são públicas). */
 async function loadMe(tx: Transaction, userId: string): Promise<MeResponse> {

@@ -4,7 +4,7 @@ import { Image, StyleSheet, Text, View } from 'react-native';
 import { apiErrorMessage, phoneFromInput } from '../../auth/login-flow';
 import { api } from '../../lib/api';
 import { isPhoneHintAvailable, pickPhoneHint } from '../../lib/phone-hint';
-import { PrimaryButton, TextButton } from '../../ui/Button';
+import { PrimaryButton } from '../../ui/Button';
 import { FormLayout } from '../../ui/FormLayout';
 import { maskPhoneInput } from '../../ui/format';
 import { TextField } from '../../ui/TextField';
@@ -53,17 +53,12 @@ export default function Entrar() {
     <FormLayout
       contentStyle={styles.content}
       footer={
-        <>
-          <PrimaryButton
-            label="Continuar"
-            onPress={() => void submit()}
-            disabled={!e164}
-            loading={sending}
-          />
-          {__DEV__ ? (
-            <TextButton label="Laboratório" onPress={() => router.push('/laboratorio')} />
-          ) : null}
-        </>
+        <PrimaryButton
+          label="Continuar"
+          onPress={() => void submit()}
+          disabled={!e164}
+          loading={sending}
+        />
       }
     >
       <View style={styles.brand}>

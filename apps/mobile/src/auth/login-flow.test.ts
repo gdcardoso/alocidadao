@@ -3,11 +3,14 @@ import { describe, expect, it, vi } from 'vitest';
 import type { KeyValueStore } from '../lib/installation-id';
 import {
   apiErrorMessage,
+  apiRetryAfterSeconds,
+  HOME_ROUTE,
   errorMessage,
   formatCountdown,
   nextStepAfterVerify,
   OUTBOX_OWNER_KEY,
   phoneFromInput,
+  SIGNUP_EXPIRED_MESSAGE,
   syncOutboxOwner,
 } from './login-flow';
 
@@ -33,8 +36,9 @@ const CHALLENGE_ID = '7d0c6a3e-8f43-4c1e-9a55-2b4f0f6d1a10';
 describe('login flow', () => {
   it('nextStepAfterVerify routes each status', () => {
     expect(nextStepAfterVerify({ status: 'signed_in', session: SESSION })).toEqual({
-      route: '/(app)',
+      route: HOME_ROUTE,
     });
+    expect(HOME_ROUTE).toBe('/(app)/(tabs)/solicitacoes');
     expect(nextStepAfterVerify({ status: 'needs_profile', signupToken: 'st-1' })).toEqual({
       route: '/(auth)/quase-la',
       signupToken: 'st-1',
@@ -81,6 +85,22 @@ describe('login flow', () => {
     );
     // Sem o tempo na resposta, usa o intervalo padrão de reenvio.
     expect(errorMessage('code_rate_limited')).toBe('Aguarde 60 s para pedir outro código.');
+  });
+
+  it('apiRetryAfterSeconds reads the wait of a rate limit', () => {
+    expect(
+      apiRetryAfterSeconds(new ApiError(429, { code: 'code_rate_limited', retryAfterSeconds: 42 })),
+    ).toBe(42);
+    expect(apiRetryAfterSeconds(new ApiError(429, { code: 'rate_limited' }))).toBeNull();
+    expect(apiRetryAfterSeconds(new ApiError(400, { code: 'code_invalid' }))).toBeNull();
+    expect(apiRetryAfterSeconds(new TypeError('Network request failed'))).toBeNull();
+  });
+
+  it('profile and signup messages', () => {
+    expect(errorMessage('email_managed_by_admin')).toBe(
+      'O e-mail da sua conta do painel é alterado pelo administrador.',
+    );
+    expect(SIGNUP_EXPIRED_MESSAGE).toBe('O tempo para concluir o cadastro acabou. Comece de novo.');
   });
 
   it('apiErrorMessage falls back for network errors and odd bodies', () => {

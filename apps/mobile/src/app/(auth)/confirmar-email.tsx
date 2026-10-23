@@ -5,7 +5,7 @@ import { StyleSheet, View } from 'react-native';
 import { apiErrorCode, apiErrorMessage } from '../../auth/login-flow';
 import { useSession } from '../../auth/use-session';
 import { api } from '../../lib/api';
-import { PrimaryButton } from '../../ui/Button';
+import { PrimaryButton, TextButton } from '../../ui/Button';
 import { CodeInput } from '../../ui/CodeInput';
 import { FormError, FormLayout, FormLink, FormText, FormTitle } from '../../ui/FormLayout';
 import { Header } from '../../ui/Header';
@@ -70,6 +70,14 @@ export default function ConfirmarEmail() {
           invalid={error?.code === 'code_invalid'}
         />
         <FormError message={error?.message ?? null} />
+        {error?.code === 'code_expired' || error?.code === 'code_locked' ? (
+          // Este código não se pede de novo aqui: recomeça pelo celular.
+          <TextButton
+            label="Começar de novo"
+            onPress={() => router.dismissTo('/(auth)/entrar')}
+            style={styles.restart}
+          />
+        ) : null}
       </View>
       <FormLink
         label="Não tenho acesso a esse e-mail"
@@ -82,4 +90,5 @@ export default function ConfirmarEmail() {
 const styles = StyleSheet.create({
   content: { gap: 28 },
   codeBlock: { gap: 12 },
+  restart: { alignSelf: 'flex-start', paddingHorizontal: 0 },
 });

@@ -6,6 +6,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   apiErrorCode,
   apiErrorMessage,
+  apiRetryAfterSeconds,
   formatCountdown,
   nextStepAfterVerify,
 } from '../../auth/login-flow';
@@ -83,6 +84,9 @@ export default function Codigo() {
       countdown.restart(challenge.resendInSeconds);
     } catch (e) {
       setError({ code: apiErrorCode(e), message: apiErrorMessage(e) });
+      // Limite de envio: o contador volta a correr pelo tempo que a API pediu.
+      const wait = apiRetryAfterSeconds(e);
+      if (wait !== null) countdown.restart(wait);
     } finally {
       setResending(false);
     }

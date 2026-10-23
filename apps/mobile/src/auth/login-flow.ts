@@ -5,9 +5,15 @@ import { parsePhoneInput } from '../ui/format';
 
 // Regras das telas de entrada, sem nada nativo (testável em Node).
 
+/**
+ * Tela inicial de quem está logado. Fica fora de "/": o `index` da raiz redireciona pela
+ * sessão, e a tela inicial lá criaria um laço de redirecionamento.
+ */
+export const HOME_ROUTE = '/(app)/(tabs)/solicitacoes';
+
 /** Para onde o app segue depois que o código do SMS confere. */
 export type LoginStep =
-  | { route: '/(app)' }
+  | { route: typeof HOME_ROUTE }
   | { route: '/(auth)/quase-la'; signupToken: string }
   | {
       route: '/(auth)/confirmar-email';
@@ -19,7 +25,7 @@ export type LoginStep =
 export function nextStepAfterVerify(response: PhoneVerifyResponse): LoginStep {
   switch (response.status) {
     case 'signed_in':
-      return { route: '/(app)' };
+      return { route: HOME_ROUTE };
     case 'needs_profile':
       return { route: '/(auth)/quase-la', signupToken: response.signupToken };
     case 'email_check':
@@ -41,7 +47,11 @@ const MESSAGES: Record<string, string> = {
   phone_in_use: 'Este número já tem uma conta. Volte e entre de novo.',
   email_in_use: 'Este e-mail já está em uso. Deixe em branco ou use outro.',
   sms_not_configured: 'Não foi possível enviar o SMS agora. Tente mais tarde.',
+  email_managed_by_admin: 'O e-mail da sua conta do painel é alterado pelo administrador.',
 };
+
+/** Cadastro que demorou demais (`signup_token_invalid`): a pessoa recomeça pelo celular. */
+export const SIGNUP_EXPIRED_MESSAGE = 'O tempo para concluir o cadastro acabou. Comece de novo.';
 
 /** Mensagem para o cidadão a partir do `code` da API. Sem o tempo de espera, usa o de reenvio. */
 export function errorMessage(code: string | null | undefined, retryAfterSeconds?: number): string {
@@ -58,6 +68,14 @@ export function apiErrorCode(error: unknown): string | null {
   if (typeof body !== 'object' || body === null) return null;
   const { code } = body as { code?: unknown };
   return typeof code === 'string' ? code : null;
+}
+
+/** Espera pedida pela API num limite de envio (`retryAfterSeconds`), se houver. */
+export function apiRetryAfterSeconds(error: unknown): number | null {
+  const code = apiErrorCode(error);
+  if (code !== 'code_rate_limited' && code !== 'rate_limited') return null;
+  const { retryAfterSeconds } = (error as ApiError).body as { retryAfterSeconds?: unknown };
+  return typeof retryAfterSeconds === 'number' ? retryAfterSeconds : null;
 }
 
 /** Mensagem de qualquer falha (erro da API, rede fora, tempo esgotado). */

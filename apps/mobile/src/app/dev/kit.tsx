@@ -3,6 +3,7 @@ import { Redirect, router } from 'expo-router';
 import { Hand, HandHeart, Send, ThumbsUp } from 'lucide-react-native';
 import { useState, type ReactNode } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { toCardModel, toQueuedCardModel } from '../../citizen/requests-view';
 import { BottomSheet } from '../../ui/BottomSheet';
 import { PrimaryButton, SecondaryButton, TextButton } from '../../ui/Button';
 import { CategoryOption } from '../../ui/CategoryOption';
@@ -167,21 +168,35 @@ export default function Kit() {
 
         <Section title="Cartões">
           <RequestCard
-            request={card({ status: 'awaiting_confirmation' })}
+            view={toCardModel(card({ status: 'awaiting_confirmation' }))}
+            highlighted
             onPress={() => undefined}
             action={{ label: 'Ver atendimento e confirmar', onPress: () => undefined }}
           />
           <RequestCard
-            request={card({
-              status: 'completed',
-              categoryName: 'Poda de árvore',
-              icon: 'trees',
-              iconGroup: 'environment',
-              address: 'Rua Ipê, 33',
-              protocol: '2026-000052',
-              createdAt: '2026-10-02T13:00:00.000Z',
-            })}
+            view={toCardModel(
+              card({
+                status: 'completed',
+                categoryName: 'Poda de árvore',
+                icon: 'trees',
+                iconGroup: 'environment',
+                address: 'Rua Ipê, 33',
+                protocol: '2026-000052',
+                createdAt: '2026-10-02T13:00:00.000Z',
+              }),
+            )}
             onPress={() => undefined}
+          />
+          <RequestCard
+            view={toQueuedCardModel({
+              id: 'fila-1',
+              categoryName: 'Iluminação',
+              icon: 'lightbulb',
+              iconGroup: 'infrastructure',
+              address: 'Av. Brasil, 1450',
+              createdAt: '2026-10-23T11:12:00.000Z',
+              rejection: null,
+            })}
           />
         </Section>
 

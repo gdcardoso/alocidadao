@@ -1,7 +1,7 @@
 import { signupBodySchema, TERMS_VERSION } from '@alocidadao/shared';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { apiErrorCode, apiErrorMessage } from '../../auth/login-flow';
+import { apiErrorCode, apiErrorMessage, SIGNUP_EXPIRED_MESSAGE } from '../../auth/login-flow';
 import { useSession } from '../../auth/use-session';
 import { api } from '../../lib/api';
 import { PrimaryButton } from '../../ui/Button';
@@ -24,6 +24,8 @@ export default function QuaseLa() {
   const [emailError, setEmailError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // O prazo do cadastro venceu: só resta recomeçar pelo celular.
+  const [expired, setExpired] = useState(false);
 
   const trimmedName = name.trim();
   const trimmedEmail = email.trim();
@@ -47,9 +49,12 @@ export default function QuaseLa() {
       });
       await signIn(session);
     } catch (e) {
-      const message = apiErrorMessage(e);
-      if (apiErrorCode(e) === 'email_in_use') setEmailError(message);
-      else setError(message);
+      const code = apiErrorCode(e);
+      if (code === 'signup_token_invalid') {
+        setExpired(true);
+        setError(SIGNUP_EXPIRED_MESSAGE);
+      } else if (code === 'email_in_use') setEmailError(apiErrorMessage(e));
+      else setError(apiErrorMessage(e));
     } finally {
       setSaving(false);
     }
@@ -61,12 +66,19 @@ export default function QuaseLa() {
       footer={
         <>
           <FormError message={error} />
-          <PrimaryButton
-            label="Criar conta"
-            onPress={() => void submit()}
-            disabled={!canSubmit}
-            loading={saving}
-          />
+          {expired ? (
+            <PrimaryButton
+              label="Começar de novo"
+              onPress={() => router.dismissTo('/(auth)/entrar')}
+            />
+          ) : (
+            <PrimaryButton
+              label="Criar conta"
+              onPress={() => void submit()}
+              disabled={!canSubmit}
+              loading={saving}
+            />
+          )}
         </>
       }
     >

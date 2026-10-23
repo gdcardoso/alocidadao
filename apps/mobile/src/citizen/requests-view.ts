@@ -1,10 +1,11 @@
 import type { IconGroup, RequestCard } from '@alocidadao/shared';
 import { CircleX, WifiOff } from 'lucide-react-native';
+import type { CreateRequestPayload, OutboxItem } from '../offline/outbox';
 import { statusBadge, type StatusBadgeStyle } from '../ui/category';
 import { formatShortDate } from '../ui/format';
 import { colors } from '../ui/theme';
 
-// Modelos dos cartões da tela 4, sem nada nativo (testável em Node).
+// Modelos dos cartões da tela 4 (testável em Node, com os ícones do lucide simulados).
 
 export interface CardModel {
   key: string;
@@ -43,7 +44,9 @@ export type QueuedRejection =
       code: 'municipality_not_served';
       municipality: { name: string; state: string } | null;
     }
-  | { code: 'category_unavailable' };
+  | { code: 'category_unavailable' }
+  /** Outra recusa da API (foto sumida, envio inválido): também só sai com "Remover". */
+  | { code: 'send_failed' };
 
 /**
  * Solicitação ainda na fila offline, como a tela 4 precisa dela. A Task 9 monta este objeto
@@ -94,6 +97,7 @@ export function rejectionReason(rejection: QueuedRejection): string {
   if (rejection.code === 'category_unavailable') {
     return 'Este tipo de solicitação não está disponível nesta cidade.';
   }
+  if (rejection.code === 'send_failed') return 'Não foi possível enviar esta solicitação.';
   return rejection.municipality
     ? `${rejection.municipality.name} ainda não usa o Alô Cidadão`
     : 'Sua cidade ainda não usa o Alô Cidadão';
@@ -112,4 +116,49 @@ export function toQueuedCardModel(item: QueuedRequest, now: Date = new Date()): 
     rejectionReason: item.rejection ? rejectionReason(item.rejection) : null,
     canRemove: item.rejection !== null,
   };
+}
+
+/** Itens da fila que a tela 4 mostra: esperando envio ou recusados. */
+const VISIBLE_STATUSES: readonly OutboxItem['status'][] = [
+  'pending',
+  'sending',
+  'rejected',
+  'failed',
+];
+
+function queuedRejection(item: OutboxItem): QueuedRejection | null {
+  if (item.status === 'failed') return { code: 'send_failed' };
+  if (item.status !== 'rejected') return null;
+  if (item.rejection?.code === 'municipality_not_served') {
+    const m = item.rejection.municipality;
+    return {
+      code: 'municipality_not_served',
+      municipality: m ? { name: m.name, state: m.state } : null,
+    };
+  }
+  if (item.rejection?.code === 'category_unavailable') return { code: 'category_unavailable' };
+  return { code: 'send_failed' };
+}
+
+/** Solicitações da fila offline para a tela 4, a mais nova primeiro. */
+export function toQueuedRequests(items: readonly OutboxItem[]): QueuedRequest[] {
+  return (
+    items
+      .filter((item) => item.kind === 'create_request' && VISIBLE_STATUSES.includes(item.status))
+      // O Hermes não tem `toSorted`; `filter` já devolve uma cópia, então ordenar nela é seguro.
+      // oxlint-disable-next-line unicorn/no-array-sort
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .map((item) => {
+        const payload = item.payload as CreateRequestPayload;
+        return {
+          id: item.id,
+          categoryName: payload.display.categoryName,
+          icon: payload.display.icon,
+          iconGroup: payload.display.iconGroup,
+          address: payload.address ?? null,
+          createdAt: new Date(item.createdAt).toISOString(),
+          rejection: queuedRejection(item),
+        };
+      })
+  );
 }

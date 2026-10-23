@@ -1,5 +1,14 @@
-import { workOrderActionResultSchema } from '@alocidadao/shared';
-import { NetworkError, UploadRejectedError, type SendActionResult } from './outbox';
+import { createRequestResponseSchema, workOrderActionResultSchema } from '@alocidadao/shared';
+import {
+  NetworkError,
+  UploadRejectedError,
+  type OutboxMunicipality,
+  type SendActionResult,
+  type SendCreateRequestResult,
+} from './outbox';
+
+/** Tempo esgotado no servidor (408) e limite de pedidos (429): tenta de novo com espera. */
+const RETRY_STATUSES = [408, 429];
 
 function parseJson(bodyText: string): unknown {
   try {
@@ -28,6 +37,7 @@ export function mapActionResponse(status: number, bodyText: string): SendActionR
   }
   // Token recusado (vencido ou sessão encerrada): o item espera um novo login na fila.
   if (status === 401) throw new NetworkError('unauthorized');
+  if (RETRY_STATUSES.includes(status)) throw new NetworkError(`http_${status}`);
   // Qualquer outro 4xx não melhora com nova tentativa: recusa e segue a fila.
   if (status >= 400 && status < 500) {
     const fallback =
@@ -46,6 +56,7 @@ export interface Presign {
 
 export function parsePresignResponse(status: number, bodyText: string): Presign {
   if (status === 401) throw new NetworkError('unauthorized');
+  if (RETRY_STATUSES.includes(status)) throw new NetworkError(`uploads_${status}`);
   if (status >= 400 && status < 500) {
     const json = parseJson(bodyText);
     const code =
@@ -70,4 +81,43 @@ export function parsePresignResponse(status: number, bodyText: string): Presign 
     throw new NetworkError('invalid_presign_response');
   }
   return { key: json.key, url: json.url, headers };
+}
+
+function readMunicipality(value: unknown): OutboxMunicipality | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const m = value as Partial<OutboxMunicipality>;
+  if (typeof m.ibgeCode !== 'string' || typeof m.name !== 'string' || typeof m.state !== 'string') {
+    return null;
+  }
+  return { ibgeCode: m.ibgeCode, name: m.name, state: m.state };
+}
+
+/** Traduz a resposta de POST /citizen/requests. Puro e testável. */
+export function mapCreateRequestResponse(
+  status: number,
+  bodyText: string,
+): SendCreateRequestResult {
+  const json = parseJson(bodyText);
+  const body = (typeof json === 'object' && json !== null ? json : {}) as {
+    code?: string;
+    municipality?: unknown;
+  };
+  if (status === 200 || status === 201) {
+    // 201 criada, 200 repetição do mesmo envio. HTML de portal cativo não confirma nada.
+    const parsed = createRequestResponseSchema.safeParse(json);
+    if (!parsed.success) throw new NetworkError('invalid_create_response');
+    return { kind: 'ok', result: parsed.data };
+  }
+  if (status === 401) throw new NetworkError('unauthorized');
+  if (RETRY_STATUSES.includes(status)) throw new NetworkError(`http_${status}`);
+  if (status === 409 && body.code === 'occurrence_unavailable') {
+    return { kind: 'occurrence_unavailable' };
+  }
+  if (status === 422 && body.code === 'municipality_not_served') {
+    return { kind: 'rejected', code: body.code, municipality: readMunicipality(body.municipality) };
+  }
+  if (status >= 400 && status < 500) {
+    return { kind: 'rejected', code: body.code ?? `http_${status}` };
+  }
+  throw new NetworkError(`http_${status}`);
 }

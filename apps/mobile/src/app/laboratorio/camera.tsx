@@ -1,18 +1,7 @@
-import { CameraView, useCameraPermissions } from 'expo-camera';
-import { useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Image,
-  Linking,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { useState } from 'react';
+import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { PhotoCapture, type CapturedPhoto } from '../../components/photo-capture';
 import { getCurrentPoint, type CurrentPoint } from '../../lib/location';
-import { compressPhoto, fileSize } from '../../lib/photo-native';
-import type { PhotoResult } from '../../lib/photo';
 
 const formatKb = (bytes: number) => `${Math.round(bytes / 1000)} KB`;
 
@@ -46,73 +35,29 @@ function PermissionDenied({ reason }: { reason: string }) {
   );
 }
 
-/** Tira a foto, reduz no aparelho e entrega o resultado em `onCaptured`. Reutilizado na Task 8. */
-export function PhotoCapture({ onCaptured }: { onCaptured: (photo: PhotoResult) => void }) {
-  const [permission, requestPermission] = useCameraPermissions();
-  const camera = useRef<CameraView>(null);
+/** Abre a câmera do app e mostra a foto antes e depois da redução. */
+function PhotoSection() {
   const [open, setOpen] = useState(false);
-  const [denied, setDenied] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [original, setOriginal] = useState<{ width: number; height: number; bytes: number } | null>(
-    null,
-  );
-  const [photo, setPhoto] = useState<PhotoResult | null>(null);
-
-  const start = async () => {
-    setError(null);
-    const current = permission?.granted ? permission : await requestPermission();
-    if (current.granted) {
-      setDenied(false);
-      setOpen(true);
-    } else {
-      setDenied(true);
-    }
-  };
-
-  const capture = async () => {
-    if (!camera.current || busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const raw = await camera.current.takePictureAsync({ quality: 1 });
-      setOriginal({ width: raw.width, height: raw.height, bytes: fileSize(raw.uri) });
-      const compressed = await compressPhoto(raw.uri);
-      setPhoto(compressed);
-      setOpen(false);
-      onCaptured(compressed);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Não foi possível tirar a foto.');
-    } finally {
-      setBusy(false);
-    }
-  };
+  const [photo, setPhoto] = useState<CapturedPhoto | null>(null);
 
   return (
     <View style={styles.section}>
       <Text style={styles.subtitle}>Foto</Text>
-      {open ? (
-        <>
-          <CameraView ref={camera} style={styles.camera} facing="back" />
-          <Button
-            label={busy ? 'Processando...' : 'Capturar'}
-            onPress={() => void capture()}
-            disabled={busy}
-          />
-        </>
-      ) : (
-        <Button label="Tirar foto" onPress={() => void start()} />
-      )}
-      {busy && <ActivityIndicator />}
-      {denied && (
-        <PermissionDenied reason="Sem acesso à câmera não dá para registrar a foto do problema. Libere a permissão nas configurações do aparelho." />
-      )}
-      {error && <Text style={styles.error}>{error}</Text>}
-      {photo && original && (
+      <Button label="Tirar foto" onPress={() => setOpen(true)} />
+      <PhotoCapture
+        visible={open}
+        onClose={() => setOpen(false)}
+        onCaptured={(p) => {
+          setPhoto(p);
+          setOpen(false);
+        }}
+      />
+      {photo && (
         <View style={styles.result}>
           <Image source={{ uri: photo.uri }} style={styles.preview} resizeMode="contain" />
           <Text style={styles.row}>
-            Antes: {original.width} x {original.height} px, {formatKb(original.bytes)}
+            Antes: {photo.original.width} x {photo.original.height} px,{' '}
+            {formatKb(photo.original.bytes)}
           </Text>
           <Text style={styles.row}>
             Depois: {photo.width} x {photo.height} px, {formatKb(photo.bytes)}
@@ -166,7 +111,7 @@ export default function CameraLab() {
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>Câmera e local</Text>
-      <PhotoCapture onCaptured={() => undefined} />
+      <PhotoSection />
       <LocationSection />
     </ScrollView>
   );
@@ -179,7 +124,6 @@ const styles = StyleSheet.create({
   section: { gap: 12 },
   row: { fontSize: 16 },
   error: { fontSize: 16, color: '#b00020' },
-  camera: { height: 360, borderRadius: 8, overflow: 'hidden' },
   preview: { height: 200, width: '100%', backgroundColor: '#eee' },
   result: { gap: 6 },
   denied: { gap: 12 },

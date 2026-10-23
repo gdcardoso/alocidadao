@@ -25,7 +25,9 @@ vi.mock('lucide-react-native', () => {
   return Object.fromEntries(names.map((name) => [name, name]));
 });
 
-const { toCardModel, toQueuedCardModel, rejectionReason } = await import('./requests-view');
+const { toCardModel, toQueuedCardModel, rejectionReason, toQueuedRequests } =
+  await import('./requests-view');
+const { makeItem, makeRequestItem } = await import('../offline/test-helpers');
 
 // 2026-10-23 08:12 em São Paulo (UTC−3).
 const NOW = new Date('2026-10-23T14:00:00.000Z');
@@ -113,5 +115,46 @@ describe('requests view', () => {
     expect(rejectionReason({ code: 'category_unavailable' })).toBe(
       'Este tipo de solicitação não está disponível nesta cidade.',
     );
+  });
+
+  it('a request that failed for another reason can be removed', () => {
+    expect(rejectionReason({ code: 'send_failed' })).toBe(
+      'Não foi possível enviar esta solicitação.',
+    );
+  });
+
+  it('maps the queue to queued requests, newest first', () => {
+    const items = [
+      makeItem({ id: 'action', createdAt: 5 }),
+      makeRequestItem({ id: 'old', createdAt: 1_000 }),
+      makeRequestItem({
+        id: 'refused',
+        createdAt: 2_000,
+        status: 'rejected',
+        rejection: {
+          code: 'municipality_not_served',
+          municipality: { ibgeCode: '3509502', name: 'Campinas', state: 'SP' },
+        },
+      }),
+      makeRequestItem({ id: 'failed', createdAt: 3_000, status: 'failed', lastError: 'x' }),
+      makeRequestItem({ id: 'sent', createdAt: 4_000, status: 'done' }),
+      makeRequestItem({ id: 'new', createdAt: 5_000, status: 'sending' }),
+    ];
+    const queued = toQueuedRequests(items);
+    expect(queued.map((q) => q.id)).toEqual(['new', 'failed', 'refused', 'old']);
+    expect(queued[3]).toEqual({
+      id: 'old',
+      categoryName: 'Buraco na via',
+      icon: 'construction',
+      iconGroup: 'infrastructure',
+      address: 'Rua das Flores, 120',
+      createdAt: new Date(1_000).toISOString(),
+      rejection: null,
+    });
+    expect(queued[1]?.rejection).toEqual({ code: 'send_failed' });
+    expect(queued[2]?.rejection).toEqual({
+      code: 'municipality_not_served',
+      municipality: { name: 'Campinas', state: 'SP' },
+    });
   });
 });

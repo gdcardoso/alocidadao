@@ -2,11 +2,17 @@ import NetInfo from '@react-native-community/netinfo';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { createSessionTransport } from '../../auth/native-session';
-import type { OutboxItem } from '../../offline/outbox';
-import { enqueueNative, openAppDatabase } from '../../offline/sqlite-outbox-store';
-import { useOutboxSync } from '../../offline/use-outbox-sync';
+import { PhotoCapture } from '../../components/photo-capture';
+import type { OutboxItem, WorkOrderActionPayload } from '../../offline/outbox';
+import { onOutboxSynced } from '../../offline/outbox-service';
+import {
+  enqueueNative,
+  openAppDatabase,
+  openOutboxStore,
+  type SqliteOutboxStore,
+} from '../../offline/sqlite-outbox-store';
+import { useOutbox } from '../../offline/use-outbox-sync';
 import { WorkOrderCache, type CachedWorkOrder } from '../../offline/work-order-cache';
-import { PhotoCapture } from './camera';
 
 const CONFLICT_MESSAGE =
   'Esta atividade foi reatribuída ou cancelada pela prefeitura. O que você registrou ficou guardado no aparelho.';
@@ -46,7 +52,13 @@ export default function OfflineLab() {
   const [message, setMessage] = useState<string | null>(null);
   const [completing, setCompleting] = useState<string | null>(null);
   const [photos, setPhotos] = useState<string[]>([]);
+  const [cameraOpen, setCameraOpen] = useState(false);
   const [note, setNote] = useState('');
+  const [store, setStore] = useState<SqliteOutboxStore | null>(null);
+
+  useEffect(() => {
+    void openOutboxStore().then(setStore);
+  }, []);
 
   useEffect(() => {
     void openAppDatabase().then(async (db) => {
@@ -75,14 +87,25 @@ export default function OfflineLab() {
     onlineRef.current = online;
   }, [online]);
   const fetchListRef = useRef<() => Promise<void>>(async () => undefined);
-  const { store, items, syncing, lastSyncError, syncNow, refresh } = useOutboxSync(() => {
-    void reloadLocal();
-    if (onlineRef.current) void fetchListRef.current();
-  });
+  const outbox = useOutbox();
+  const { syncing, lastSyncError, syncNow, refresh } = outbox;
+  // Só as ações do agente: a fila do app também guarda solicitações do cidadão.
+  const items = useMemo(
+    () => outbox.items.filter((i) => i.kind === 'work_order_action'),
+    [outbox.items],
+  );
+  useEffect(
+    () =>
+      onOutboxSynced(() => {
+        void reloadLocal();
+        if (onlineRef.current) void fetchListRef.current();
+      }),
+    [reloadLocal],
+  );
 
   // Mostra no cartão o resultado dos itens já resolvidos (conflito não é reenviado).
   const conflictByOrder = useMemo(
-    () => new Set(items.filter((i) => i.status === 'conflict').map((i) => i.workOrderId)),
+    () => new Set(items.filter((i) => i.status === 'conflict').map((i) => actionOf(i).workOrderId)),
     [items],
   );
 
@@ -98,8 +121,10 @@ export default function OfflineLab() {
       const list = (await transport.listWorkOrders()) as CachedWorkOrder[];
       await cache.replaceAll(list);
       for (const item of queue) {
+        if (item.kind !== 'work_order_action') continue;
         if (item.status === 'pending' || item.status === 'sending') {
-          await cache.setLocalStatus(item.workOrderId, LOCAL_STATUS[item.action]);
+          const action = actionOf(item);
+          await cache.setLocalStatus(action.workOrderId, LOCAL_STATUS[action.action]);
         }
       }
       setOrders(await cache.list());
@@ -132,9 +157,9 @@ export default function OfflineLab() {
     extra?: { note: string; photoUris: string[] },
   ) => {
     if (!cache || !store) return;
-    await enqueueNative(store, { workOrderId, action, online, ...extra });
+    await enqueueNative(store, { workOrderId, action, online, userId: '', ...extra });
     await cache.setLocalStatus(workOrderId, LOCAL_STATUS[action]);
-    await Promise.all([reloadLocal(), refresh(store)]);
+    await Promise.all([reloadLocal(), refresh()]);
     if (online) void syncNow();
   };
 
@@ -198,8 +223,14 @@ export default function OfflineLab() {
           </View>
           {completing === o.id && (
             <View style={styles.form}>
+              <Button label="Tirar foto" onPress={() => setCameraOpen(true)} />
               <PhotoCapture
-                onCaptured={(p) => setPhotos((prev) => [...prev, p.uri].slice(0, MAX_PHOTOS))}
+                visible={cameraOpen}
+                onClose={() => setCameraOpen(false)}
+                onCaptured={(p) => {
+                  setPhotos((prev) => [...prev, p.uri].slice(0, MAX_PHOTOS));
+                  setCameraOpen(false);
+                }}
               />
               <Text style={styles.row}>
                 Fotos: {photos.length} de {MAX_PHOTOS}
@@ -226,11 +257,14 @@ export default function OfflineLab() {
   );
 }
 
+const actionOf = (item: OutboxItem) => item.payload as WorkOrderActionPayload;
+
 function QueueItem({ item }: { item: OutboxItem }) {
+  const action = actionOf(item);
   return (
     <View style={styles.card}>
       <Text style={styles.cardTitle}>
-        {item.action} · {item.workOrderId.slice(0, 8)}
+        {action.action} · {action.workOrderId.slice(0, 8)}
       </Text>
       <Text style={styles.row}>
         Status: {item.status} · tentativas: {item.attempts} · fotos: {item.photoPaths.length}

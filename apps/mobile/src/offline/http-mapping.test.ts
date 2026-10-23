@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mapActionResponse, parsePresignResponse } from './http-mapping';
+import { mapActionResponse, mapCreateRequestResponse, parsePresignResponse } from './http-mapping';
 import { NetworkError, UploadRejectedError } from './outbox';
 
 const ok = JSON.stringify({
@@ -67,6 +67,10 @@ describe('parsePresignResponse', () => {
   it('keeps the item queued on 401', () => {
     expect(() => parsePresignResponse(401, '')).toThrow(NetworkError);
   });
+  it('retries 408 and 429', () => {
+    expect(() => parsePresignResponse(408, '')).toThrow(NetworkError);
+    expect(() => parsePresignResponse(429, '{"code":"rate_limited"}')).toThrow(NetworkError);
+  });
   it('rejects 4xx for good', () => {
     expect(() => parsePresignResponse(400, '{}')).toThrow(UploadRejectedError);
     expect(() => parsePresignResponse(403, '')).toThrow(UploadRejectedError);
@@ -74,6 +78,62 @@ describe('parsePresignResponse', () => {
       parsePresignResponse(400, JSON.stringify({ code: 'bad_content_type' }));
     } catch (e) {
       expect((e as UploadRejectedError).code).toBe('bad_content_type');
+    }
+  });
+});
+
+describe('mapCreateRequestResponse', () => {
+  const created = {
+    requestId: '33333333-3333-4333-8333-333333333333',
+    protocol: '2026-000200',
+    status: 'open',
+    duplicate: false,
+  };
+
+  it('accepts 201 and the 200 duplicate', () => {
+    expect(mapCreateRequestResponse(201, JSON.stringify(created))).toEqual({
+      kind: 'ok',
+      result: created,
+    });
+    expect(
+      mapCreateRequestResponse(200, JSON.stringify({ ...created, duplicate: true })),
+    ).toMatchObject({ kind: 'ok', result: { duplicate: true } });
+  });
+  it('treats an HTML or malformed success as a network error', () => {
+    expect(() => mapCreateRequestResponse(200, '<html/>')).toThrow(NetworkError);
+    expect(() => mapCreateRequestResponse(201, '{"requestId":"x"}')).toThrow(NetworkError);
+  });
+  it('maps the refusals with the municipality', () => {
+    const municipality = { ibgeCode: '3509502', name: 'Campinas', state: 'SP' };
+    expect(
+      mapCreateRequestResponse(
+        422,
+        JSON.stringify({ code: 'municipality_not_served', municipality }),
+      ),
+    ).toEqual({ kind: 'rejected', code: 'municipality_not_served', municipality });
+    expect(
+      mapCreateRequestResponse(
+        422,
+        JSON.stringify({ code: 'municipality_not_served', municipality: null }),
+      ),
+    ).toEqual({ kind: 'rejected', code: 'municipality_not_served', municipality: null });
+    expect(mapCreateRequestResponse(422, JSON.stringify({ code: 'category_unavailable' }))).toEqual(
+      { kind: 'rejected', code: 'category_unavailable' },
+    );
+    expect(mapCreateRequestResponse(409, JSON.stringify({ code: 'photo_already_used' }))).toEqual({
+      kind: 'rejected',
+      code: 'photo_already_used',
+    });
+    expect(mapCreateRequestResponse(400, '')).toEqual({ kind: 'rejected', code: 'http_400' });
+  });
+  it('maps occurrence_unavailable', () => {
+    expect(
+      mapCreateRequestResponse(409, JSON.stringify({ code: 'occurrence_unavailable' })),
+    ).toEqual({ kind: 'occurrence_unavailable' });
+  });
+  it('retries 401, 408, 429, 5xx and redirects', () => {
+    for (const status of [302, 401, 408, 429, 500, 503]) {
+      expect(() => mapCreateRequestResponse(status, '{}')).toThrow(NetworkError);
     }
   });
 });

@@ -1,22 +1,17 @@
-import type { QueuedRequest } from './requests-view';
+import { useMemo } from 'react';
+import { useOutbox } from '../offline/use-outbox-sync';
+import { toQueuedRequests, type QueuedRequest } from './requests-view';
 
 /**
- * Ponto de ligação da Task 9: as solicitações da fila offline (itens `create_request`,
- * esperando internet ou recusadas) que aparecem no topo da tela 4. A fila de hoje só tem
- * ações do agente, então a lista vem vazia; a Task 9 lê os itens da fila aqui e implementa
- * `remove` (botão "Remover" das recusadas).
+ * Solicitações da fila offline (esperando internet ou recusadas) que aparecem no topo da
+ * tela 4. `remove` é o "Remover" das recusadas: tira o item e as fotos guardadas dele.
  */
 export function useQueuedRequests(): {
   items: QueuedRequest[];
   remove(id: string): Promise<void>;
   reload(): Promise<void>;
 } {
-  return EMPTY_QUEUE;
+  const { items, remove, refresh } = useOutbox();
+  const queued = useMemo(() => toQueuedRequests(items), [items]);
+  return { items: queued, remove, reload: refresh };
 }
-
-// Referências estáveis: a tela usa `reload` como dependência dos efeitos.
-const EMPTY_QUEUE = {
-  items: [] as QueuedRequest[],
-  remove: async (_id: string) => undefined,
-  reload: async () => undefined,
-};

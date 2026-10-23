@@ -1,103 +1,54 @@
 import { randomUUID } from 'expo-crypto';
 import { Directory, File, Paths } from 'expo-file-system';
 import { openDatabaseAsync, type SQLiteDatabase } from 'expo-sqlite';
+import { OUTBOX_OWNER_KEY } from '../auth/login-flow';
+import { PlaceCache } from '../citizen/place-cache';
+import { secureStore } from '../lib/secure-store';
 import {
+  enqueueCreateRequest,
   enqueueWorkOrderAction,
   type EnqueueDeps,
   type OutboxItem,
   type OutboxStore,
 } from './outbox';
+import {
+  OUTBOX_COLUMNS,
+  fromOutboxRow,
+  migrateOutbox,
+  toColumnValue,
+  toOutboxRow,
+  type OutboxRow,
+} from './outbox-schema';
 import { WorkOrderCache } from './work-order-cache';
 
 const DB_NAME = 'alocidadao.db';
 
 let dbPromise: Promise<SQLiteDatabase> | null = null;
 
-/** Abre o banco do app uma única vez (compartilhado com o cache de listas). */
+/** Abre o banco do app uma única vez (compartilhado com os caches) e migra a fila. */
 export function openAppDatabase(): Promise<SQLiteDatabase> {
-  dbPromise ??= openDatabaseAsync(DB_NAME).then(async (db) => {
-    await db.execAsync(`
-      PRAGMA journal_mode = WAL;
-      CREATE TABLE IF NOT EXISTS outbox (
-        id TEXT PRIMARY KEY NOT NULL,
-        work_order_id TEXT NOT NULL,
-        action TEXT NOT NULL,
-        occurred_at TEXT NOT NULL,
-        note TEXT,
-        photo_paths TEXT NOT NULL,
-        photo_keys TEXT NOT NULL,
-        created_offline INTEGER NOT NULL,
-        status TEXT NOT NULL,
-        attempts INTEGER NOT NULL,
-        next_attempt_at INTEGER NOT NULL,
-        last_error TEXT,
-        created_at INTEGER NOT NULL
-      );
-      CREATE INDEX IF NOT EXISTS outbox_due ON outbox (status, next_attempt_at, created_at);
-    `);
-    return db;
-  });
+  dbPromise ??= openDatabaseAsync(DB_NAME)
+    .then(async (db) => {
+      await db.execAsync('PRAGMA journal_mode = WAL;');
+      // A versão 0 da fila só tinha ações do agente: os itens ficam com o dono guardado.
+      await migrateOutbox(db, () => secureStore.getItem(OUTBOX_OWNER_KEY));
+      return db;
+    })
+    .catch((error: unknown) => {
+      // Uma falha na abertura não pode travar o app até ele ser reiniciado.
+      dbPromise = null;
+      throw error;
+    });
   return dbPromise;
-}
-
-interface Row {
-  id: string;
-  work_order_id: string;
-  action: 'start' | 'complete';
-  occurred_at: string;
-  note: string | null;
-  photo_paths: string;
-  photo_keys: string;
-  created_offline: number;
-  status: OutboxItem['status'];
-  attempts: number;
-  next_attempt_at: number;
-  last_error: string | null;
-  created_at: number;
-}
-
-const COLUMNS: Record<keyof OutboxItem, string> = {
-  id: 'id',
-  workOrderId: 'work_order_id',
-  action: 'action',
-  occurredAt: 'occurred_at',
-  note: 'note',
-  photoPaths: 'photo_paths',
-  photoKeys: 'photo_keys',
-  createdOffline: 'created_offline',
-  status: 'status',
-  attempts: 'attempts',
-  nextAttemptAt: 'next_attempt_at',
-  lastError: 'last_error',
-  createdAt: 'created_at',
-};
-
-function toColumnValue(key: keyof OutboxItem, value: OutboxItem[keyof OutboxItem]) {
-  if (key === 'photoPaths' || key === 'photoKeys') return JSON.stringify(value);
-  if (key === 'createdOffline') return value ? 1 : 0;
-  return value as string | number | null;
-}
-
-function fromRow(row: Row): OutboxItem {
-  return {
-    id: row.id,
-    workOrderId: row.work_order_id,
-    action: row.action,
-    occurredAt: row.occurred_at,
-    note: row.note,
-    photoPaths: JSON.parse(row.photo_paths) as string[],
-    photoKeys: JSON.parse(row.photo_keys) as (string | null)[],
-    createdOffline: row.created_offline === 1,
-    status: row.status,
-    attempts: row.attempts,
-    nextAttemptAt: row.next_attempt_at,
-    lastError: row.last_error,
-    createdAt: row.created_at,
-  };
 }
 
 const outboxRoot = () => new Directory(Paths.document, 'outbox');
 const outboxDir = (id: string) => new Directory(Paths.document, 'outbox', id);
+
+function deletePhotos(id: string): void {
+  const dir = outboxDir(id);
+  if (dir.exists) dir.delete();
+}
 
 /** Copia a foto para `Paths.document/outbox/<id>/` e devolve o novo caminho. */
 export async function stashPhoto(id: string, uri: string, index: number): Promise<string> {
@@ -110,23 +61,43 @@ export async function stashPhoto(id: string, uri: string, index: number): Promis
   return target.uri;
 }
 
+const draftsDir = () => new Directory(Paths.document, 'drafts');
+
+/**
+ * Guarda a foto do rascunho fora do cache: com pouco espaço, o Android apaga o cache do app
+ * a qualquer momento, inclusive com a Nova solicitação aberta.
+ */
+export async function keepDraftPhoto(uri: string): Promise<string> {
+  const dir = draftsDir();
+  dir.create({ intermediates: true, idempotent: true });
+  const target = new File(dir, `${randomUUID()}.jpg`);
+  await new File(uri).copy(target);
+  return target.uri;
+}
+
+/** Apaga as fotos de rascunho (a fila já copiou as que foram enviadas). */
+export function clearDraftPhotos(): void {
+  const dir = draftsDir();
+  if (dir.exists) dir.delete();
+}
+
 export class SqliteOutboxStore implements OutboxStore {
   constructor(private readonly db: SQLiteDatabase) {}
 
   async add(item: OutboxItem): Promise<void> {
-    const keys = Object.keys(COLUMNS) as (keyof OutboxItem)[];
+    const row = toOutboxRow(item);
+    const columns = Object.keys(row);
     await this.db.runAsync(
-      `INSERT INTO outbox (${keys.map((k) => COLUMNS[k]).join(', ')})
-       VALUES (${keys.map(() => '?').join(', ')})`,
-      keys.map((k) => toColumnValue(k, item[k])),
+      `INSERT INTO outbox (${columns.join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`,
+      Object.values(row),
     );
   }
 
   async listPending(): Promise<OutboxItem[]> {
-    const rows = await this.db.getAllAsync<Row>(
+    const rows = await this.db.getAllAsync<OutboxRow>(
       `SELECT * FROM outbox WHERE status = 'pending' ORDER BY created_at ASC, rowid ASC`,
     );
-    return rows.map(fromRow);
+    return rows.map(fromOutboxRow);
   }
 
   async update(id: string, patch: Partial<OutboxItem>): Promise<void> {
@@ -135,14 +106,12 @@ export class SqliteOutboxStore implements OutboxStore {
     );
     if (keys.length > 0) {
       await this.db.runAsync(
-        `UPDATE outbox SET ${keys.map((k) => `${COLUMNS[k]} = ?`).join(', ')} WHERE id = ?`,
-        [...keys.map((k) => toColumnValue(k, patch[k] as OutboxItem[keyof OutboxItem])), id],
+        `UPDATE outbox SET ${keys.map((k) => `${OUTBOX_COLUMNS[k]} = ?`).join(', ')} WHERE id = ?`,
+        [...keys.map((k) => toColumnValue(k, patch[k] as OutboxItem[typeof k])), id],
       );
     }
-    if (patch.status === 'done') {
-      const dir = outboxDir(id);
-      if (dir.exists) dir.delete();
-    }
+    // Enviado: as fotos guardadas já estão no servidor.
+    if (patch.status === 'done') deletePhotos(id);
   }
 
   async resetInFlight(): Promise<void> {
@@ -150,37 +119,70 @@ export class SqliteOutboxStore implements OutboxStore {
   }
 
   async list(): Promise<OutboxItem[]> {
-    const rows = await this.db.getAllAsync<Row>(
+    const rows = await this.db.getAllAsync<OutboxRow>(
       `SELECT * FROM outbox ORDER BY created_at ASC, rowid ASC`,
     );
-    return rows.map(fromRow);
+    return rows.map(fromOutboxRow);
+  }
+
+  async remove(id: string): Promise<void> {
+    await this.db.runAsync('DELETE FROM outbox WHERE id = ?', [id]);
+    deletePhotos(id);
   }
 }
 
 /**
- * Apaga o que o agente deixou no aparelho ao sair: fila, cache de atividades e fotos
- * guardadas. O id da instalação (SecureStore) fica.
+ * Apaga o que a pessoa deixou no aparelho ao sair: fila, caches (atividades e última
+ * prefeitura) e fotos guardadas. O id da instalação (SecureStore) fica.
  */
 export async function clearOfflineData(): Promise<void> {
   const db = await openAppDatabase();
-  // Garante a tabela do cache, que só existe depois da primeira abertura da lista.
+  // Garante as tabelas dos caches, que só existem depois do primeiro uso.
   await new WorkOrderCache(db).init();
+  const places = new PlaceCache(db);
+  await places.init();
   await db.withTransactionAsync(async () => {
     await db.runAsync('DELETE FROM outbox');
     await db.runAsync('DELETE FROM work_orders_cache');
+    await db.runAsync('DELETE FROM place_cache');
   });
   const photos = outboxRoot();
   if (photos.exists) photos.delete();
+  clearDraftPhotos();
 }
 
 export async function openOutboxStore(): Promise<SqliteOutboxStore> {
   return new SqliteOutboxStore(await openAppDatabase());
 }
 
-/** Dependências nativas de `enqueueWorkOrderAction`. */
-export const nativeEnqueueDeps: EnqueueDeps = { randomUuid: randomUUID, stashPhoto };
+/** Enfileira com as dependências nativas e, se falhar no meio (ex.: foto sumiu), apaga a pasta de fotos que sobrou. */
+async function enqueueCleaningUp<T>(run: (deps: EnqueueDeps) => Promise<T>): Promise<T> {
+  const ids: string[] = [];
+  const deps: EnqueueDeps = {
+    randomUuid: () => {
+      const id = randomUUID();
+      ids.push(id);
+      return id;
+    },
+    stashPhoto: async (id, uri, index) => {
+      ids.push(id);
+      return stashPhoto(id, uri, index);
+    },
+  };
+  try {
+    return await run(deps);
+  } catch (error) {
+    for (const id of new Set(ids)) deletePhotos(id);
+    throw error;
+  }
+}
 
 export const enqueueNative = (
   store: OutboxStore,
   input: Parameters<typeof enqueueWorkOrderAction>[1],
-) => enqueueWorkOrderAction(store, input, nativeEnqueueDeps);
+) => enqueueCleaningUp((deps) => enqueueWorkOrderAction(store, input, deps));
+
+export const enqueueCreateRequestNative = (
+  store: OutboxStore,
+  input: Parameters<typeof enqueueCreateRequest>[1],
+) => enqueueCleaningUp((deps) => enqueueCreateRequest(store, input, deps));

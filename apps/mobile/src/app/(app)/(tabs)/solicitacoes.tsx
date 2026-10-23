@@ -121,7 +121,8 @@ export default function MinhasSolicitacoes() {
     </View>
   );
 
-  const empty =
+  // Carregando e erro aparecem mesmo com itens da fila na tela: embaixo deles, no rodapé.
+  const listState =
     state.phase === 'loading' ? (
       <View style={styles.state}>
         <ActivityIndicator size="large" color={colors.primary} accessibilityLabel="Carregando" />
@@ -132,14 +133,16 @@ export default function MinhasSolicitacoes() {
         <Text style={styles.stateText}>Confira sua internet e tente de novo.</Text>
         <SecondaryButton label="Tentar de novo" onPress={() => void load(filter)} size="medium" />
       </View>
-    ) : (
-      <View style={styles.state}>
-        <Text style={styles.stateTitle}>Nenhuma solicitação ainda</Text>
-        <Text style={styles.stateText}>
-          Toque em Nova para avisar a prefeitura sobre um problema.
-        </Text>
-      </View>
-    );
+    ) : null;
+
+  const empty = listState ?? (
+    <View style={styles.state}>
+      <Text style={styles.stateTitle}>Nenhuma solicitação ainda</Text>
+      <Text style={styles.stateText}>
+        Toque em Nova para avisar a prefeitura sobre um problema.
+      </Text>
+    </View>
+  );
 
   return (
     <Screen>
@@ -148,6 +151,7 @@ export default function MinhasSolicitacoes() {
         keyExtractor={(row) => row.model.key}
         ListHeaderComponent={header}
         ListEmptyComponent={empty}
+        ListFooterComponent={rows.length > 0 ? (listState ?? undefined) : undefined}
         contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + 20 }]}
         ItemSeparatorComponent={Separator}
         refreshControl={

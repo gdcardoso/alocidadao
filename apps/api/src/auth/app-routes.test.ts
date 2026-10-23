@@ -1,5 +1,5 @@
 import { randomInt, randomUUID } from 'node:crypto';
-import { createDatabase, schema, withContext } from '@alocidadao/db';
+import { createDatabase, schema } from '@alocidadao/db';
 import {
   TERMS_VERSION,
   maskEmail,
@@ -14,7 +14,6 @@ import { buildApp, type AppOptions } from '../app.js';
 import type { EmailSender } from '../messaging/email.js';
 import type { SmsSender } from '../messaging/sms.js';
 import { API_TEST_APP_URL, API_TEST_OWNER_URL } from '../test/urls.js';
-import { requireAuth } from './plugin.js';
 import { verifyAccessToken } from './tokens.js';
 
 const { users, devices, memberships, tenants, sessions } = schema;
@@ -41,15 +40,7 @@ async function build(rateLimit = { max: 1000, timeWindowMs: 60_000 }) {
     database: appDb.db,
     auth: { secret, devFixedCode: '123456', sms, email, rateLimit },
   };
-  const app = await buildApp(options);
-  // O GET /me chega com as rotas de perfil; aqui uma rota mínima confere o token e lê o nome.
-  app.get('/test/me', { preHandler: requireAuth(['app']) }, (request) => {
-    const userId = request.auth!.userId;
-    return withContext(appDb.db, { userId }, (tx) =>
-      tx.select({ name: users.name }).from(users).where(eq(users.id, userId)),
-    ).then(([user]) => ({ name: user!.name }));
-  });
-  return app;
+  return buildApp(options);
 }
 
 let app: Awaited<ReturnType<typeof build>>;
@@ -181,11 +172,11 @@ describe('app auth routes', () => {
 
     const me = await app.inject({
       method: 'GET',
-      url: '/test/me',
+      url: '/me',
       headers: { authorization: `Bearer ${session.accessToken}` },
     });
     expect(me.statusCode).toBe(200);
-    expect(me.json()).toEqual({ name: 'Maria Nova' });
+    expect(me.json()).toMatchObject({ name: 'Maria Nova', phone });
 
     const userId = await userIdOf(session.accessToken);
     const [user] = await owner.db.select().from(users).where(eq(users.id, userId));
@@ -208,12 +199,12 @@ describe('app auth routes', () => {
     ]);
 
     // Sem token, ou com o token de cadastro, a rota autenticada recusa.
-    const anonymous = await app.inject({ method: 'GET', url: '/test/me' });
+    const anonymous = await app.inject({ method: 'GET', url: '/me' });
     expect(anonymous.statusCode).toBe(401);
     expect(anonymous.json()).toEqual({ code: 'unauthorized' });
     const withSignupToken = await app.inject({
       method: 'GET',
-      url: '/test/me',
+      url: '/me',
       headers: { authorization: `Bearer ${verified.signupToken}` },
     });
     expect(withSignupToken.statusCode).toBe(401);

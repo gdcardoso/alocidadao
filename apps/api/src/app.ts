@@ -9,12 +9,14 @@ import {
   type ZodTypeProvider,
 } from 'fastify-type-provider-zod';
 import { registerAppAuthRoutes } from './auth/app-routes.js';
+import { registerPanelAuthRoutes } from './auth/panel-routes.js';
 import { registerAuth } from './auth/plugin.js';
 import { registerDevPush, type PushSenders } from './dev/push.js';
 import { registerDevUploads } from './dev/uploads.js';
 import { registerDevWorkOrders } from './dev/work-orders.js';
 import type { EmailSender } from './messaging/email.js';
 import { createLogSmsSender, type SmsSender } from './messaging/sms.js';
+import { registerMeRoutes } from './me/routes.js';
 import type { Storage } from './storage/s3.js';
 
 export interface AuthOptions {
@@ -69,6 +71,13 @@ export async function buildApp({
   if (auth && database) {
     const sms =
       auth.sms ?? (process.env.NODE_ENV === 'production' ? undefined : createLogSmsSender(app.log));
+    const deps = {
+      db: database,
+      secret: auth.secret,
+      devFixedCode: auth.devFixedCode,
+      sms,
+      email: auth.email,
+    };
     // Escopo próprio: o limite por IP vale só para /auth/*.
     await app.register(async (scope) => {
       await scope.register(rateLimit, {
@@ -88,14 +97,11 @@ export async function buildApp({
         // Os demais erros seguem para o tratamento padrão.
         return reply.send(error);
       });
-      registerAppAuthRoutes(scope, {
-        db: database,
-        secret: auth.secret,
-        devFixedCode: auth.devFixedCode,
-        sms,
-        email: auth.email,
-      });
+      registerAppAuthRoutes(scope, deps);
+      registerPanelAuthRoutes(scope, deps);
     });
+    // Fora do escopo de /auth: o limite por IP não vale para o perfil.
+    registerMeRoutes(app, deps);
   }
 
   if (devRoutes) {

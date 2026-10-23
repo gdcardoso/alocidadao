@@ -1,0 +1,359 @@
+import { randomInt, randomUUID } from 'node:crypto';
+import { createDatabase, schema } from '@alocidadao/db';
+import type {
+  ChallengeResponse,
+  MeResponse,
+  PhoneVerifyResponse,
+  SessionTokens,
+} from '@alocidadao/shared';
+import { eq } from 'drizzle-orm';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { buildApp } from '../app.js';
+import type { EmailSender } from '../messaging/email.js';
+import type { SmsSender } from '../messaging/sms.js';
+import { API_TEST_APP_URL, API_TEST_OWNER_URL } from '../test/urls.js';
+
+const { users, memberships, tenants, devices } = schema;
+
+const owner = createDatabase(API_TEST_OWNER_URL);
+const appDb = createDatabase(API_TEST_APP_URL);
+const secret = 'segredo-de-teste-da-api-com-mais-de-32-caracteres';
+
+const smsSent: { phone: string; text: string }[] = [];
+const sms: SmsSender = {
+  send: async (phone, text) => {
+    smsSent.push({ phone, text });
+  },
+};
+const email: EmailSender = { send: async () => {} };
+
+let app: Awaited<ReturnType<typeof buildApp>>;
+
+const newPhone = () => `+5521${String(randomInt(0, 1_000_000_000)).padStart(9, '0')}`;
+
+async function createUser(values: Partial<typeof users.$inferInsert> = {}) {
+  const phone = values.phone ?? newPhone();
+  const [user] = await owner.db
+    .insert(users)
+    .values({ name: 'Conta de perfil', ...values, phone })
+    .returning();
+  return { id: user!.id, phone };
+}
+
+async function createTenant(name: string, status: (typeof tenants.$inferInsert)['status']) {
+  const [tenant] = await owner.db
+    .insert(tenants)
+    .values({
+      name: `Município ${name}`,
+      displayName: name,
+      city: name,
+      state: 'BA',
+      ibgeCode: String(randomInt(1_000_000, 9_999_999)),
+      status,
+    })
+    .returning();
+  return tenant!.id;
+}
+
+/** Entra pelo app (celular e código fixo) e devolve os tokens. */
+async function signIn(phone: string, installationId = randomUUID()): Promise<SessionTokens> {
+  const start = await app.inject({ method: 'POST', url: '/auth/phone/start', payload: { phone } });
+  expect(start.statusCode).toBe(200);
+  const { challengeId } = start.json<ChallengeResponse>();
+  const verify = await app.inject({
+    method: 'POST',
+    url: '/auth/phone/verify',
+    payload: {
+      challengeId,
+      code: '123456',
+      device: { installationId, platform: 'android', appVersion: '1.0.0' },
+    },
+  });
+  const body = verify.json<PhoneVerifyResponse>();
+  if (body.status !== 'signed_in') throw new Error(`status ${body.status}`);
+  return body.session;
+}
+
+const bearer = (session: SessionTokens) => ({ authorization: `Bearer ${session.accessToken}` });
+
+async function getMe(session: SessionTokens) {
+  return app.inject({ method: 'GET', url: '/me', headers: bearer(session) });
+}
+
+beforeAll(async () => {
+  app = await buildApp({
+    database: appDb.db,
+    auth: {
+      secret,
+      devFixedCode: '123456',
+      sms,
+      email,
+      rateLimit: { max: 1000, timeWindowMs: 60_000 },
+    },
+  });
+});
+
+afterAll(async () => {
+  await app.close();
+  await owner.pool.end();
+  await appDb.pool.end();
+});
+
+describe('me routes', () => {
+  it('me lists agent and panel tenants', async () => {
+    const user = await createUser({ name: 'Ana Vínculos', email: 'ana@exemplo.com' });
+    const activeTenant = await createTenant('Prefeitura Ativa', 'active');
+    const onboardingTenant = await createTenant('Prefeitura Nova', 'onboarding');
+    const inactiveTenant = await createTenant('Prefeitura Antiga', 'active');
+    const panelTenant = await createTenant('Prefeitura Gestão', 'active');
+    await owner.db.insert(memberships).values([
+      { tenantId: activeTenant, userId: user.id, role: 'field_agent', status: 'active' },
+      { tenantId: onboardingTenant, userId: user.id, role: 'field_agent', status: 'active' },
+      { tenantId: inactiveTenant, userId: user.id, role: 'field_agent', status: 'inactive' },
+      { tenantId: inactiveTenant, userId: user.id, role: 'manager', status: 'inactive' },
+      { tenantId: panelTenant, userId: user.id, role: 'tenant_admin', status: 'active' },
+      { tenantId: activeTenant, userId: user.id, role: 'citizen', status: 'active' },
+    ]);
+
+    const session = await signIn(user.phone);
+    const res = await getMe(session);
+    expect(res.statusCode).toBe(200);
+    expect(res.json<MeResponse>()).toEqual({
+      id: user.id,
+      name: 'Ana Vínculos',
+      phone: user.phone,
+      email: 'ana@exemplo.com',
+      platformRole: null,
+      agentTenants: [{ tenantId: activeTenant, tenantName: 'Prefeitura Ativa' }],
+      panelTenants: [
+        { tenantId: panelTenant, tenantName: 'Prefeitura Gestão', role: 'tenant_admin' },
+      ],
+    });
+
+    const anonymous = await app.inject({ method: 'GET', url: '/me' });
+    expect(anonymous.statusCode).toBe(401);
+    expect(anonymous.json()).toEqual({ code: 'unauthorized' });
+  });
+
+  it('PATCH me updates name and clears email', async () => {
+    const user = await createUser({ email: 'antes@exemplo.com' });
+    const session = await signIn(user.phone);
+
+    const renamed = await app.inject({
+      method: 'PATCH',
+      url: '/me',
+      headers: bearer(session),
+      payload: { name: 'Nome Novo', email: 'Depois@Exemplo.com' },
+    });
+    expect(renamed.statusCode).toBe(200);
+    expect(renamed.json<MeResponse>()).toMatchObject({
+      name: 'Nome Novo',
+      email: 'depois@exemplo.com',
+    });
+
+    const cleared = await app.inject({
+      method: 'PATCH',
+      url: '/me',
+      headers: bearer(session),
+      payload: { email: null },
+    });
+    expect(cleared.statusCode).toBe(200);
+    expect(cleared.json<MeResponse>()).toMatchObject({ name: 'Nome Novo', email: null });
+
+    const empty = await app.inject({
+      method: 'PATCH',
+      url: '/me',
+      headers: bearer(session),
+      payload: {},
+    });
+    expect(empty.statusCode).toBe(400);
+
+    // E-mail de outra conta.
+    await createUser({ email: 'ocupado@exemplo.com' });
+    const taken = await app.inject({
+      method: 'PATCH',
+      url: '/me',
+      headers: bearer(session),
+      payload: { email: 'Ocupado@exemplo.com' },
+    });
+    expect(taken.statusCode).toBe(409);
+    expect(taken.json()).toEqual({ code: 'email_in_use' });
+  });
+
+  it('device update upserts the device', async () => {
+    const user = await createUser();
+    const installationId = randomUUID();
+    const session = await signIn(user.phone, installationId);
+
+    const known = await app.inject({
+      method: 'PUT',
+      url: `/me/devices/${installationId}`,
+      headers: bearer(session),
+      payload: { platform: 'android', appVersion: '1.2.0', pushToken: 'push-token-1' },
+    });
+    expect(known.statusCode).toBe(204);
+
+    const other = randomUUID();
+    const created = await app.inject({
+      method: 'PUT',
+      url: `/me/devices/${other}`,
+      headers: bearer(session),
+      payload: { platform: 'ios', appVersion: '2.0.0' },
+    });
+    expect(created.statusCode).toBe(204);
+
+    const saved = await owner.db.select().from(devices).where(eq(devices.userId, user.id));
+    expect(saved).toHaveLength(2);
+    expect(saved.find((d) => d.installationId === installationId)).toMatchObject({
+      platform: 'android',
+      appVersion: '1.2.0',
+      pushToken: 'push-token-1',
+    });
+    expect(saved.find((d) => d.installationId === other)).toMatchObject({
+      platform: 'ios',
+      appVersion: '2.0.0',
+      pushToken: null,
+    });
+  });
+
+  it('phone change needs the code sent to the new number', async () => {
+    const user = await createUser();
+    const session = await signIn(user.phone);
+    const next = newPhone();
+
+    const start = await app.inject({
+      method: 'POST',
+      url: '/me/phone/start',
+      headers: bearer(session),
+      payload: { phone: next },
+    });
+    expect(start.statusCode).toBe(200);
+    const { challengeId } = start.json<ChallengeResponse>();
+    expect(smsSent).toContainEqual({
+      phone: next,
+      text: 'Alô Cidadão: seu código é 123456. Não compartilhe com ninguém.',
+    });
+
+    const wrong = await app.inject({
+      method: 'POST',
+      url: '/me/phone/verify',
+      headers: bearer(session),
+      payload: { challengeId, code: '000000' },
+    });
+    expect(wrong.statusCode).toBe(400);
+    expect(wrong.json()).toEqual({ code: 'code_invalid' });
+
+    const right = await app.inject({
+      method: 'POST',
+      url: '/me/phone/verify',
+      headers: bearer(session),
+      payload: { challengeId, code: '123456' },
+    });
+    expect(right.statusCode).toBe(200);
+    expect(right.json<MeResponse>().phone).toBe(next);
+
+    const me = await getMe(session);
+    expect(me.json<MeResponse>().phone).toBe(next);
+  });
+
+  it('phone change code only works for the account that asked for it', async () => {
+    const asker = await createUser();
+    const other = await createUser();
+    const askerSession = await signIn(asker.phone);
+    const otherSession = await signIn(other.phone);
+
+    const start = await app.inject({
+      method: 'POST',
+      url: '/me/phone/start',
+      headers: bearer(askerSession),
+      payload: { phone: newPhone() },
+    });
+    const { challengeId } = start.json<ChallengeResponse>();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/me/phone/verify',
+      headers: bearer(otherSession),
+      payload: { challengeId, code: '123456' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ code: 'code_invalid' });
+
+    // O código de login do app também não serve para trocar o número.
+    const login = await app.inject({
+      method: 'POST',
+      url: '/auth/phone/start',
+      payload: { phone: newPhone() },
+    });
+    const loginCode = await app.inject({
+      method: 'POST',
+      url: '/me/phone/verify',
+      headers: bearer(askerSession),
+      payload: { challengeId: login.json<ChallengeResponse>().challengeId, code: '123456' },
+    });
+    expect(loginCode.statusCode).toBe(400);
+    expect(loginCode.json()).toEqual({ code: 'code_invalid' });
+  });
+
+  it('phone change to a number in use is 409', async () => {
+    const user = await createUser();
+    const taken = await createUser();
+    const session = await signIn(user.phone);
+
+    const start = await app.inject({
+      method: 'POST',
+      url: '/me/phone/start',
+      headers: bearer(session),
+      payload: { phone: taken.phone },
+    });
+    expect(start.statusCode).toBe(200);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/me/phone/verify',
+      headers: bearer(session),
+      payload: { challengeId: start.json<ChallengeResponse>().challengeId, code: '123456' },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toEqual({ code: 'phone_in_use' });
+    expect((await getMe(session)).json<MeResponse>().phone).toBe(user.phone);
+  });
+
+  it('refresh and me fail after account deletion', async () => {
+    const user = await createUser({ email: 'excluir@exemplo.com' });
+    const session = await signIn(user.phone);
+
+    const deleted = await app.inject({ method: 'DELETE', url: '/me', headers: bearer(session) });
+    expect(deleted.statusCode).toBe(204);
+    expect(deleted.body).toBe('');
+
+    const refresh = await app.inject({
+      method: 'POST',
+      url: '/auth/refresh',
+      payload: { refreshToken: session.refreshToken },
+    });
+    expect(refresh.statusCode).toBe(401);
+
+    const me = await getMe(session);
+    expect(me.statusCode).toBe(401);
+    expect(me.json()).toEqual({ code: 'unauthorized' });
+
+    const [row] = await owner.db.select().from(users).where(eq(users.id, user.id));
+    expect(row).toMatchObject({ accountStatus: 'frozen', phone: null, email: null });
+    expect(row!.deletedAt).not.toBeNull();
+  });
+
+  it('frozen account is refused by me routes', async () => {
+    const user = await createUser();
+    const session = await signIn(user.phone);
+    await owner.db.update(users).set({ accountStatus: 'frozen' }).where(eq(users.id, user.id));
+
+    const me = await getMe(session);
+    expect(me.statusCode).toBe(401);
+    const patch = await app.inject({
+      method: 'PATCH',
+      url: '/me',
+      headers: bearer(session),
+      payload: { name: 'Congelada' },
+    });
+    expect(patch.statusCode).toBe(401);
+  });
+});

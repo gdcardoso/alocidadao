@@ -47,7 +47,7 @@ export interface AuthDeps {
 }
 
 /** Código conferido, mas recusado: a resposta é sempre 400 com o motivo. */
-function codeError(result: Exclude<ConsumeCodeResult['result'], 'ok'>) {
+export function codeError(result: Exclude<ConsumeCodeResult['result'], 'ok'>) {
   return { code: `code_${result}` as const };
 }
 
@@ -58,14 +58,20 @@ class SignupConflict extends Error {
   }
 }
 
-/** Violação de unicidade (23505) em users: qual índice recusou. */
-function uniqueConflict(error: unknown): SignupConflict | undefined {
+/**
+ * Violação de unicidade (23505) em users: o conflito que ela representa, ou undefined se o
+ * erro é outro. O Drizzle embrulha o erro do Postgres em `cause`.
+ */
+export function usersUniqueConflict(error: unknown): 'phone_in_use' | 'email_in_use' | undefined {
   const e = error as { code?: string; constraint?: string; cause?: unknown };
   const pg = e.code === '23505' ? e : (e.cause as typeof e | undefined);
   if (pg?.code !== '23505') return undefined;
-  return new SignupConflict(
-    pg.constraint === 'users_email_lower_idx' ? 'email_in_use' : 'phone_in_use',
-  );
+  return pg.constraint === 'users_email_lower_idx' ? 'email_in_use' : 'phone_in_use';
+}
+
+function uniqueConflict(error: unknown): SignupConflict | undefined {
+  const code = usersUniqueConflict(error);
+  return code ? new SignupConflict(code) : undefined;
 }
 
 /** Rotas de login do app: celular e código, cadastro, número reaproveitado e sessões. */

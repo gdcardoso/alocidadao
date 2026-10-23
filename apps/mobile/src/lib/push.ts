@@ -11,12 +11,14 @@ export type PushRegistration =
   | { error: 'token_failed'; message: string };
 
 /**
- * Pede permissão e devolve o token nativo (FCM no Android, APNs no iOS).
+ * Pede permissão (ou, com `requestPermission: false`, só confere a que já existe) e devolve o token nativo (FCM no Android, APNs no iOS).
  * No Android o canal `status` é criado antes da permissão (exigência do Android 13+).
  * Sem `google-services.json` no build, o FirebaseApp não inicia e o token não sai:
  * devolve `push_not_configured`.
  */
-export async function registerForPush(): Promise<PushRegistration> {
+export async function registerForPush({
+  requestPermission = true,
+}: { requestPermission?: boolean } = {}): Promise<PushRegistration> {
   if (Platform.OS !== 'android' && Platform.OS !== 'ios') return { error: 'unsupported' };
   const platform = Platform.OS;
 
@@ -31,7 +33,8 @@ export async function registerForPush(): Promise<PushRegistration> {
   }
 
   const current = await Notifications.getPermissionsAsync();
-  const permission = current.granted ? current : await Notifications.requestPermissionsAsync();
+  const permission =
+    current.granted || !requestPermission ? current : await Notifications.requestPermissionsAsync();
   if (!permission.granted) return { error: 'permission_denied' };
 
   try {

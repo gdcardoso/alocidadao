@@ -39,3 +39,6 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Capturas do emulador (conferência das telas)
+.screenshots/

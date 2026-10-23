@@ -3,6 +3,11 @@ import { createDatabase } from '@alocidadao/db';
 import { GoogleAuth } from 'google-auth-library';
 import { buildApp } from './app.js';
 import { parseEnv, type ApiEnv } from './env.js';
+import {
+  createLogEmailSender,
+  createResendEmailSender,
+  type EmailSender,
+} from './messaging/email.js';
 import { createApnsSender } from './push/apns.js';
 import { createFcmSender } from './push/fcm.js';
 import { createStorage } from './storage/s3.js';
@@ -52,6 +57,11 @@ const apns = env.apns
     })
   : undefined;
 
+// Sem Resend (só fora de produção), o e-mail sai no log da aplicação, criada logo abaixo.
+const email: EmailSender = env.email.resendApiKey
+  ? createResendEmailSender({ apiKey: env.email.resendApiKey, from: env.email.from })
+  : { send: (msg) => createLogEmailSender(app.log).send(msg) };
+
 const app = await buildApp({
   logger: true,
   corsOrigin: env.corsOrigin,
@@ -59,6 +69,8 @@ const app = await buildApp({
   database: databaseHandle?.db,
   push: { android: fcm, ios: apns },
   devRoutes: env.devRoutes,
+  // Não há provedor de SMS: fora de produção o código sai no log; em produção, 503.
+  auth: env.auth && databaseHandle ? { ...env.auth, email } : undefined,
 });
 
 // Fecha o pool do banco junto com o servidor.

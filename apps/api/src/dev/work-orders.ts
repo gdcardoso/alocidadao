@@ -14,8 +14,9 @@ import { and, asc, eq, inArray } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
+import { requireAuth } from '../auth/plugin.js';
+import { requireTenantMember } from '../auth/tenant-context.js';
 import type { Storage } from '../storage/s3.js';
-import { requireDevIdentity, type DevIdentity } from './identity.js';
 
 const {
   workOrders,
@@ -27,6 +28,12 @@ const {
   clientActions,
   photos,
 } = schema;
+
+/** Quem chama: a pessoa da sessão e a prefeitura conferida pelo vínculo. */
+interface DevIdentity {
+  userId: string;
+  tenantId: string;
+}
 
 const idParams = z.object({ id: z.uuid() });
 
@@ -191,6 +198,7 @@ export function registerDevWorkOrders(
   app.get(
     '/dev/work-orders',
     {
+      preHandler: requireAuth(['app']),
       schema: {
         response: {
           200: z.array(workOrderSummarySchema),
@@ -199,9 +207,9 @@ export function registerDevWorkOrders(
       },
     },
     async (request, reply) => {
-      const identity = requireDevIdentity(request, reply);
-      if (!identity) return reply;
       if (!database) return reply.code(503).send({ code: 'database_not_configured' });
+      const identity = await requireTenantMember(database, request, reply, ['field_agent']);
+      if (!identity) return reply;
 
       const rows = await withContext(database, identity, (tx) => {
         // Protocolo, descrição e endereço vêm da solicitação mais antiga de cada ocorrência.
@@ -248,11 +256,14 @@ export function registerDevWorkOrders(
 
   app.post(
     '/dev/work-orders/:id/actions',
-    { schema: { params: idParams, body: workOrderActionInputSchema } },
+    {
+      preHandler: requireAuth(['app']),
+      schema: { params: idParams, body: workOrderActionInputSchema },
+    },
     async (request, reply) => {
-      const identity = requireDevIdentity(request, reply);
-      if (!identity) return reply;
       if (!database) return reply.code(503).send({ code: 'database_not_configured' });
+      const identity = await requireTenantMember(database, request, reply, ['field_agent']);
+      if (!identity) return reply;
       const { id } = request.params;
       const input = request.body;
 
@@ -289,11 +300,11 @@ export function registerDevWorkOrders(
   // Simula a reatribuição pelo gestor: cancela a atividade ainda ativa.
   app.post(
     '/dev/work-orders/:id/cancel',
-    { schema: { params: idParams } },
+    { preHandler: requireAuth(['app']), schema: { params: idParams } },
     async (request, reply) => {
-      const identity = requireDevIdentity(request, reply);
-      if (!identity) return reply;
       if (!database) return reply.code(503).send({ code: 'database_not_configured' });
+      const identity = await requireTenantMember(database, request, reply, ['field_agent']);
+      if (!identity) return reply;
 
       const outcome = await withContext(database, identity, async (tx) => {
         const [order] = await tx

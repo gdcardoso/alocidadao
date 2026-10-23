@@ -8,6 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp } from '../app.js';
 import { createStorage, newPhotoKey } from '../storage/s3.js';
 import { testStorageConfig } from '../storage/test-fixtures.js';
+import { appAuthHeader, testAuthOptions } from '../test/session.js';
 import { API_TEST_APP_URL, API_TEST_OWNER_URL } from '../test/urls.js';
 import { isUniqueViolation } from './work-orders.js';
 
@@ -133,12 +134,30 @@ async function newWorkOrder(tid: string, teamIdArg: string, citizen: string, cat
 
 const freshWorkOrder = () => newWorkOrder(tenantId, teamId, citizenId, categoryId);
 
-function headers(as: { tenantId: string; userId: string } = { tenantId, userId: agentId }) {
-  return { 'x-dev-tenant-id': as.tenantId, 'x-dev-user-id': as.userId };
+// Cada pessoa abre uma sessão de verdade; o cabeçalho é montado uma vez por pessoa.
+const authHeaders = new Map<string, Record<string, string>>();
+
+async function headersFor(as: { tenantId: string; userId: string }) {
+  const key = `${as.tenantId}:${as.userId}`;
+  let found = authHeaders.get(key);
+  if (!found) {
+    found = { ...(await appAuthHeader(appDb.db, as.userId)), 'x-tenant-id': as.tenantId };
+    authHeaders.set(key, found);
+  }
+  return found;
 }
 
-function inject(method: 'GET' | 'POST', url: string, payload?: unknown, as?: typeof outsider) {
-  return app.inject({ method, url, headers: headers(as), payload: payload as never });
+async function headers(as: { tenantId: string; userId: string } = { tenantId, userId: agentId }) {
+  return headersFor(as);
+}
+
+async function inject(
+  method: 'GET' | 'POST',
+  url: string,
+  payload?: unknown,
+  as?: typeof outsider,
+) {
+  return app.inject({ method, url, headers: await headers(as), payload: payload as never });
 }
 
 let outsider: { tenantId: string; userId: string };
@@ -198,13 +217,22 @@ beforeAll(async () => {
     .returning();
   outsiderId = stranger!.id;
   outsider = { tenantId, userId: outsiderId };
+  // Agente da prefeitura, mas fora da equipe da atividade.
+  await owner.db
+    .insert(memberships)
+    .values({ tenantId, userId: outsiderId, role: 'field_agent', status: 'active' });
 
   const other = await seedTenant('outra', '0000099');
   otherTenantId = other.tenantId;
   otherTenantAgentId = other.agentId;
   otherTenantWorkOrder = other.workOrderId;
 
-  app = await buildApp({ devRoutes: true, storage, database: appDb.db });
+  app = await buildApp({
+    devRoutes: true,
+    storage,
+    database: appDb.db,
+    auth: testAuthOptions,
+  });
 });
 
 afterAll(async () => {
@@ -283,13 +311,17 @@ describe('work order actions', () => {
   });
 
   it('responds 503 storage_not_configured when completing without storage', async () => {
-    const bare = await buildApp({ devRoutes: true, database: appDb.db });
+    const bare = await buildApp({
+      devRoutes: true,
+      database: appDb.db,
+      auth: testAuthOptions,
+    });
     const id = await freshWorkOrder();
     await act(id, start());
     const res = await bare.inject({
       method: 'POST',
       url: `/dev/work-orders/${id}/actions`,
-      headers: headers(),
+      headers: await headers(),
       payload: complete({ photoKeys: [newPhotoKey(tenantId)] }),
     });
     await bare.close();
@@ -435,14 +467,40 @@ describe('work order actions', () => {
   it('hides work orders from people outside the team', async () => {
     const id = await freshWorkOrder();
     expect((await act(id, start(), outsider)).statusCode).toBe(404);
-    // E de quem tem outra identidade de prefeitura.
-    const cross = { tenantId: otherTenantId, userId: otherTenantAgentId };
-    expect((await act(id, start(), cross)).statusCode).toBe(404);
+  });
+
+  it('refuses an agent of another tenant with 403', async () => {
+    const id = await freshWorkOrder();
+    const cross = { tenantId, userId: otherTenantAgentId };
+    const res = await act(id, start(), cross);
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toEqual({ code: 'not_a_member' });
+  });
+
+  it('missing token is 401', async () => {
+    const res = await app.inject({ method: 'GET', url: '/dev/work-orders' });
+    expect(res.statusCode).toBe(401);
+    expect(res.json()).toEqual({ code: 'unauthorized' });
+  });
+
+  it('missing tenant header is 400', async () => {
+    const { authorization } = await headers();
+    const res = await app.inject({
+      method: 'GET',
+      url: '/dev/work-orders',
+      headers: { authorization: authorization! },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ code: 'tenant_required' });
   });
 
   it('answers 503 without a database', async () => {
-    const bare = await buildApp({ devRoutes: true });
-    const res = await bare.inject({ method: 'GET', url: '/dev/work-orders', headers: headers() });
+    const bare = await buildApp({ devRoutes: true, auth: testAuthOptions });
+    const res = await bare.inject({
+      method: 'GET',
+      url: '/dev/work-orders',
+      headers: await headers(),
+    });
     expect(res.statusCode).toBe(503);
     expect(res.json()).toEqual({ code: 'database_not_configured' });
     await bare.close();

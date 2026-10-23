@@ -126,8 +126,11 @@ export async function buildApp({
   }
 
   if (devRoutes) {
-    registerDevUploads(app, storage);
-    registerDevWorkOrders(app, database, storage);
+    // Uploads e atividades dependem da sessão; sem `auth` só o /dev/push existe.
+    if (auth) {
+      registerDevUploads(app, database, storage);
+      registerDevWorkOrders(app, database, storage);
+    }
     registerDevPush(app, push);
   }
 

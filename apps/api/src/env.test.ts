@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { parseEnv as parseEnvFile } from 'node:util';
 import { describe, expect, it } from 'vitest';
 import { parseEnv } from './env.js';
 
@@ -17,6 +19,15 @@ describe('parseEnv', () => {
 
   it('rejects S3_ENDPOINT without credentials', () => {
     expect(() => parseEnv({ S3_ENDPOINT: 'http://localhost:9000' })).toThrow(/S3_ACCESS_KEY_ID/);
+    let lines: string[] = [];
+    try {
+      parseEnv({ S3_ENDPOINT: 'http://localhost:9000' });
+    } catch (error) {
+      lines = (error as Error).message.split('\n');
+    }
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toMatch(/^S3_ACCESS_KEY_ID: /);
+    expect(lines[1]).toMatch(/^S3_SECRET_ACCESS_KEY: /);
     expect(() => parseEnv({ S3_ENDPOINT: 'http://localhost:9000', S3_ACCESS_KEY_ID: 'a' })).toThrow(
       /S3_SECRET_ACCESS_KEY/,
     );
@@ -47,9 +58,16 @@ describe('parseEnv', () => {
     expect(() => parseEnv({ APNS_TEAM_ID: 't' })).toThrow(/APNS_KEY_ID/);
   });
 
-  it('treats empty strings as unset, as in .env.example', () => {
-    const env = parseEnv({ FCM_PROJECT_ID: '', FCM_SERVICE_ACCOUNT_FILE: '', S3_ENDPOINT: '' });
+  it('accepts the real .env.example as copied', () => {
+    const example = parseEnvFile(readFileSync(new URL('../.env.example', import.meta.url), 'utf8'));
+    const env = parseEnv(example);
+    expect(env.s3).toMatchObject({
+      endpoint: 'http://localhost:9000',
+      accessKeyId: 'alocidadao',
+    });
     expect(env.fcm).toBeUndefined();
+    expect(env.apns).toBeUndefined();
+    expect(env.devRoutes).toBe(true);
   });
 
   it('rejects a non numeric PORT', () => {

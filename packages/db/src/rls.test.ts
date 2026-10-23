@@ -6,12 +6,11 @@ import {
   categories,
   departments,
   memberships,
+  occurrences,
   requests,
   statusEvents,
-  teams,
   tenants,
   users,
-  workOrders,
 } from './schema.js';
 import { TEST_APP_URL, TEST_OWNER_URL } from './test/urls.js';
 
@@ -28,7 +27,7 @@ interface TenantSeed {
   tenantId: string;
   citizenId: string;
   categoryId: string;
-  teamId: string;
+  occurrenceId: string;
   requestId: string;
 }
 
@@ -55,13 +54,13 @@ async function seedTenant(db: Database, label: string, ibgeCode: string): Promis
       .insert(departments)
       .values({ tenantId, name: 'Obras' })
       .returning();
-    const [team] = await tx
-      .insert(teams)
-      .values({ tenantId, departmentId: department!.id, name: 'Equipe 1' })
-      .returning();
     const [category] = await tx
       .insert(categories)
       .values({ tenantId, departmentId: department!.id, name: 'Buraco na via' })
+      .returning();
+    const [occurrence] = await tx
+      .insert(occurrences)
+      .values({ tenantId, categoryId: category!.id, location: geoPoint(LOCATION) })
       .returning();
     const [request] = await tx
       .insert(requests)
@@ -69,15 +68,17 @@ async function seedTenant(db: Database, label: string, ibgeCode: string): Promis
         tenantId,
         citizenId,
         categoryId: category!.id,
+        occurrenceId: occurrence!.id,
         description: `Buraco grande na rua principal de ${label}`,
         location: geoPoint(LOCATION),
+        gpsLocation: geoPoint(LOCATION),
       })
       .returning();
     return {
       tenantId,
       citizenId,
       categoryId: category!.id,
-      teamId: team!.id,
+      occurrenceId: occurrence!.id,
       requestId: request!.id,
     };
   });
@@ -180,8 +181,10 @@ describe('isolamento por prefeitura (RLS)', () => {
           tenantId: a.tenantId,
           citizenId: a.citizenId,
           categoryId: b.categoryId,
+          occurrenceId: a.occurrenceId,
           description: 'Categoria de outra prefeitura',
           location: geoPoint(LOCATION),
+          gpsLocation: geoPoint(LOCATION),
         }),
       ),
     );
@@ -199,8 +202,10 @@ describe('regras no banco', () => {
             tenantId: seed.tenantId,
             citizenId: seed.citizenId,
             categoryId: seed.categoryId,
+            occurrenceId: seed.occurrenceId,
             description: 'Lâmpada queimada no poste',
             location: geoPoint(LOCATION),
+            gpsLocation: geoPoint(LOCATION),
           })
           .returning({ protocol: requests.protocol });
         return row!.protocol;
@@ -214,9 +219,12 @@ describe('regras no banco', () => {
 
   it('histórico de status não pode ser alterado nem apagado', async () => {
     await withContext(app.db, { tenantId: a.tenantId }, (tx) =>
-      tx
-        .insert(statusEvents)
-        .values({ tenantId: a.tenantId, requestId: a.requestId, toStatus: 'open' }),
+      tx.insert(statusEvents).values({
+        tenantId: a.tenantId,
+        occurrenceId: a.occurrenceId,
+        requestId: a.requestId,
+        toStatus: 'open',
+      }),
     );
     const updateError = await dbError(
       withContext(app.db, { tenantId: a.tenantId }, (tx) =>
@@ -228,17 +236,6 @@ describe('regras no banco', () => {
     );
     expect(updateError).toMatch(/permission denied/);
     expect(deleteError).toMatch(/permission denied/);
-  });
-
-  it('permite só uma atividade ativa por solicitação', async () => {
-    const assign = () =>
-      withContext(app.db, { tenantId: a.tenantId }, (tx) =>
-        tx
-          .insert(workOrders)
-          .values({ tenantId: a.tenantId, requestId: a.requestId, teamId: a.teamId }),
-      );
-    await assign();
-    expect(await dbError(assign())).toMatch(/work_orders_one_active_per_request_idx/);
   });
 });
 

@@ -1,6 +1,7 @@
 import { createDatabase } from './client.js';
 import { seedDev } from './seed-dev-data.js';
 
+// seedDev exige o dono do banco (superusuário), nunca app_user.
 const url =
   process.env.DATABASE_OWNER_URL ?? 'postgres://alocidadao:alocidadao@localhost:5433/alocidadao';
 

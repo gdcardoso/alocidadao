@@ -61,19 +61,38 @@ afterAll(async () => {
 });
 
 describe('registro de ações do aparelho', () => {
-  it('rejects a repeated client action id', async () => {
+  it('recusa repetir o id de uma ação', async () => {
     await insertAction(a, ACTION_ID);
     expect(await dbError(insertAction(a, ACTION_ID))).toMatch(/duplicate key/);
   });
 
-  it('hides actions from another tenant', async () => {
-    const rows = await withContext(app.db, { tenantId: b.tenantId }, (tx) =>
-      tx.select().from(clientActions),
-    );
-    expect(rows).toHaveLength(0);
+  it('esconde ações de outra prefeitura', async () => {
+    const id = randomUUID();
+    await insertAction(a, id);
+    const visible = (tenantId: string) =>
+      withContext(app.db, { tenantId }, (tx) =>
+        tx.select({ id: clientActions.id }).from(clientActions),
+      );
+    expect((await visible(a.tenantId)).map((r) => r.id)).toContain(id);
+    expect((await visible(b.tenantId)).map((r) => r.id)).not.toContain(id);
   });
 
-  it('does not allow rewriting an action', async () =>
+  it('recusa gravar ação com tenant_id de outra prefeitura', async () => {
+    const message = await dbError(
+      withContext(app.db, { tenantId: a.tenantId, userId: a.userId }, (tx) =>
+        tx.insert(clientActions).values({
+          id: randomUUID(),
+          tenantId: b.tenantId,
+          userId: a.userId,
+          kind: 'work_order.start',
+          response: { ok: true },
+        }),
+      ),
+    );
+    expect(message).toMatch(/row-level security/);
+  });
+
+  it('não permite reescrever uma ação', async () =>
     expect(
       await dbError(
         withContext(app.db, { tenantId: a.tenantId }, (tx) =>
@@ -82,7 +101,7 @@ describe('registro de ações do aparelho', () => {
       ),
     ).toMatch(/permission denied/));
 
-  it('does not allow deleting an action', async () =>
+  it('não permite apagar uma ação', async () =>
     expect(
       await dbError(
         withContext(app.db, { tenantId: a.tenantId }, (tx) => tx.delete(clientActions)),
@@ -91,7 +110,7 @@ describe('registro de ações do aparelho', () => {
 });
 
 describe('dados de demonstração', () => {
-  it('seeds the demo tenant once', async () => {
+  it('cria a prefeitura de demonstração uma vez só', async () => {
     const first = await seedDev(owner.db);
     const second = await seedDev(owner.db);
     expect(second).toEqual(first);

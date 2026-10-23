@@ -1,10 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import { and, asc, eq } from 'drizzle-orm';
-import { geoPoint, withContext, type Database } from './client.js';
+import { and, asc, eq, sql } from 'drizzle-orm';
+import { geoPoint, type Database } from './client.js';
 import {
   categories,
   departments,
   memberships,
+  occurrences,
   requests,
   teamMembers,
   teams,
@@ -37,18 +38,24 @@ export interface SeedDevResult {
 }
 
 /**
- * Cria a prefeitura de demonstração (IBGE 9999901) com equipe, agente, cidadão e 3 solicitações
- * atribuídas à equipe. Idempotente: se a prefeitura já existe, devolve os ids existentes.
- * Use a conexão do dono (superusuário): ele cria a prefeitura e os usuários, que são globais.
+ * Cria a prefeitura de demonstração (IBGE 9999901) com equipe, agente, cidadão e 3 solicitações,
+ * cada uma na sua ocorrência, com a atividade da ocorrência atribuída à equipe.
+ * Idempotente: se a prefeitura já existe, devolve os ids existentes.
+ * Exige a conexão do dono do banco (superusuário): ele cria a prefeitura e os usuários, que são
+ * globais, e não passa pelo RLS.
  */
 export async function seedDev(db: Database): Promise<SeedDevResult> {
-  const [existing] = await db
-    .select({ id: tenants.id })
-    .from(tenants)
-    .where(eq(tenants.ibgeCode, DEMO_IBGE_CODE));
+  return db.transaction(async (tx) => {
+    // Duas execuções ao mesmo tempo esperam uma pela outra: a segunda já encontra a prefeitura.
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext('seed-dev'))`);
+    const [existing] = await tx
+      .select({ id: tenants.id })
+      .from(tenants)
+      .where(eq(tenants.ibgeCode, DEMO_IBGE_CODE));
+    const tenantId = existing?.id ?? randomUUID();
+    // next_request_protocol() lê a prefeitura de app_current_tenant().
+    await tx.execute(sql`select set_config('app.tenant_id', ${tenantId}, true)`);
 
-  const tenantId = existing?.id ?? randomUUID();
-  return withContext(db, { tenantId }, async (tx) => {
     if (existing) {
       const [team] = await tx
         .select({ id: teams.id })
@@ -121,22 +128,27 @@ export async function seedDev(db: Database): Promise<SeedDevResult> {
     const workOrderIds: string[] = [];
     for (const [index, item] of REQUESTS.entries()) {
       const createdAt = new Date(base + index * 1000);
-      const [request] = await tx
-        .insert(requests)
-        .values({
-          tenantId,
-          citizenId: citizen!.id,
-          categoryId: category!.id,
-          description: item.description,
-          location: geoPoint({ lat: CENTER.lat + item.dLat, lng: CENTER.lng + item.dLng }),
-          createdAt,
-        })
-        .returning({ id: requests.id });
+      const location = geoPoint({ lat: CENTER.lat + item.dLat, lng: CENTER.lng + item.dLng });
+      const [occurrence] = await tx
+        .insert(occurrences)
+        .values({ tenantId, categoryId: category!.id, location, status: 'in_progress', createdAt })
+        .returning({ id: occurrences.id });
+      await tx.insert(requests).values({
+        tenantId,
+        citizenId: citizen!.id,
+        categoryId: category!.id,
+        occurrenceId: occurrence!.id,
+        status: 'in_progress',
+        description: item.description,
+        location,
+        gpsLocation: location,
+        createdAt,
+      });
       const [order] = await tx
         .insert(workOrders)
         .values({
           tenantId,
-          requestId: request!.id,
+          occurrenceId: occurrence!.id,
           teamId: team!.id,
           status: 'assigned',
           createdAt,

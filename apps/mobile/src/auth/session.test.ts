@@ -1,4 +1,4 @@
-import { ApiError } from '@alocidadao/api-client';
+import { ApiError, ApiTimeoutError } from '@alocidadao/api-client';
 import { describe, expect, it, vi } from 'vitest';
 import type { KeyValueStore } from '../lib/installation-id';
 import { NetworkError } from '../offline/outbox';
@@ -27,7 +27,12 @@ function setup() {
     refresh: vi.fn<SessionApi['refresh']>(),
     logout: vi.fn<SessionApi['logout']>(async () => undefined),
   };
-  const session = createSessionManager({ store, api, now: () => clock });
+  const session = createSessionManager({
+    store,
+    api,
+    now: () => clock,
+    signOutTimeoutMs: 20,
+  });
   return {
     store,
     api,
@@ -113,5 +118,40 @@ describe('session manager', () => {
     expect(await session.isSignedIn()).toBe(false);
     expect(store.data.has('refresh-token')).toBe(false);
     expect(await session.getAccessToken()).toBeNull();
+  });
+
+  it('refresh timeout keeps the session', async () => {
+    const { api, session, advance } = setup();
+    api.refresh.mockRejectedValueOnce(new ApiTimeoutError());
+    await session.signIn(TOKENS);
+    advance(900_000);
+
+    await expect(session.getAccessToken()).rejects.toBeInstanceOf(NetworkError);
+    expect(await session.isSignedIn()).toBe(true);
+
+    api.refresh.mockResolvedValueOnce({ accessToken: 'access-2', accessExpiresInSeconds: 900 });
+    expect(await session.getAccessToken()).toBe('access-2');
+    expect(api.refresh).toHaveBeenCalledTimes(2);
+  });
+
+  it('signOut completes when logout hangs', async () => {
+    const { store, api, session } = setup();
+    api.logout.mockReturnValue(new Promise(() => undefined));
+    await session.signIn(TOKENS);
+
+    await session.signOut();
+    expect(await session.isSignedIn()).toBe(false);
+    expect(store.data.has('refresh-token')).toBe(false);
+  });
+
+  it('signOut completes when the refresh before logout hangs', async () => {
+    const { store, api } = setup();
+    store.data.set('refresh-token', 'stored');
+    api.refresh.mockReturnValue(new Promise(() => undefined));
+    const fresh = createSessionManager({ store, api, now: () => 0, signOutTimeoutMs: 20 });
+
+    await fresh.signOut();
+    expect(await fresh.isSignedIn()).toBe(false);
+    expect(api.logout).not.toHaveBeenCalled();
   });
 });

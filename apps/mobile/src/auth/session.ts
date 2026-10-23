@@ -20,6 +20,8 @@ export interface SessionManager {
 const REFRESH_KEY = 'refresh-token';
 /** Renova quando faltam menos de 30 s para o token de acesso vencer. */
 const REFRESH_MARGIN_MS = 30_000;
+/** Quanto `signOut` espera pela rede (renovação + logout) antes de sair só no aparelho. */
+const SIGN_OUT_TIMEOUT_MS = 5_000;
 
 /**
  * Sessão do app, sem nada nativo (testável em Node). O token de renovação fica no `store`;
@@ -29,10 +31,12 @@ export function createSessionManager({
   store,
   api,
   now = Date.now,
+  signOutTimeoutMs = SIGN_OUT_TIMEOUT_MS,
 }: {
   store: KeyValueStore;
   api: SessionApi;
   now?: () => number;
+  signOutTimeoutMs?: number;
 }): SessionManager {
   let access: { token: string; expiresAt: number } | null = null;
   let refreshing: Promise<string | null> | null = null;
@@ -101,17 +105,23 @@ export function createSessionManager({
     getAccessToken,
 
     async signOut() {
-      let token = valid()?.token ?? null;
-      if (!token) {
+      // Avisar o servidor é cortesia: com rede parada, sai do aparelho depois do prazo.
+      const notifyServer = async () => {
+        let token = valid()?.token ?? null;
         // Depois de reabrir o app não há token em memória: tenta um para avisar o servidor.
-        token = await getAccessToken().catch(() => null);
-      }
-      if (token) {
-        try {
-          await api.logout(token);
-        } catch {
-          // Sem rede ou erro do servidor: sai do aparelho mesmo assim.
-        }
+        token ??= await getAccessToken().catch(() => null);
+        if (token) await api.logout(token);
+      };
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const deadline = new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, signOutTimeoutMs);
+      });
+      try {
+        await Promise.race([notifyServer(), deadline]);
+      } catch {
+        // Sem rede ou erro do servidor: sai do aparelho mesmo assim.
+      } finally {
+        clearTimeout(timer);
       }
       await clear();
     },

@@ -173,7 +173,7 @@ Os requisitos que mais pesam no MVP são o uso offline do agente de campo e o is
 | Conflitos            | O servidor é a fonte da verdade: ação offline sobre atividade reatribuída ou cancelada é recusada e o agente é avisado                                                     |
 | Qualidade da conexão | Tipo de rede, geração móvel, latência até a API e tempo de envio das fotos gravados em cada ação                                                                           |
 | Isolamento           | `tenant_id` em toda tabela da prefeitura + Row-Level Security no Postgres; testes automáticos tentando ler dados de outra prefeitura                                       |
-| Autenticação         | JWT de curta duração + refresh token; senha com hash forte; bloqueio após tentativas falhas                                                                                |
+| Autenticação         | JWT de curta duração + refresh token; sem senha: código de 6 dígitos (celular no app, e-mail no painel), com bloqueio após 5 tentativas erradas e limite de envios         |
 | Fotos                | Envio direto ao Spaces por URL assinada; leitura só por URL assinada com validade curta; metadados EXIF de localização removidos das fotos exibidas ao público             |
 | LGPD                 | Termo de uso e política de privacidade no cadastro; coleta mínima (CPF opcional); exclusão de conta pelo app; registro de quem acessou dados pessoais                      |
 | Histórico            | Eventos de status apenas inseridos, nunca alterados (trilha de auditoria)                                                                                                  |

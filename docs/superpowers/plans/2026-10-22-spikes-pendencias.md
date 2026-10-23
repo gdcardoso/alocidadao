@@ -19,12 +19,11 @@ Itens menores achados nas revisões dos spikes (`2026-10-22-spikes-de-risco.md`)
 
 ## Plano 2 — Acesso
 
-- `client_actions`: amarrar `user_id = app_current_user()` na política quando houver login real.
-- `getInstallationId`: duas primeiras chamadas simultâneas podem gerar ids diferentes (entra no trabalho de `devices`).
-- Identidade por cabeçalho `x-dev-*` some com o login real.
-- Suporte ainda pode alterar telefone, e-mail e CPF de qualquer conta que não seja da equipe interna: trocar por funções que exigem verificação e estreitar o `UPDATE` direto.
-- `auth_find_user_by_cpf` devolve o e-mail completo e permite enumerar telefones e CPFs: a API mascara o e-mail e limita tentativas.
-- Exigir e-mail e CPF para gestor e admin é regra da API (o banco só exige telefone ou CPF).
+- [x] `client_actions`: amarrar `user_id = app_current_user()` na política quando houver login real.
+- [x] `getInstallationId`: duas primeiras chamadas simultâneas podem gerar ids diferentes (entra no trabalho de `devices`).
+- [x] Identidade por cabeçalho `x-dev-*` some com o login real.
+- [x] Suporte ainda pode alterar telefone, e-mail e CPF de qualquer conta que não seja da equipe interna: trocar por funções que exigem verificação e estreitar o `UPDATE` direto.
+- [x] `auth_find_user_by_cpf` devolve o e-mail completo e permite enumerar telefones e CPFs: a API mascara o e-mail e limita tentativas.
 
 ## Plano 3 — App do cidadão
 
@@ -32,6 +31,10 @@ Itens menores achados nas revisões dos spikes (`2026-10-22-spikes-de-risco.md`)
 - Título repetido no cabeçalho.
 - O evento de conclusão guarda o relato interno do agente em `status_events.comment`: não mostrar ao cidadão (ou mover para `details`).
 - Solicitação que apoia ocorrência já em atendimento nasce "Em atendimento" (6.1): regra ainda não codificada.
+- Aviso antes de "Sair" quando há itens não enviados na fila.
+- Telas 1, 2, 3 e "Quase lá" sobre a sessão desta etapa.
+- Registrar o token de push com `PUT /me/devices`.
+- Saída forçada (renovação recusada) não apaga os dados offline do usuário anterior: marcar a fila por usuário ou limpar ao trocar de conta; o token de acesso não é descartado quando uma rota responde 401.
 
 ## Plano 4 — App do agente
 
@@ -55,16 +58,25 @@ Itens menores achados nas revisões dos spikes (`2026-10-22-spikes-de-risco.md`)
 - Admin e gestor da prefeitura ainda não conseguem cadastrar nem achar pelo telefone um usuário de fora: precisa de função `SECURITY DEFINER`.
 - `merged_into_id` sem `CHECK` ligando ao status `merged` (e diferente do próprio id).
 - `status_events.request_id` não é amarrado à mesma ocorrência (precisa acompanhar a junção).
+- Exigir e-mail e CPF para gestor e admin é regra da API (o banco só exige telefone ou CPF); vale também para o Plano 6.
+- Decidir onde o painel guarda o token de renovação (cookie `httpOnly` ou memória).
+- Cadastro de gestor com função `SECURITY DEFINER`.
+- O login do painel aceita gestor de prefeitura suspensa ou em implantação (`has_panel_access` não olha o status) e um token do painel continua valendo em `/me` depois de perder o vínculo: as rotas do painel conferem o vínculo a cada chamada.
+- Troca de e-mail de quem tem acesso ao painel é feita pelo admin (hoje `PATCH /me` recusa com `email_managed_by_admin`).
 
 ## Plano 6 — Backoffice
 
 - `municipality_leads.updated_by` não é forçado a `app_current_user()` e `updated_at` não muda no `UPDATE`.
+- Exigir e-mail e CPF para gestor e admin (regra da API, ver Plano 5).
+- Correções de conta pelo suporte, com função própria e auditoria.
+- Excluir conta ainda não apaga `city_interest` nem tira `platform_role` da conta excluída.
 
 ## Plano 7 — Notificações
 
 - FCM: todo 400 `INVALID_ARGUMENT` vira token inválido; com descarte de tokens, um erro de conteúdo apagaria todos. Corrigir antes de descartar tokens.
 - HTTP/2: sem teste de reaproveitamento da sessão; sessão com GOAWAY não é fechada; token do APNs sem `encodeURIComponent`; `DeviceTokenNotForTopic` tratado como nova tentativa; bundle id fixo no código; `.p8` ausente derruba a subida.
 - App: `app.config.ts` usa `process.cwd()` em vez de `__dirname`.
+- O mesmo token de push em duas contas: ao registrar, apagar o token dos outros aparelhos (função `SECURITY DEFINER`).
 
 ## Plano 8 — Infraestrutura
 
@@ -72,3 +84,12 @@ Itens menores achados nas revisões dos spikes (`2026-10-22-spikes-de-risco.md`)
 - Script `dev` da API só funciona em macOS/Linux.
 - Produção: nunca definir `ENABLE_DEV_ROUTES`; definir `NODE_ENV=production`.
 - Índice GiST em `tenants.boundary` quando houver muitas prefeituras.
+- O dono das tabelas com `BYPASSRLS` em produção.
+- Escolher um provedor de SMS ou WhatsApp.
+- Verificar o domínio no Resend.
+- Um `AUTH_SECRET` forte e único.
+- `AUTH_DEV_FIXED_CODE` nunca em produção.
+- Limite por IP usa `request.ip` sem `trustProxy` (atrás de proxy todos dividem o mesmo limite).
+- Erros 5xx devolvem a mensagem interna: falta resposta `{ code: 'internal_error' }`.
+- Limites de envio ficam na memória de cada instância da API.
+- `NODE_ENV=production` é a única trava do código fixo e do envio pelo log.

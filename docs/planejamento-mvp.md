@@ -208,7 +208,7 @@ Um de cada vez, depois dos testes de risco.
 
 1. **Modelo de dados do design:** as migrações da seção 9 do spec (ocorrências, atividade nova, usuários sem senha, prefeitura com status, contrato, papéis internos, auditoria) e as transições novas no `shared`.
 2. **Acesso:** código por celular no app, CPF + código por e-mail (Resend, `nao-responda@alocidadao.com.br`) no painel, sessões, `devices` e a regra dos 90 dias.
-3. **App do cidadão:** telas 0 a 8, prefeitura pela localização, agrupamento pela 5b e registro offline, reaproveitando a fila dos testes de risco.
+3. **App do cidadão:** telas 0 a 8, prefeitura pela localização, agrupamento pela 5b e registro offline, reaproveitando a fila dos testes de risco. **Feito** (plano `docs/superpowers/plans/2026-10-23-app-do-cidadao.md`).
 4. **App do agente:** telas A1 a A5, sobre a fila e o cache dos testes de risco.
 5. **Painel da prefeitura:** W0 a W7, com mapa, triagem, agrupamento, atribuição, revisão e configurações.
 6. **Backoffice:** P1 a P6.

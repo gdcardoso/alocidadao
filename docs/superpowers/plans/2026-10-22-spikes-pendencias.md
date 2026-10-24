@@ -27,37 +27,37 @@ Itens menores achados nas revisões dos spikes (`2026-10-22-spikes-de-risco.md`)
 
 ## Plano 3 — App do cidadão
 
-- `src/lib/api.ts` usa `10.0.2.2` como padrão (só vale no emulador Android): trocar por configuração de build.
-- Título repetido no cabeçalho.
-- O evento de conclusão guarda o relato interno do agente em `status_events.comment`: não mostrar ao cidadão (ou mover para `details`).
-- Solicitação que apoia ocorrência já em atendimento nasce "Em atendimento" (6.1): regra ainda não codificada.
-- Aviso antes de "Sair" quando há itens não enviados na fila.
-- Telas 1, 2, 3 e "Quase lá" sobre a sessão desta etapa.
-- Registrar o token de push com `PUT /me/devices`.
-- Saída forçada (renovação recusada) não apaga os dados offline do usuário anterior: marcar a fila por usuário ou limpar ao trocar de conta; o token de acesso não é descartado quando uma rota responde 401.
-- O código é gasto mesmo quando enviado à rota errada (`consumeCode` roda antes de conferir finalidade e usuário).
-- Falha no envio de SMS ou e-mail ainda gasta a janela de 60 s e conta no limite por hora.
-- `409 email_in_use` com o e-mail de uma conta congelada impede o antigo dono de reaproveitar o próprio e-mail.
-- Dois códigos de 429: `rate_limited` (por IP ou conta) e `code_rate_limited` (por destino); as telas tratam os dois.
-- Login do Laboratório pode terminar sem prefeitura salva se `me` falhar.
-- `api-client` sobrescreve o `init.signal` de quem chama.
-- Testes que faltam: código de `phone_login` em `recovery/verify`; 503 `sms_not_configured`; `expires_at` da sessão do painel; RLS de `devices` e `sessions` entre usuários; nas rotas `/dev`, a validação do corpo responde 400 antes do 401.
+- [x] `src/lib/api.ts` usa `10.0.2.2` como padrão (só vale no emulador Android): trocar por configuração de build.
+- [x] Título repetido no cabeçalho.
+- [x] O evento de conclusão guarda o relato interno do agente em `status_events.comment`: não mostrar ao cidadão (ou mover para `details`).
+- [x] Solicitação que apoia ocorrência já em atendimento nasce "Em atendimento" (6.1): regra ainda não codificada.
+- [x] Aviso antes de "Sair" quando há itens não enviados na fila.
+- [x] Telas 1, 2, 3 e "Quase lá" sobre a sessão desta etapa.
+- [x] Registrar o token de push com `PUT /me/devices`.
+- [x] Saída forçada (renovação recusada) não apaga os dados offline do usuário anterior: marcar a fila por usuário ou limpar ao trocar de conta; o token de acesso não é descartado quando uma rota responde 401.
+- [x] Dois códigos de 429: `rate_limited` (por IP ou conta) e `code_rate_limited` (por destino); as telas tratam os dois.
+- [x] `api-client` sobrescreve o `init.signal` de quem chama.
+
+Os demais itens deste plano continuam em aberto e passaram para o Plano 4 (Laboratório) ou o Plano 8 (API e testes).
 
 ## Plano 4 — App do agente
 
 - Rotas reais substituem `/dev/*`: schema de resposta em todas as rotas (hoje só a lista de atividades declara o seu).
 - Chave de foto já usada em outra conclusão responde 409 `client_action_conflict`: o 23505 de `photos.storage_key` cai no mesmo ramo do id de ação repetido.
-- `useOutboxSync` está só na tela do Laboratório: mover para o layout raiz.
-- 408 e 429 no envio de foto viram falha definitiva: tratar como nova tentativa.
+- [x] `useOutboxSync` está só na tela do Laboratório: mover para o layout raiz.
+- [x] 408 e 429 no envio de foto viram falha definitiva: tratar como nova tentativa.
 - Foto de conclusão recusada por conflito fica órfã no armazenamento; pastas de itens em conflito ou falha não são apagadas; `dir.delete` com erro interrompe a passada.
-- Tempo limite de 30 s também no envio da foto (3G fraco); corpo da resposta lido sem tempo limite.
+- [x] Tempo limite de 30 s também no envio da foto (3G fraco); corpo da resposta lido sem tempo limite.
 - Banco SQLite sem versão de esquema; `openAppDatabase` guarda a promessa rejeitada.
 - Máximo de 3 fotos não é imposto em `enqueueWorkOrderAction`; `occurredAt` e `createdAt` vêm de chamadas diferentes de `now()`.
 - Página de login de Wi-Fi público com 200 no envio da foto passa (o servidor recusa depois com 422).
 - Estado `online` começa verdadeiro antes do primeiro evento do NetInfo; cartão em conflito mostra o status otimista até atualizar; lista do servidor sem validação; `fetchChain` frágil; `reloadLocal` sem `catch`; sem testes do hook.
-- Câmera: decodifica a foto duas vezes; pode passar de 1 MB sem aviso; JPEGs intermediários não são apagados; temporizador da localização não é limpo; mensagem técnica mostrada ao usuário; `PhotoCapture` mora num arquivo de rota.
+- Câmera: decodifica a foto duas vezes; pode passar de 1 MB sem aviso; JPEGs intermediários não são apagados; temporizador da localização não é limpo; mensagem técnica mostrada ao usuário.
+- [x] `PhotoCapture` mora num arquivo de rota.
 - iOS: desligar os textos de microfone e de localização "sempre" antes do primeiro TestFlight.
 - Decidir quais status o agente vê na lista (hoje `/dev` lista todos os ativos, inclusive `awaiting_review` e `impeded`).
+- Login do Laboratório pode terminar sem prefeitura salva se `me` falhar. (veio do Plano 3)
+- Tela de código da entrada (conferir também a da troca de número): com o teclado aberto, o botão "Confirmar" fica atrás dele; conferir o `FormLayout` com o `CodeInput` (achado na passada final do Plano 3).
 
 ## Plano 5 — Painel
 
@@ -73,6 +73,8 @@ Itens menores achados nas revisões dos spikes (`2026-10-22-spikes-de-risco.md`)
 - Troca de e-mail de quem tem acesso ao painel é feita pelo admin (hoje `PATCH /me` recusa com `email_managed_by_admin`).
 - A máscara do e-mail usa a caixa original, enquanto o envio usa minúsculas.
 - CPF com espaço ou `/` é recusado (só `.` e `-` são removidos); `PanelStartBody` é o tipo de saída (o cliente precisa de `z.input`).
+- Categorias na ordem do Pencil: falta um campo de ordenação na categoria (hoje a grade da Nova solicitação vem em ordem alfabética).
+- Fotos da contestação aparecem como "Sua foto · abertura" no detalhe e na galeria: o `PhotoView` não diz a origem da foto; falta decidir no Pencil uma legenda para fotos da contestação.
 
 ## Plano 6 — Backoffice
 
@@ -81,6 +83,7 @@ Itens menores achados nas revisões dos spikes (`2026-10-22-spikes-de-risco.md`)
 - Correções de conta pelo suporte, com função própria e auditoria.
 - Excluir conta ainda não apaga `city_interest` nem tira `platform_role` da conta excluída.
 - Sessões revogadas de conta excluída guardam `installation_id`.
+- Ao criar uma prefeitura, usar `municipalities` (nome, UF e contorno do IBGE) em vez de digitar os dados.
 
 ## Plano 7 — Notificações
 
@@ -88,6 +91,8 @@ Itens menores achados nas revisões dos spikes (`2026-10-22-spikes-de-risco.md`)
 - HTTP/2: sem teste de reaproveitamento da sessão; sessão com GOAWAY não é fechada; token do APNs sem `encodeURIComponent`; `DeviceTokenNotForTopic` tratado como nova tentativa; bundle id fixo no código; `.p8` ausente derruba a subida.
 - App: `app.config.ts` usa `process.cwd()` em vez de `__dirname`.
 - O mesmo token de push em duas contas: ao registrar, apagar o token dos outros aparelhos (função `SECURITY DEFINER`).
+- Avisos por push ao cidadão nas mudanças de status da solicitação (o app já diz "Você recebe um aviso a cada mudança").
+- Conclusão automática em 7 dias: solicitação aguardando a confirmação do cidadão é confirmada sozinha (o texto da tela já promete).
 
 ## Plano 8 — Infraestrutura
 
@@ -106,3 +111,7 @@ Itens menores achados nas revisões dos spikes (`2026-10-22-spikes-de-risco.md`)
 - `NODE_ENV=production` é a única trava do código fixo e do envio pelo log.
 - `/auth/refresh` está no limite por IP de `/auth/*` (o CGNAT das operadoras pode juntar muitos aparelhos num IP).
 - Falta limite diário de códigos por número.
+- O código é gasto mesmo quando enviado à rota errada (`consumeCode` roda antes de conferir finalidade e usuário). (veio do Plano 3)
+- Falha no envio de SMS ou e-mail ainda gasta a janela de 60 s e conta no limite por hora. (veio do Plano 3)
+- `409 email_in_use` com o e-mail de uma conta congelada impede o antigo dono de reaproveitar o próprio e-mail. (veio do Plano 3)
+- Testes que faltam: código de `phone_login` em `recovery/verify`; 503 `sms_not_configured`; `expires_at` da sessão do painel; RLS de `devices` e `sessions` entre usuários; nas rotas `/dev`, a validação do corpo responde 400 antes do 401. (veio do Plano 3)

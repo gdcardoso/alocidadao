@@ -744,3 +744,22 @@
   Registrar o resultado em `docs/superpowers/plans/2026-10-23-app-do-cidadao.md`, numa seção "Resultado no emulador" no fim, com data e o que falhou, se algo falhou.
 
 - [ ] **Step 5:** `pnpm format:check` → PASS. Commit: `Design system e pendências após o app do cidadão`.
+
+## Resultado no emulador
+
+Passada final em 24/10/2026 no emulador Android `AloCidadao_API36`, com o app desinstalado e o build de desenvolvimento instalado de novo (`npx expo run:android`), API e Metro locais. Telas em `.superpowers/sdd/2026-10-23-app-do-cidadao/task-11-*.png`.
+
+- **Abertura:** a nativa branca e depois a tela 0 (cidade e logo); em seguida, a entrada (01, 02).
+- **Entrar com número novo:** (11) 97001-1124 → código fixo de desenvolvimento → "Quase lá!" com nome e termos → pedido de notificações → lista vazia "Nenhuma solicitação ainda" (06 a 11).
+- **Nova solicitação com 2 fotos:** permissão de localização e câmera, endereço lido, "2 de 3", tipo "Buraco na via" e envio; o app abre o detalhe da solicitação nova (12 a 17).
+- **Lista → detalhe → galeria:** cartão "Aberta" com protocolo; detalhe com "Aberta hoje" e pilha de 2 fotos; galeria "1 de 2" e "2 de 2" (18 a 21).
+- **Perfil:** nome editado para "Joana Teste Silva", com as iniciais atualizadas (22 a 24).
+- **Sair e entrar de novo com o mesmo número:** sem envios na fila, sai direto; depois do código, a solicitação continua na lista (25 a 27).
+
+O que falhou ou chamou atenção:
+
+- **Sugestão do chip (corrigido):** a lista de números do Google aparece ao tocar no campo de celular. O emulador sugere `+15551234567` (EUA, sem E.164), que virava "(15) 55123-4567" porque tinha 11 dígitos. Agora só número do Brasil preenche o campo (`phoneHintDigits`, com teste); o de fora deixa o campo vazio (03 a 05).
+- **Código:** com o teclado aberto, o botão "Confirmar" fica escondido atrás dele (na entrada e no nome, o botão sobe com o teclado). Registrado nas pendências.
+- **Câmera do emulador:** as fotos saem pretas (cena virtual do emulador); o fluxo de fotos funcionou.
+- **Localização:** logo depois de ligar a precisão do Android, a primeira leitura falhou ("Não foi possível obter a localização"); "Tentar de novo" resolveu.
+- **Metro:** depois de editar `src/app/(auth)/entrar.tsx`, o Metro continuou servindo a versão antiga até ser reiniciado com `--clear`.

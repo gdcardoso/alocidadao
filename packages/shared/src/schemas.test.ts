@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createRequestInputSchema } from './schemas.js';
+import { createRequestInputSchema, workOrderActionInputSchema } from './schemas.js';
 
 const gps = { lat: -23.5505, lng: -46.6333 };
 // 1 grau de latitude ~ 111 195 m
@@ -51,5 +51,75 @@ describe('createRequestInputSchema', () => {
       location: gps,
     });
     expect(result.success).toBe(false);
+  });
+});
+
+describe('workOrderActionInputSchema', () => {
+  const action = {
+    clientActionId: base.clientActionId,
+    occurredAt: base.occurredAt,
+    photoKeys: [] as string[],
+    connection: base.connection,
+  };
+
+  it('report_impediment requires a reason, a note and at most one photo', () => {
+    const ok = {
+      ...action,
+      action: 'report_impediment',
+      impedimentReason: 'inaccessible',
+      note: 'Rua bloqueada por obra',
+    };
+    expect(workOrderActionInputSchema.safeParse(ok).success).toBe(true);
+    expect(workOrderActionInputSchema.safeParse({ ...ok, photoKeys: ['a.jpg'] }).success).toBe(
+      true,
+    );
+    expect(
+      workOrderActionInputSchema.safeParse({ ...ok, impedimentReason: undefined }).success,
+    ).toBe(false);
+    expect(workOrderActionInputSchema.safeParse({ ...ok, note: undefined }).success).toBe(false);
+    expect(workOrderActionInputSchema.safeParse({ ...ok, note: 'ab' }).success).toBe(false);
+    expect(
+      workOrderActionInputSchema.safeParse({ ...ok, photoKeys: ['a.jpg', 'b.jpg'] }).success,
+    ).toBe(false);
+  });
+
+  it('start rejects photos, note and reason', () => {
+    const start = { ...action, action: 'start' };
+    expect(workOrderActionInputSchema.safeParse(start).success).toBe(true);
+    expect(workOrderActionInputSchema.safeParse({ ...start, photoKeys: ['a.jpg'] }).success).toBe(
+      false,
+    );
+    expect(workOrderActionInputSchema.safeParse({ ...start, note: 'algo aqui' }).success).toBe(
+      false,
+    );
+    expect(
+      workOrderActionInputSchema.safeParse({ ...start, impedimentReason: 'other' }).success,
+    ).toBe(false);
+  });
+
+  it('complete keeps requiring a note and one to three photos', () => {
+    const complete = { ...action, action: 'complete', note: 'Buraco tapado', photoKeys: ['a.jpg'] };
+    expect(workOrderActionInputSchema.safeParse(complete).success).toBe(true);
+    expect(workOrderActionInputSchema.safeParse({ ...complete, note: undefined }).success).toBe(
+      false,
+    );
+    expect(workOrderActionInputSchema.safeParse({ ...complete, photoKeys: [] }).success).toBe(
+      false,
+    );
+    expect(
+      workOrderActionInputSchema.safeParse({ ...complete, photoKeys: ['a', 'b', 'c', 'd'] })
+        .success,
+    ).toBe(false);
+  });
+
+  it('location defaults to null and accepts accuracy', () => {
+    const start = { ...action, action: 'start' };
+    const parsed = workOrderActionInputSchema.parse(start);
+    expect(parsed.location).toBeNull();
+    const withLocation = workOrderActionInputSchema.parse({
+      ...start,
+      location: { ...gps, accuracyM: 12 },
+    });
+    expect(withLocation.location?.accuracyM).toBe(12);
   });
 });

@@ -10,13 +10,33 @@ import {
   seedDev,
 } from './seed-dev-data.js';
 
+const HELP = `Uso: pnpm db:seed:dev [--reset]
+
+Cria (ou completa) a prefeitura de demonstração. Pode rodar quantas vezes quiser.
+
+  --reset   Volta a demo ao começo: cancela as atividades ativas da demo (as que o agente
+            iniciou, concluiu ou relatou impedimento) e cria outras, atribuídas de novo.
+            Também vale SEED_RESET=1.
+  --help    Mostra esta ajuda.
+
+Conexão: DATABASE_OWNER_URL (dono do banco; padrão: o Postgres local do docker compose).`;
+
+const args = process.argv.slice(2);
+if (args.includes('--help') || args.includes('-h')) {
+  console.log(HELP);
+  process.exit(0);
+}
+const reset = args.includes('--reset') || process.env.SEED_RESET === '1';
+
 // seedDev exige o dono do banco (superusuário), nunca app_user.
 const url =
   process.env.DATABASE_OWNER_URL ?? 'postgres://alocidadao:alocidadao@localhost:5433/alocidadao';
 
 const { db, pool } = createDatabase(url);
 try {
-  const result = await seedDev(db);
+  const result = await seedDev(db, { reset });
+  if (reset)
+    console.log('Demo reiniciada: atividades ativas da demo canceladas e criadas de novo.');
   console.log(JSON.stringify(result, null, 2));
   console.log(
     [
@@ -30,6 +50,8 @@ try {
       'Município sem prefeitura (tela 5c): Vila Sem Adesão (9999902)',
       `  Centro: ${DEMO_UNSERVED_CENTER.lat}, ${DEMO_UNSERVED_CENTER.lng}`,
       `  GPS do emulador Android: adb emu geo fix ${DEMO_UNSERVED_CENTER.lng} ${DEMO_UNSERVED_CENTER.lat}`,
+      '',
+      'Para voltar as atividades da demo ao começo: pnpm db:seed:dev --reset (ajuda: --help)',
     ].join('\n'),
   );
 } finally {

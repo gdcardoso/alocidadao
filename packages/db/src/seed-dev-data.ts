@@ -87,9 +87,19 @@ const EXTRA_CITIZENS = [
   { name: 'Cidadão Demo 3', email: 'cidadao3.demo@alocidadao.dev', phone: '+5511900000004' },
 ];
 
+/** Endereços do primeiro relato de cada atividade da demo, na ordem de DEMO_WORK_ORDERS. */
+export const DEMO_ADDRESSES = [
+  'Rua das Flores, 120 — Centro',
+  'Av. Brasil, 1450',
+  'Rua Ipê, 33',
+  'Rua XV, 88',
+] as const;
+
 interface DemoWorkOrder {
   /** Descrição do primeiro relato; é por ela que a segunda execução reencontra a atividade. */
   description: string;
+  /** Endereço do primeiro relato (os cartões e o detalhe do agente mostram). */
+  address: string;
   /** Deslocamento fixo em graus (1e-3 de latitude ≈ 111 m; de longitude ≈ 102 m nesta latitude). */
   dLat: number;
   dLng: number;
@@ -108,6 +118,7 @@ interface DemoWorkOrder {
 const DEMO_WORK_ORDERS: DemoWorkOrder[] = [
   {
     description: 'Buraco na via em frente ao número 100',
+    address: DEMO_ADDRESSES[0],
     dLat: 0,
     dLng: 0.0005,
     assignedHoursAgo: 0.5,
@@ -121,6 +132,7 @@ const DEMO_WORK_ORDERS: DemoWorkOrder[] = [
   },
   {
     description: 'Buraco profundo na esquina',
+    address: DEMO_ADDRESSES[1],
     dLat: 0.001,
     dLng: -0.0005,
     assignedHoursAgo: 3,
@@ -130,6 +142,7 @@ const DEMO_WORK_ORDERS: DemoWorkOrder[] = [
   },
   {
     description: 'Buraco no cruzamento, risco para motos',
+    address: DEMO_ADDRESSES[2],
     dLat: -0.0015,
     dLng: 0.001,
     assignedHoursAgo: 26,
@@ -139,6 +152,7 @@ const DEMO_WORK_ORDERS: DemoWorkOrder[] = [
   },
   {
     description: 'Buraco perto do ponto de ônibus',
+    address: DEMO_ADDRESSES[3],
     dLat: 0.002,
     dLng: 0.0015,
     assignedHoursAgo: 30,
@@ -153,6 +167,14 @@ const DEMO_WORK_ORDERS: DemoWorkOrder[] = [
     },
   },
 ];
+
+export interface SeedDevOptions {
+  /**
+   * Volta a demo ao começo: cancela as atividades ativas da demo (com o evento, como o gestor
+   * faria) e cria outras, atribuídas de novo.
+   */
+  reset?: boolean;
+}
 
 export interface SeedDevResult {
   tenantId: string;
@@ -186,7 +208,11 @@ interface DemoIds {
  * DEMO_WORK_ORDERS. Idempotente: reencontra cada atividade ativa pela descrição do relato do
  * cidadão demo e só cria o que falta (ocorrência, relatos extras, atribuição, instruções, prazo).
  */
-async function seedDemoWorkOrders(tx: Transaction, ids: DemoIds): Promise<string[]> {
+async function seedDemoWorkOrders(
+  tx: Transaction,
+  ids: DemoIds,
+  { reset = false }: SeedDevOptions,
+): Promise<string[]> {
   const extraCitizenIds: string[] = [];
   for (const citizen of EXTRA_CITIZENS) {
     extraCitizenIds.push(await ensureCitizen(tx, ids.tenantId, citizen));
@@ -195,9 +221,24 @@ async function seedDemoWorkOrders(tx: Transaction, ids: DemoIds): Promise<string
   const workOrderIds: string[] = [];
   for (const [index, item] of DEMO_WORK_ORDERS.entries()) {
     const location: GeoPoint = { lat: CENTER.lat + item.dLat, lng: CENTER.lng + item.dLng };
-    const order =
-      (await findDemoWorkOrder(tx, ids, item)) ??
-      (await createDemoWorkOrder(tx, ids, item, location, now, index));
+    let existing = await findDemoWorkOrder(tx, ids, item);
+    if (existing && reset) {
+      await cancelDemoWorkOrder(tx, ids, existing.id);
+      existing = undefined;
+    }
+    const order = existing ?? (await createDemoWorkOrder(tx, ids, item, location, now, index));
+
+    // Demo criada antes dos endereços: o primeiro relato ganha o da demo.
+    await tx
+      .update(requests)
+      .set({ address: sql`coalesce(${requests.address}, ${item.address})` })
+      .where(
+        and(
+          eq(requests.occurrenceId, order.occurrenceId),
+          eq(requests.citizenId, ids.citizenId),
+          eq(requests.description, item.description),
+        ),
+      );
 
     await tx
       .update(workOrders)
@@ -258,6 +299,27 @@ async function seedDemoWorkOrders(tx: Transaction, ids: DemoIds): Promise<string
     workOrderIds.push(order.id);
   }
   return workOrderIds;
+}
+
+/** Cancela a atividade ativa da demo, com o evento feito pelo gestor demo (reset). */
+async function cancelDemoWorkOrder(tx: Transaction, ids: DemoIds, id: string): Promise<void> {
+  const [order] = await tx
+    .select({ status: workOrders.status, occurrenceId: workOrders.occurrenceId })
+    .from(workOrders)
+    .where(eq(workOrders.id, id));
+  await tx
+    .update(workOrders)
+    .set({ status: 'cancelled', updatedAt: new Date() })
+    .where(eq(workOrders.id, id));
+  await tx.insert(statusEvents).values({
+    tenantId: ids.tenantId,
+    occurrenceId: order!.occurrenceId,
+    workOrderId: id,
+    fromStatus: order!.status,
+    toStatus: 'cancelled',
+    actorUserId: ids.managerId,
+    comment: 'Cancelada ao reiniciar a demo (seed com --reset)',
+  });
 }
 
 interface DemoOrderRow {
@@ -329,6 +391,7 @@ async function createDemoWorkOrder(
     occurrenceId,
     status: 'in_progress',
     description: item.description,
+    address: item.address,
     location: point,
     gpsLocation: point,
     createdAt: reportedAt,
@@ -405,16 +468,17 @@ async function ensureCitizen(
  * Cria a prefeitura de demonstração (IBGE 9999901) com equipe, agente, cidadãos, gestor e as
  * atividades de DEMO_WORK_ORDERS, cada uma na sua ocorrência e atribuída à equipe pelo gestor.
  * Idempotente: reencontra o que já existe e só cria o que falta; se uma migração apagou os dados
- * operacionais, recria as atividades. Exige a conexão do dono do banco (superusuário): ele cria a prefeitura e os usuários, que são
+ * operacionais, recria as atividades. Com `reset`, cancela as atividades ativas da demo e cria
+ * outras. Exige a conexão do dono do banco (superusuário): ele cria a prefeitura e os usuários, que são
  * globais, e não passa pelo RLS.
  */
-export async function seedDev(db: Database): Promise<SeedDevResult> {
+export async function seedDev(db: Database, options: SeedDevOptions = {}): Promise<SeedDevResult> {
   return db.transaction(async (tx) => {
     const base = await seedTenantData(tx);
     await seedCatalog(tx, base.tenantId);
     await seedMunicipalities(tx);
     const staff = await seedStaff(tx, base.tenantId);
-    const workOrderIds = await seedDemoWorkOrders(tx, { ...base, ...staff });
+    const workOrderIds = await seedDemoWorkOrders(tx, { ...base, ...staff }, options);
     return {
       tenantId: base.tenantId,
       teamId: base.teamId,

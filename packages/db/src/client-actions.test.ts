@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDatabase, withContext, type Database } from './client.js';
-import { DEMO_UNSERVED_CENTER, seedDev } from './seed-dev-data.js';
+import { DEMO_ADDRESSES, DEMO_UNSERVED_CENTER, seedDev } from './seed-dev-data.js';
 import { findActiveTenantAt, findMunicipalityAt } from './geo.js';
 import {
   categories,
@@ -375,6 +375,88 @@ describe('dados de demonstração', () => {
     });
     expect(after.workOrderIds).toHaveLength(4);
     expect(after.workOrderIds).not.toEqual(before.workOrderIds);
+    expect(await seedDev(owner.db)).toEqual(after);
+  });
+
+  it('põe o endereço no primeiro relato de cada atividade da demo', async () => {
+    const before = await seedDev(owner.db);
+    // Uma demo criada antes dos endereços: o relato ainda sem endereço ganha o da demo.
+    const [firstOrder] = await owner.db
+      .select({ occurrenceId: workOrders.occurrenceId })
+      .from(workOrders)
+      .where(eq(workOrders.id, before.workOrderIds[0]!));
+    await owner.db
+      .update(requests)
+      .set({ address: null })
+      .where(eq(requests.occurrenceId, firstOrder!.occurrenceId));
+
+    const seeded = await seedDev(owner.db);
+    expect(seeded).toEqual(before);
+    const addresses: (string | null)[] = [];
+    for (const id of seeded.workOrderIds) {
+      const [order] = await owner.db
+        .select({ occurrenceId: workOrders.occurrenceId })
+        .from(workOrders)
+        .where(eq(workOrders.id, id));
+      const [first] = await owner.db
+        .select({ address: requests.address })
+        .from(requests)
+        .where(eq(requests.occurrenceId, order!.occurrenceId))
+        .orderBy(asc(requests.createdAt))
+        .limit(1);
+      addresses.push(first!.address);
+    }
+    expect(addresses).toEqual([...DEMO_ADDRESSES]);
+    expect(DEMO_ADDRESSES).toEqual([
+      'Rua das Flores, 120 — Centro',
+      'Av. Brasil, 1450',
+      'Rua Ipê, 33',
+      'Rua XV, 88',
+    ]);
+  });
+
+  it('com reset, cancela as atividades ativas da demo e cria outras', async () => {
+    const before = await seedDev(owner.db);
+    // O agente já mexeu numa delas: o reset volta a demo ao começo.
+    await owner.db
+      .update(workOrders)
+      .set({ status: 'awaiting_review' })
+      .where(eq(workOrders.id, before.workOrderIds[1]!));
+
+    const after = await seedDev(owner.db, { reset: true });
+    expect(after).toMatchObject({ tenantId: before.tenantId, teamId: before.teamId });
+    expect(after.workOrderIds).toHaveLength(4);
+    for (const id of before.workOrderIds) expect(after.workOrderIds).not.toContain(id);
+
+    const old = await owner.db
+      .select({ id: workOrders.id, status: workOrders.status })
+      .from(workOrders)
+      .where(inArray(workOrders.id, before.workOrderIds));
+    expect(old.map((order) => order.status)).toEqual(before.workOrderIds.map(() => 'cancelled'));
+    const cancelEvents = await owner.db
+      .select()
+      .from(statusEvents)
+      .where(
+        and(
+          inArray(statusEvents.workOrderId, before.workOrderIds),
+          eq(statusEvents.toStatus, 'cancelled'),
+        ),
+      );
+    expect(cancelEvents).toHaveLength(4);
+    for (const event of cancelEvents) expect(event.actorUserId).toBe(after.managerId);
+
+    const fresh = await owner.db
+      .select({ id: workOrders.id, status: workOrders.status })
+      .from(workOrders)
+      .where(inArray(workOrders.id, after.workOrderIds));
+    const statusById = new Map(fresh.map((order) => [order.id, order.status]));
+    expect(after.workOrderIds.map((id) => statusById.get(id))).toEqual([
+      'assigned',
+      'assigned',
+      'assigned',
+      'rework_requested',
+    ]);
+    // Sem reset, a próxima execução reencontra as novas.
     expect(await seedDev(owner.db)).toEqual(after);
   });
 });

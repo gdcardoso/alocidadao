@@ -17,8 +17,12 @@ function quoteIdent(name: string): string {
  * Recria do zero o banco da URL (dono do banco) e aplica todas as migrações.
  * Cria o banco se ele não existir, conectando ao banco `postgres` do mesmo servidor.
  * A extensão PostGIS vem da migração 0000; o papel app_user é do cluster (init.sql).
+ * `migrationsFolder` só muda nos testes que aplicam as migrações em etapas.
  */
-export async function resetTestDatabase(ownerUrl: string): Promise<void> {
+export async function resetTestDatabase(
+  ownerUrl: string,
+  migrationsFolder?: string,
+): Promise<void> {
   const database = decodeURIComponent(new URL(ownerUrl).pathname.slice(1));
   if (!database) throw new Error('A URL de conexão não informa o nome do banco');
   // Trava de segurança: esta função apaga o schema public, então só vale para bancos de teste.
@@ -49,5 +53,5 @@ export async function resetTestDatabase(ownerUrl: string): Promise<void> {
   } finally {
     await client.end();
   }
-  await runMigrations(ownerUrl);
+  await runMigrations(ownerUrl, migrationsFolder);
 }

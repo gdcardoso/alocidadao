@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { distanceMeters, type GeoPoint } from '@alocidadao/shared';
+import { distanceMeters, type GeoPoint, type PhotoPurpose } from '@alocidadao/shared';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDatabase, geoPoint, withContext, type Database } from './client.js';
@@ -108,6 +108,7 @@ async function seedTenant(db: Database, label: string, ibgeCode: string): Promis
         requestId: request!.id,
         storageKey: `${tenantId}/${randomUUID()}.jpg`,
         uploadedBy: citizenId,
+        purpose: 'report',
       })
       .returning();
     return {
@@ -167,16 +168,19 @@ function insertWorkOrder(occurrenceId: string, status: 'assigned' | 'impeded' = 
   });
 }
 
+/** Sem `purpose`, usa o propósito válido para o dono: relato na solicitação, conclusão na atividade. */
 function insertPhoto(values: {
   requestId?: string;
   workOrderId?: string;
   review?: 'pending' | 'published' | 'discarded';
+  purpose?: PhotoPurpose;
 }) {
   return withContext(app.db, { tenantId: a.tenantId }, (tx) =>
     tx.insert(photos).values({
       tenantId: a.tenantId,
       storageKey: `${a.tenantId}/${randomUUID()}.jpg`,
       uploadedBy: a.citizenId,
+      purpose: values.requestId ? 'report' : 'completion',
       ...values,
     }),
   );
@@ -290,6 +294,32 @@ describe('ocorrências e fotos', () => {
 
     await insertPhoto({ requestId: request.id });
     await insertPhoto({ workOrderId, review: 'pending' });
+  });
+
+  it('foto de solicitação não pode ter propósito de conclusão', async () => {
+    const occurrenceId = await newOccurrence();
+    const request = await insertRequest({ occurrenceId });
+
+    for (const purpose of ['completion', 'impediment'] as const) {
+      expect(await dbError(insertPhoto({ requestId: request.id, purpose }))).toMatch(
+        /photos_purpose_check/,
+      );
+    }
+    await insertPhoto({ requestId: request.id, purpose: 'report' });
+    await insertPhoto({ requestId: request.id, purpose: 'contest' });
+  });
+
+  it('foto de atividade não pode ter propósito de relato', async () => {
+    const occurrenceId = await newOccurrence();
+    const workOrderId = await insertWorkOrder(occurrenceId);
+
+    for (const purpose of ['report', 'contest'] as const) {
+      expect(await dbError(insertPhoto({ workOrderId, review: 'pending', purpose }))).toMatch(
+        /photos_purpose_check/,
+      );
+    }
+    await insertPhoto({ workOrderId, review: 'pending', purpose: 'completion' });
+    await insertPhoto({ workOrderId, review: 'pending', purpose: 'impediment' });
   });
 
   it('a revisão é a única alteração permitida na foto', async () => {

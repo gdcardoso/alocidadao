@@ -146,6 +146,7 @@ async function seedOccurrence(
         requestId,
         storageKey: key,
         uploadedBy: member.citizenId,
+        purpose: 'report',
         createdAt: at(0),
       });
       await tx.insert(statusEvents).values({
@@ -347,6 +348,7 @@ describe('GET /citizen/requests/:id', () => {
     ]);
     const publishedKey = `${demoTenantId}/published-${randomUUID()}.jpg`;
     const discardedKey = `${demoTenantId}/discarded-${randomUUID()}.jpg`;
+    const impedimentKey = `${demoTenantId}/impediment-${randomUUID()}.jpg`;
     const agentNote = `Nota interna do agente ${randomUUID()}`;
     await withContext(owner.db, { tenantId: demoTenantId }, async (tx) => {
       const [team] = await tx
@@ -377,6 +379,7 @@ describe('GET /citizen/requests/:id', () => {
           storageKey: publishedKey,
           uploadedBy: agent!.id,
           review: 'published',
+          purpose: 'completion',
           createdAt: at(20),
         },
         {
@@ -385,7 +388,18 @@ describe('GET /citizen/requests/:id', () => {
           storageKey: discardedKey,
           uploadedBy: agent!.id,
           review: 'discarded',
+          purpose: 'completion',
           createdAt: at(20),
+        },
+        // Foto do impedimento, mesmo publicada, não é foto da conclusão.
+        {
+          tenantId: demoTenantId,
+          workOrderId: order!.id,
+          storageKey: impedimentKey,
+          uploadedBy: agent!.id,
+          review: 'published',
+          purpose: 'impediment',
+          createdAt: at(10),
         },
       ]);
       await tx.insert(statusEvents).values({
@@ -405,6 +419,7 @@ describe('GET /citizen/requests/:id', () => {
     expect(raw).not.toContain(agentNote);
     expect(raw).not.toContain('Comentário interno do gestor');
     expect(raw).not.toContain(discardedKey);
+    expect(raw).not.toContain(impedimentKey);
     expect(raw).not.toContain(seeded.photoKeys[1]!);
     expect(raw).not.toContain(neighbor.id);
 
@@ -562,7 +577,7 @@ describe('POST /citizen/requests/:id actions', () => {
 
     const stored = await owner.db.select().from(photos).where(eq(photos.storageKey, photoKey));
     expect(stored).toMatchObject([
-      { requestId: seeded.requestIds[0], uploadedBy: citizen.id, review: null },
+      { requestId: seeded.requestIds[0], uploadedBy: citizen.id, review: null, purpose: 'contest' },
     ]);
 
     // O vizinho não vê o comentário de quem contestou, só o aviso.
@@ -609,6 +624,7 @@ describe('POST /citizen/requests/:id actions', () => {
       requestId: elsewhere.requestIds[0]!,
       storageKey: usedKey,
       uploadedBy: citizen.id,
+      purpose: 'report',
     });
     const used = await act(id, 'contest', citizen, {
       clientActionId: randomUUID(),

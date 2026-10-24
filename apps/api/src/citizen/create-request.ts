@@ -187,6 +187,7 @@ async function createRequest(
       requestId,
       storageKey,
       uploadedBy: userId,
+      purpose: 'report' as const,
     })),
   );
   await tx.insert(statusEvents).values({

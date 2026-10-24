@@ -5,6 +5,7 @@ import {
   ICON_GROUPS,
   MEMBERSHIP_STATUSES,
   OCCURRENCE_STATUSES,
+  PHOTO_PURPOSES,
   PHOTO_REVIEWS,
   PLATFORM_ROLES,
   REQUEST_STATUSES,
@@ -57,6 +58,7 @@ export const requestStatus = pgEnum('request_status', REQUEST_STATUSES);
 export const workOrderStatus = pgEnum('work_order_status', WORK_ORDER_STATUSES);
 export const occurrenceStatus = pgEnum('occurrence_status', OCCURRENCE_STATUSES);
 export const photoReview = pgEnum('photo_review', PHOTO_REVIEWS);
+export const photoPurpose = pgEnum('photo_purpose', PHOTO_PURPOSES);
 export const iconGroup = pgEnum('icon_group', ICON_GROUPS);
 export const tenantStatus = pgEnum('tenant_status', TENANT_STATUSES);
 export const membershipStatus = pgEnum('membership_status', MEMBERSHIP_STATUSES);
@@ -585,6 +587,11 @@ export const photos = pgTable(
       .notNull()
       .references(() => users.id),
     review: photoReview('review'),
+    /**
+     * Para que serve a foto: `report` (relato) e `contest` (contestação) são do cidadão, na
+     * solicitação; `completion` (conclusão) e `impediment` (impedimento) são do agente, na atividade.
+     */
+    purpose: photoPurpose('purpose').notNull(),
     createdAt: createdAt(),
   },
   (t) => [
@@ -601,6 +608,10 @@ export const photos = pgTable(
     index().on(t.workOrderId),
     check('photos_owner_check', sql`num_nonnulls(${t.requestId}, ${t.workOrderId}) = 1`),
     check('photos_review_check', sql`(${t.workOrderId} is null) = (${t.review} is null)`),
+    check(
+      'photos_purpose_check',
+      sql`(${t.purpose} in ('report', 'contest')) = (${t.requestId} is not null)`,
+    ),
   ],
 );
 

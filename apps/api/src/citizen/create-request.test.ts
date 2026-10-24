@@ -173,6 +173,7 @@ describe('POST /citizen/requests', () => {
       storageKey: input.photoKeys[0],
       uploadedBy: citizenId,
       review: null,
+      purpose: 'report',
     });
 
     const events = await owner.db

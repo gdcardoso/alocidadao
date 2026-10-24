@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { and, eq } from 'drizzle-orm';
+import { and, asc, eq, inArray } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDatabase, withContext, type Database } from './client.js';
 import { DEMO_UNSERVED_CENTER, seedDev } from './seed-dev-data.js';
@@ -139,7 +139,7 @@ describe('dados de demonstração', () => {
     const first = await seedDev(owner.db);
     const second = await seedDev(owner.db);
     expect(second).toEqual(first);
-    expect(first.workOrderIds).toHaveLength(3);
+    expect(first.workOrderIds).toHaveLength(4);
   });
 
   it('cria o gestor demo e o admin interno, sem duplicar', async () => {
@@ -221,16 +221,95 @@ describe('dados de demonstração', () => {
     );
   });
 
+  it('seed cria atividade com ajuste pedido e autor da atribuição', async () => {
+    const seeded = await seedDev(owner.db);
+    await seedDev(owner.db);
+    const [manager] = await owner.db.select().from(users).where(eq(users.id, seeded.managerId));
+    expect(manager?.name).toBe('Carlos Demo');
+
+    const orders = await owner.db
+      .select()
+      .from(workOrders)
+      .where(inArray(workOrders.id, seeded.workOrderIds));
+    const byId = new Map(orders.map((order) => [order.id, order]));
+    const [first, , , rework] = seeded.workOrderIds.map((id) => byId.get(id)!);
+    expect(first).toMatchObject({
+      status: 'assigned',
+      managerInstructions:
+        'Levar asfalto a frio e cones. Buraco fica na faixa de pedestres em frente à escola, priorizar antes das 11h.',
+    });
+    for (const order of orders) {
+      expect(order.managerInstructions).toBeTruthy();
+      expect(order.dueAt).toBeInstanceOf(Date);
+    }
+
+    // Uma atribuição feita pelo gestor em cada atividade, sem duplicar na segunda execução.
+    const assigned = await owner.db
+      .select()
+      .from(statusEvents)
+      .where(
+        and(
+          inArray(statusEvents.workOrderId, seeded.workOrderIds),
+          eq(statusEvents.toStatus, 'assigned'),
+        ),
+      );
+    expect(assigned).toHaveLength(4);
+    for (const event of assigned) expect(event.actorUserId).toBe(seeded.managerId);
+
+    expect(rework).toMatchObject({ status: 'rework_requested' });
+    expect(rework!.agentNote).toBeTruthy();
+    const reworkEvents = await owner.db
+      .select()
+      .from(statusEvents)
+      .where(eq(statusEvents.workOrderId, rework!.id))
+      .orderBy(asc(statusEvents.createdAt));
+    expect(reworkEvents.map((event) => event.toStatus)).toEqual([
+      'assigned',
+      'in_execution',
+      'awaiting_review',
+      'rework_requested',
+    ]);
+    expect(reworkEvents.at(-1)).toMatchObject({
+      fromStatus: 'awaiting_review',
+      actorUserId: seeded.managerId,
+      comment:
+        'As fotos 2 e 3 ficaram escuras e não mostram o buraco tapado. Tire uma de perto e uma de longe, com a rua aparecendo.',
+      details: { reasons: ['new_photos'], discardedPhotoIds: [] },
+    });
+
+    // Uma ocorrência com 3 relatos de cidadãos diferentes.
+    const reports = await owner.db
+      .select({ citizenId: requests.citizenId })
+      .from(requests)
+      .where(eq(requests.occurrenceId, first!.occurrenceId));
+    expect(reports).toHaveLength(3);
+    expect(new Set(reports.map((r) => r.citizenId)).size).toBe(3);
+  });
+
   it('completa o gestor e o admin numa prefeitura demo criada antes deles', async () => {
     const before = await seedDev(owner.db);
     await owner.db
       .delete(departmentManagers)
       .where(eq(departmentManagers.userId, before.managerId));
     await owner.db.delete(memberships).where(eq(memberships.userId, before.managerId));
+    // As atribuições da demo apontam para o gestor; saem com ele e voltam com o novo.
+    await owner.db.delete(statusEvents).where(eq(statusEvents.actorUserId, before.managerId));
     await owner.db.delete(users).where(eq(users.id, before.managerId));
     await owner.db.delete(users).where(eq(users.id, before.platformAdminId));
     const after = await seedDev(owner.db);
     expect(after.managerId).not.toBe(before.managerId);
+    const assigned = await owner.db
+      .select({ actorUserId: statusEvents.actorUserId })
+      .from(statusEvents)
+      .where(
+        and(
+          inArray(statusEvents.workOrderId, after.workOrderIds),
+          eq(statusEvents.toStatus, 'assigned'),
+        ),
+      );
+    expect(assigned.map((event) => event.actorUserId)).toEqual(
+      after.workOrderIds.map(() => after.managerId),
+    );
     const links = await owner.db
       .select()
       .from(memberships)
@@ -242,6 +321,40 @@ describe('dados de demonstração', () => {
         .from(departmentManagers)
         .where(eq(departmentManagers.userId, after.managerId)),
     ).toHaveLength(1);
+  });
+
+  it('recria a atividade da demo que foi concluída ou cancelada', async () => {
+    const before = await seedDev(owner.db);
+    const [closedId, cancelledId] = before.workOrderIds;
+    await owner.db
+      .update(workOrders)
+      .set({ status: 'completed' })
+      .where(eq(workOrders.id, closedId!));
+    await owner.db
+      .update(workOrders)
+      .set({ status: 'cancelled' })
+      .where(eq(workOrders.id, cancelledId!));
+
+    const after = await seedDev(owner.db);
+    expect(after.workOrderIds).toHaveLength(4);
+    expect(after.workOrderIds.slice(0, 2)).not.toContain(closedId);
+    expect(after.workOrderIds.slice(0, 2)).not.toContain(cancelledId);
+    expect(after.workOrderIds.slice(2)).toEqual(before.workOrderIds.slice(2));
+    const [fresh] = await owner.db
+      .select()
+      .from(workOrders)
+      .where(eq(workOrders.id, after.workOrderIds[0]!));
+    expect(fresh).toMatchObject({
+      status: 'assigned',
+      managerInstructions:
+        'Levar asfalto a frio e cones. Buraco fica na faixa de pedestres em frente à escola, priorizar antes das 11h.',
+    });
+    const reports = await owner.db
+      .select({ id: requests.id })
+      .from(requests)
+      .where(eq(requests.occurrenceId, fresh!.occurrenceId));
+    expect(reports).toHaveLength(3);
+    expect(await seedDev(owner.db)).toEqual(after);
   });
 
   it('recria as atividades da demo quando foram apagadas', async () => {
@@ -260,7 +373,7 @@ describe('dados de demonstração', () => {
       teamId: before.teamId,
       agentId: before.agentId,
     });
-    expect(after.workOrderIds).toHaveLength(3);
+    expect(after.workOrderIds).toHaveLength(4);
     expect(after.workOrderIds).not.toEqual(before.workOrderIds);
     expect(await seedDev(owner.db)).toEqual(after);
   });

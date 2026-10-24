@@ -1,6 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import type { GeoPoint, IconGroup } from '@alocidadao/shared';
-import { and, asc, eq, sql } from 'drizzle-orm';
+import {
+  ACTIVE_WORK_ORDER_STATUSES,
+  type GeoPoint,
+  type IconGroup,
+  type ReworkDetails,
+} from '@alocidadao/shared';
+import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import { geoPoint, type Database, type Transaction } from './client.js';
 import {
   categories,
@@ -10,6 +15,7 @@ import {
   municipalities,
   occurrences,
   requests,
+  statusEvents,
   teamMembers,
   teams,
   tenants,
@@ -24,6 +30,7 @@ const CITIZEN_EMAIL = 'cidadao.demo@alocidadao.dev';
 export const CITIZEN_PHONE = '+5511900000002';
 export const MANAGER_CPF = '52998224725';
 export const MANAGER_EMAIL = 'gestor.demo@alocidadao.dev';
+const MANAGER_NAME = 'Carlos Demo';
 export const ADMIN_CPF = '11144477735';
 export const ADMIN_EMAIL = 'admin.demo@alocidadao.dev';
 const DEPARTMENT_NAME = 'Obras';
@@ -71,12 +78,80 @@ function squareAround(center: GeoPoint) {
     ${center.lng + BOUNDARY_HALF_SIDE}, ${center.lat + BOUNDARY_HALF_SIDE}, 4326))`;
 }
 
-// Deslocamentos fixos (1e-3 grau de latitude ≈ 111 m; de longitude ≈ 102 m nesta latitude),
-// todos a menos de 300 m do centro.
-const REQUESTS = [
-  { description: 'Buraco na via em frente ao número 100', dLat: 0, dLng: 0.0005 },
-  { description: 'Buraco profundo na esquina', dLat: 0.001, dLng: -0.0005 },
-  { description: 'Buraco no cruzamento, risco para motos', dLat: -0.0015, dLng: 0.001 },
+const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
+
+/** Cidadãos que fazem os relatos extras da primeira atividade (a ocorrência com 3 relatos). */
+const EXTRA_CITIZENS = [
+  { name: 'Cidadã Demo 2', email: 'cidadao2.demo@alocidadao.dev', phone: '+5511900000003' },
+  { name: 'Cidadão Demo 3', email: 'cidadao3.demo@alocidadao.dev', phone: '+5511900000004' },
+];
+
+interface DemoWorkOrder {
+  /** Descrição do primeiro relato; é por ela que a segunda execução reencontra a atividade. */
+  description: string;
+  /** Deslocamento fixo em graus (1e-3 de latitude ≈ 111 m; de longitude ≈ 102 m nesta latitude). */
+  dLat: number;
+  dLng: number;
+  /** Há quantas horas o gestor atribuiu a atividade à equipe. */
+  assignedHoursAgo: number;
+  /** Prazo, em dias a partir da execução do seed. */
+  dueInDays: number;
+  managerInstructions: string;
+  /** Relatos de outros cidadãos na mesma ocorrência, um por cidadão de EXTRA_CITIZENS. */
+  extraReports?: string[];
+  /** Atividade que o agente concluiu e o gestor devolveu pedindo ajuste. */
+  rework?: { agentNote: string; comment: string; details: ReworkDetails };
+}
+
+// Todas a menos de 300 m do centro.
+const DEMO_WORK_ORDERS: DemoWorkOrder[] = [
+  {
+    description: 'Buraco na via em frente ao número 100',
+    dLat: 0,
+    dLng: 0.0005,
+    assignedHoursAgo: 0.5,
+    dueInDays: 1,
+    managerInstructions:
+      'Levar asfalto a frio e cones. Buraco fica na faixa de pedestres em frente à escola, priorizar antes das 11h.',
+    extraReports: [
+      'Buraco grande na faixa de pedestres, as crianças da escola desviam pela rua',
+      '',
+    ],
+  },
+  {
+    description: 'Buraco profundo na esquina',
+    dLat: 0.001,
+    dLng: -0.0005,
+    assignedHoursAgo: 3,
+    dueInDays: 3,
+    managerInstructions:
+      'Sinalizar a esquina com cones antes de começar. Trânsito intenso no fim da tarde.',
+  },
+  {
+    description: 'Buraco no cruzamento, risco para motos',
+    dLat: -0.0015,
+    dLng: 0.001,
+    assignedHoursAgo: 26,
+    dueInDays: 5,
+    managerInstructions:
+      'Conferir se o buraco aumentou desde o relato e levar placa de sinalização.',
+  },
+  {
+    description: 'Buraco perto do ponto de ônibus',
+    dLat: 0.002,
+    dLng: 0.0015,
+    assignedHoursAgo: 30,
+    dueInDays: 2,
+    managerInstructions:
+      'Usar massa asfáltica e compactar bem. Avisar o motorista do ônibus da linha 107.',
+    rework: {
+      agentNote: 'Buraco tapado com massa asfáltica e compactado. Área sinalizada até secar.',
+      comment:
+        'As fotos 2 e 3 ficaram escuras e não mostram o buraco tapado. Tire uma de perto e uma de longe, com a rua aparecendo.',
+      details: { reasons: ['new_photos'], discardedPhotoIds: [] },
+    },
+  },
 ];
 
 export interface SeedDevResult {
@@ -88,54 +163,249 @@ export interface SeedDevResult {
   workOrderIds: string[];
 }
 
-type SeedBase = Omit<SeedDevResult, 'managerId' | 'platformAdminId'>;
+/** Prefeitura, equipe e pessoas da demo, antes do gestor e das atividades. */
+interface SeedBase {
+  tenantId: string;
+  teamId: string;
+  agentId: string;
+  categoryId: string;
+  citizenId: string;
+}
+
+interface DemoIds {
+  tenantId: string;
+  teamId: string;
+  categoryId: string;
+  citizenId: string;
+  agentId: string;
+  managerId: string;
+}
 
 /**
- * Cria as 3 solicitações da demo, cada uma na sua ocorrência, com a atividade atribuída à equipe.
- * Devolve os ids das atividades na ordem de REQUESTS.
+ * Garante as 4 atividades da demo, cada uma na sua ocorrência, e devolve os ids na ordem de
+ * DEMO_WORK_ORDERS. Idempotente: reencontra cada atividade ativa pela descrição do relato do
+ * cidadão demo e só cria o que falta (ocorrência, relatos extras, atribuição, instruções, prazo).
  */
-async function createDemoWorkOrders(
-  tx: Transaction,
-  ids: { tenantId: string; teamId: string; categoryId: string; citizenId: string },
-): Promise<string[]> {
-  const { tenantId, teamId, categoryId, citizenId } = ids;
-  // created_at explícito e crescente: dentro de uma transação now() é igual para todas as
-  // linhas, e a ordem por created_at é o que reencontra as atividades na segunda execução.
-  const base = Date.now();
+async function seedDemoWorkOrders(tx: Transaction, ids: DemoIds): Promise<string[]> {
+  const extraCitizenIds: string[] = [];
+  for (const citizen of EXTRA_CITIZENS) {
+    extraCitizenIds.push(await ensureCitizen(tx, ids.tenantId, citizen));
+  }
+  const now = Date.now();
   const workOrderIds: string[] = [];
-  for (const [index, item] of REQUESTS.entries()) {
-    const createdAt = new Date(base + index * 1000);
-    const location = geoPoint({ lat: CENTER.lat + item.dLat, lng: CENTER.lng + item.dLng });
-    const [occurrence] = await tx
-      .insert(occurrences)
-      .values({ tenantId, categoryId, location, status: 'in_progress', createdAt })
-      .returning({ id: occurrences.id });
-    await tx.insert(requests).values({
-      tenantId,
-      citizenId,
-      categoryId,
-      occurrenceId: occurrence!.id,
-      status: 'in_progress',
-      description: item.description,
-      location,
-      gpsLocation: location,
-      createdAt,
-    });
-    const [order] = await tx
-      .insert(workOrders)
-      .values({ tenantId, occurrenceId: occurrence!.id, teamId, status: 'assigned', createdAt })
-      .returning({ id: workOrders.id });
-    workOrderIds.push(order!.id);
+  for (const [index, item] of DEMO_WORK_ORDERS.entries()) {
+    const location: GeoPoint = { lat: CENTER.lat + item.dLat, lng: CENTER.lng + item.dLng };
+    const order =
+      (await findDemoWorkOrder(tx, ids, item)) ??
+      (await createDemoWorkOrder(tx, ids, item, location, now, index));
+
+    await tx
+      .update(workOrders)
+      .set({
+        managerInstructions: sql`coalesce(${workOrders.managerInstructions}, ${item.managerInstructions})`,
+        dueAt: sql`coalesce(${workOrders.dueAt}, ${new Date(now + item.dueInDays * DAY_MS)})`,
+      })
+      .where(eq(workOrders.id, order.id));
+
+    const [assigned] = await tx
+      .select({ id: statusEvents.id })
+      .from(statusEvents)
+      .where(and(eq(statusEvents.workOrderId, order.id), eq(statusEvents.toStatus, 'assigned')));
+    if (!assigned) {
+      await tx.insert(statusEvents).values({
+        tenantId: ids.tenantId,
+        occurrenceId: order.occurrenceId,
+        workOrderId: order.id,
+        toStatus: 'assigned',
+        actorUserId: ids.managerId,
+        createdAt: order.createdAt,
+      });
+    }
+
+    const [firstReport] = await tx
+      .select({ createdAt: requests.createdAt })
+      .from(requests)
+      .where(eq(requests.occurrenceId, order.occurrenceId))
+      .orderBy(asc(requests.createdAt))
+      .limit(1);
+    for (const [extraIndex, description] of (item.extraReports ?? []).entries()) {
+      const citizenId = extraCitizenIds[extraIndex]!;
+      const [found] = await tx
+        .select({ id: requests.id })
+        .from(requests)
+        .where(
+          and(eq(requests.occurrenceId, order.occurrenceId), eq(requests.citizenId, citizenId)),
+        );
+      if (found) continue;
+      // Poucos metros ao lado do primeiro relato, dentro do raio de agrupamento do tipo.
+      const point = geoPoint({
+        lat: location.lat + (extraIndex + 1) * 0.00002,
+        lng: location.lng - (extraIndex + 1) * 0.00002,
+      });
+      await tx.insert(requests).values({
+        tenantId: ids.tenantId,
+        citizenId,
+        categoryId: ids.categoryId,
+        occurrenceId: order.occurrenceId,
+        status: 'in_progress',
+        description,
+        location: point,
+        gpsLocation: point,
+        // Depois do primeiro relato, que continua dando protocolo e descrição à ocorrência.
+        createdAt: new Date(firstReport!.createdAt.getTime() + (extraIndex + 1) * 15 * 60 * 1000),
+      });
+    }
+    workOrderIds.push(order.id);
   }
   return workOrderIds;
 }
 
+interface DemoOrderRow {
+  id: string;
+  occurrenceId: string;
+  createdAt: Date;
+}
+
 /**
- * Cria a prefeitura de demonstração (IBGE 9999901) com equipe, agente, cidadão e 3 solicitações,
- * cada uma na sua ocorrência, com a atividade da ocorrência atribuída à equipe.
- * Idempotente: se a prefeitura já existe, devolve os ids existentes. Se ela existe mas a equipe
- * ficou sem atividades (uma migração apagou os dados operacionais), recria as 3 solicitações.
- * Exige a conexão do dono do banco (superusuário): ele cria a prefeitura e os usuários, que são
+ * A atividade mais recente da ocorrência do último relato de `item` feito pelo cidadão demo.
+ * Concluída ou cancelada (alguém usou a demo até o fim) não conta: o seed cria outra.
+ */
+async function findDemoWorkOrder(
+  tx: Transaction,
+  ids: DemoIds,
+  item: DemoWorkOrder,
+): Promise<DemoOrderRow | undefined> {
+  const [request] = await tx
+    .select({ occurrenceId: requests.occurrenceId })
+    .from(requests)
+    .where(
+      and(
+        eq(requests.tenantId, ids.tenantId),
+        eq(requests.citizenId, ids.citizenId),
+        eq(requests.description, item.description),
+      ),
+    )
+    .orderBy(desc(requests.createdAt))
+    .limit(1);
+  if (!request) return undefined;
+  const [order] = await tx
+    .select({
+      id: workOrders.id,
+      occurrenceId: workOrders.occurrenceId,
+      status: workOrders.status,
+      createdAt: workOrders.createdAt,
+    })
+    .from(workOrders)
+    .where(eq(workOrders.occurrenceId, request.occurrenceId))
+    .orderBy(desc(workOrders.createdAt))
+    .limit(1);
+  if (!order || !ACTIVE_WORK_ORDER_STATUSES.includes(order.status)) return undefined;
+  return { id: order.id, occurrenceId: order.occurrenceId, createdAt: order.createdAt };
+}
+
+/** Cria a ocorrência, o primeiro relato e a atividade de `item` (com a devolução, se houver). */
+async function createDemoWorkOrder(
+  tx: Transaction,
+  ids: DemoIds,
+  item: DemoWorkOrder,
+  location: GeoPoint,
+  now: number,
+  index: number,
+): Promise<DemoOrderRow> {
+  const { tenantId, teamId, categoryId, citizenId } = ids;
+  // O relato chega um pouco antes da atribuição; o índice desempata atividades da mesma hora.
+  const assignedAt = new Date(now - item.assignedHoursAgo * HOUR_MS + index * 1000);
+  const reportedAt = new Date(assignedAt.getTime() - HOUR_MS);
+  const point = geoPoint(location);
+  const [occurrence] = await tx
+    .insert(occurrences)
+    .values({ tenantId, categoryId, location: point, status: 'in_progress', createdAt: reportedAt })
+    .returning({ id: occurrences.id });
+  const occurrenceId = occurrence!.id;
+  await tx.insert(requests).values({
+    tenantId,
+    citizenId,
+    categoryId,
+    occurrenceId,
+    status: 'in_progress',
+    description: item.description,
+    location: point,
+    gpsLocation: point,
+    createdAt: reportedAt,
+  });
+  const [order] = await tx
+    .insert(workOrders)
+    .values({
+      tenantId,
+      occurrenceId,
+      teamId,
+      status: item.rework ? 'rework_requested' : 'assigned',
+      agentNote: item.rework?.agentNote ?? null,
+      createdAt: assignedAt,
+    })
+    .returning({
+      id: workOrders.id,
+      occurrenceId: workOrders.occurrenceId,
+      createdAt: workOrders.createdAt,
+    });
+
+  if (item.rework) {
+    // Atribuída → iniciada 2 h depois → enviada 1 h depois → devolvida 1 h antes de agora.
+    const at = (hours: number) => new Date(assignedAt.getTime() + hours * HOUR_MS);
+    const event = { tenantId, occurrenceId, workOrderId: order!.id };
+    const reworkAt = new Date(now - HOUR_MS);
+    await tx.insert(statusEvents).values([
+      {
+        ...event,
+        fromStatus: 'assigned',
+        toStatus: 'in_execution',
+        actorUserId: ids.agentId,
+        createdAt: at(2),
+      },
+      {
+        ...event,
+        fromStatus: 'in_execution',
+        toStatus: 'awaiting_review',
+        actorUserId: ids.agentId,
+        comment: item.rework.agentNote,
+        createdAt: at(3),
+      },
+      {
+        ...event,
+        fromStatus: 'awaiting_review',
+        toStatus: 'rework_requested',
+        actorUserId: ids.managerId,
+        comment: item.rework.comment,
+        details: item.rework.details,
+        createdAt: reworkAt,
+      },
+    ]);
+    await tx.update(workOrders).set({ updatedAt: reworkAt }).where(eq(workOrders.id, order!.id));
+  }
+  return order!;
+}
+
+/** Cidadão demo extra (pelo e-mail), com vínculo de cidadão na prefeitura. Idempotente. */
+async function ensureCitizen(
+  tx: Transaction,
+  tenantId: string,
+  values: { name: string; email: string; phone: string },
+): Promise<string> {
+  const [found] = await tx
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.email, values.email));
+  const userId =
+    found?.id ?? (await tx.insert(users).values(values).returning({ id: users.id }))[0]!.id;
+  await tx.insert(memberships).values({ tenantId, userId, role: 'citizen' }).onConflictDoNothing();
+  return userId;
+}
+
+/**
+ * Cria a prefeitura de demonstração (IBGE 9999901) com equipe, agente, cidadãos, gestor e as
+ * atividades de DEMO_WORK_ORDERS, cada uma na sua ocorrência e atribuída à equipe pelo gestor.
+ * Idempotente: reencontra o que já existe e só cria o que falta; se uma migração apagou os dados
+ * operacionais, recria as atividades. Exige a conexão do dono do banco (superusuário): ele cria a prefeitura e os usuários, que são
  * globais, e não passa pelo RLS.
  */
 export async function seedDev(db: Database): Promise<SeedDevResult> {
@@ -144,7 +414,14 @@ export async function seedDev(db: Database): Promise<SeedDevResult> {
     await seedCatalog(tx, base.tenantId);
     await seedMunicipalities(tx);
     const staff = await seedStaff(tx, base.tenantId);
-    return { ...base, ...staff };
+    const workOrderIds = await seedDemoWorkOrders(tx, { ...base, ...staff });
+    return {
+      tenantId: base.tenantId,
+      teamId: base.teamId,
+      agentId: base.agentId,
+      ...staff,
+      workOrderIds,
+    };
   });
 }
 
@@ -202,19 +479,17 @@ async function seedMunicipalities(tx: Transaction): Promise<void> {
     });
 }
 
-/** Cria a conta pelo CPF se faltar; devolve o id (nova ou existente). */
+/** Cria a conta pelo CPF se faltar (a existente fica com o nome da demo); devolve o id. */
 async function ensureUser(
   tx: Transaction,
   values: { cpf: string; email: string; name: string; platformRole?: 'admin' },
 ): Promise<string> {
   const [found] = await tx.select({ id: users.id }).from(users).where(eq(users.cpf, values.cpf));
   if (found) {
-    if (values.platformRole) {
-      await tx
-        .update(users)
-        .set({ platformRole: values.platformRole })
-        .where(eq(users.id, found.id));
-    }
+    await tx
+      .update(users)
+      .set({ name: values.name, ...(values.platformRole && { platformRole: values.platformRole }) })
+      .where(eq(users.id, found.id));
     return found.id;
   }
   const [created] = await tx.insert(users).values(values).returning({ id: users.id });
@@ -233,7 +508,7 @@ async function seedStaff(
   const managerId = await ensureUser(tx, {
     cpf: MANAGER_CPF,
     email: MANAGER_EMAIL,
-    name: 'Gestor Demo',
+    name: MANAGER_NAME,
   });
   const platformAdminId = await ensureUser(tx, {
     cpf: ADMIN_CPF,
@@ -290,20 +565,6 @@ async function seedTenantData(tx: Transaction): Promise<SeedBase> {
       .from(users)
       .where(eq(users.email, AGENT_EMAIL));
     if (!team || !agent) throw new Error('A prefeitura demo existe mas está incompleta');
-    const orders = await tx
-      .select({ id: workOrders.id })
-      .from(workOrders)
-      .where(and(eq(workOrders.tenantId, tenantId), eq(workOrders.teamId, team.id)))
-      .orderBy(asc(workOrders.createdAt));
-    if (orders.length > 0) {
-      return {
-        tenantId,
-        teamId: team.id,
-        agentId: agent.id,
-        workOrderIds: orders.map((o) => o.id),
-      };
-    }
-    // Uma migração apagou os dados operacionais: recria as solicitações e as atividades.
     const [category] = await tx
       .select({ id: categories.id })
       .from(categories)
@@ -313,13 +574,13 @@ async function seedTenantData(tx: Transaction): Promise<SeedBase> {
       .from(users)
       .where(eq(users.email, CITIZEN_EMAIL));
     if (!category || !citizen) throw new Error('A prefeitura demo existe mas está incompleta');
-    const workOrderIds = await createDemoWorkOrders(tx, {
+    return {
       tenantId,
       teamId: team.id,
+      agentId: agent.id,
       categoryId: category.id,
       citizenId: citizen.id,
-    });
-    return { tenantId, teamId: team.id, agentId: agent.id, workOrderIds };
+    };
   }
 
   await tx.insert(tenants).values({
@@ -366,11 +627,11 @@ async function seedTenantData(tx: Transaction): Promise<SeedBase> {
     .values({ tenantId, departmentId: department!.id, name: CATEGORY_NAME })
     .returning({ id: categories.id });
 
-  const workOrderIds = await createDemoWorkOrders(tx, {
+  return {
     tenantId,
     teamId: team!.id,
+    agentId: agent!.id,
     categoryId: category!.id,
     citizenId: citizen!.id,
-  });
-  return { tenantId, teamId: team!.id, agentId: agent!.id, workOrderIds };
+  };
 }

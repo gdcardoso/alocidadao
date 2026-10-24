@@ -215,7 +215,13 @@ async function loadDetail(
       const published = await tx
         .select({ storageKey: photos.storageKey, createdAt: photos.createdAt })
         .from(photos)
-        .where(and(eq(photos.workOrderId, order.id), eq(photos.review, 'published')))
+        .where(
+          and(
+            eq(photos.workOrderId, order.id),
+            eq(photos.purpose, 'completion'),
+            eq(photos.review, 'published'),
+          ),
+        )
         .orderBy(asc(photos.createdAt), asc(photos.id));
       completion = {
         publicNote: order.publicNote,
@@ -391,11 +397,15 @@ async function runAction(
     comment,
   });
   if (photoKeys.length > 0) {
-    await tx
-      .insert(photos)
-      .values(
-        photoKeys.map((storageKey) => ({ tenantId, requestId, storageKey, uploadedBy: userId })),
-      );
+    await tx.insert(photos).values(
+      photoKeys.map((storageKey) => ({
+        tenantId,
+        requestId,
+        storageKey,
+        uploadedBy: userId,
+        purpose: 'contest' as const,
+      })),
+    );
   }
 
   if (action === 'cancel') {

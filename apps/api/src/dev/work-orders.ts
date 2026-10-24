@@ -153,6 +153,7 @@ async function applyAction(
           storageKey,
           uploadedBy: userId,
           review: 'pending' as const,
+          purpose: 'completion' as const,
         })),
       );
     }

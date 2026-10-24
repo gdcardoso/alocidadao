@@ -273,6 +273,7 @@ describe('work order actions', () => {
         requestId: null,
         review: 'pending',
         uploadedBy: agentId,
+        purpose: 'completion',
       });
     }
   });
@@ -381,10 +382,12 @@ describe('work order actions', () => {
 
   it('replays a duplicate clientActionId', async () => {
     const action = start();
+    // A atividade da demo já tem o evento da atribuição feita pelo gestor.
+    const before = await countStatusEvents(wo[1]!);
     await act(wo[1]!, action);
     const again = await act(wo[1]!, action);
     expect(again.json()).toMatchObject({ status: 'in_execution', duplicate: true });
-    expect(await countStatusEvents(wo[1]!)).toBe(1);
+    expect(await countStatusEvents(wo[1]!)).toBe(before + 1);
   });
 
   it('answers the same stored response to concurrent duplicates', async () => {
@@ -518,8 +521,9 @@ describe('GET /dev/work-orders', () => {
     });
     expect(list[0].location.lat).toBeLessThan(-23);
     expect(list[0].location.lng).toBeLessThan(-46);
-    // Protocolo, descrição e endereço vêm da solicitação mais antiga da ocorrência.
-    expect(list[0]).toMatchObject({
+    // Protocolo, descrição e endereço vêm da solicitação mais antiga da ocorrência (a primeira
+    // atividade da demo tem 3 relatos).
+    expect(list.find((w: { id: string }) => w.id === wo[0])).toMatchObject({
       description: 'Buraco na via em frente ao número 100',
       categoryName: 'Buraco na via',
     });

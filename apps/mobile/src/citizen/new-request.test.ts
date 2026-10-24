@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildCreateInput,
   canSubmit,
+  categoryAfterLocate,
   closestSimilar,
   decideFlow,
   formatAddress,
@@ -172,5 +173,21 @@ describe('texts', () => {
   it('counts the reports', () => {
     expect(reportCountLabel(6)).toBe('6 pessoas relataram');
     expect(reportCountLabel(1)).toBe('1 pessoa relatou');
+  });
+});
+
+describe('categoryAfterLocate', () => {
+  const lighting: CategoryOption = { ...category, id: 'c-light', name: 'Iluminação' };
+  const hole = category;
+
+  it('keeps the chosen type when the located city offers it', () => {
+    expect(categoryAfterLocate(hole, [lighting, { ...hole, name: 'Buraco' }])).toEqual({
+      ...hole,
+      name: 'Buraco',
+    });
+  });
+
+  it('clears the choice when the located city does not offer it', () => {
+    expect(categoryAfterLocate(hole, [lighting])).toBeNull();
   });
 });

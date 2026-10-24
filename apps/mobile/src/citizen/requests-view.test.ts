@@ -25,7 +25,7 @@ vi.mock('lucide-react-native', () => {
   return Object.fromEntries(names.map((name) => [name, name]));
 });
 
-const { toCardModel, toQueuedCardModel, rejectionReason, toQueuedRequests } =
+const { toCardModel, toQueuedCardModel, rejectionReason, toQueuedRequests, settledSentRequests } =
   await import('./requests-view');
 const { makeItem, makeRequestItem } = await import('../offline/test-helpers');
 
@@ -156,5 +156,37 @@ describe('requests view', () => {
       code: 'municipality_not_served',
       municipality: { name: 'Campinas', state: 'SP' },
     });
+  });
+
+  it('keeps a sent request on screen until the server list brings it', () => {
+    const waiting = makeRequestItem({ id: 'waiting', createdAt: 1_000 });
+    const sent = {
+      item: makeRequestItem({ id: 'sent', createdAt: 2_000, status: 'done' }),
+      requestId: 'server-sent',
+    };
+    // A fila já tirou o item enviado: ele continua no topo, esperando a lista do servidor.
+    expect(toQueuedRequests([waiting], [sent], null).map((q) => q.id)).toEqual(['sent', 'waiting']);
+    expect(toQueuedRequests([waiting], [sent], null)[0]?.rejection).toBeNull();
+    expect(toQueuedRequests([waiting], [sent], new Set(['other'])).map((q) => q.id)).toEqual([
+      'sent',
+      'waiting',
+    ]);
+    // A lista do servidor trouxe a solicitação: o cartão dela substitui o da fila.
+    expect(toQueuedRequests([waiting], [sent], new Set(['server-sent'])).map((q) => q.id)).toEqual([
+      'waiting',
+    ]);
+    // O mesmo item ainda na fila não aparece duas vezes.
+    expect(toQueuedRequests([sent.item], [sent], null).map((q) => q.id)).toEqual(['sent']);
+  });
+
+  it('lists the sent requests the server list already brings', () => {
+    const sent = [
+      { item: makeRequestItem({ id: 'a', status: 'done' }), requestId: 'server-a' },
+      { item: makeRequestItem({ id: 'b', status: 'done' }), requestId: 'server-b' },
+    ];
+    expect(settledSentRequests(sent, [card({ id: 'server-b' }), card({ id: 'x' })])).toEqual([
+      'server-b',
+    ]);
+    expect(settledSentRequests(sent, [])).toEqual([]);
   });
 });

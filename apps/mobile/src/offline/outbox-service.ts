@@ -1,15 +1,25 @@
 import NetInfo from '@react-native-community/netinfo';
+import { OUTBOX_OWNER_KEY } from '../auth/login-flow';
 import { createSessionTransport } from '../auth/native-session';
 import { api } from '../lib/api';
 import { measureApiLatency, toConnectionContext } from '../lib/connection';
 import { readNetSnapshot } from '../lib/net-info';
+import { secureStore } from '../lib/secure-store';
 import {
   processOutbox,
   processOutboxItem,
+  type CreatedRequest,
   type ItemOutcome,
   type OutboxItem,
   type ProcessOutboxDeps,
 } from './outbox';
+import {
+  emitOutbox,
+  exclusive,
+  rememberSentRequests,
+  setOutboxItems,
+  type SentRequest,
+} from './outbox-state';
 import { createSingleFlight } from './single-flight';
 import {
   enqueueCreateRequestNative,
@@ -31,41 +41,20 @@ const connection: ProcessOutboxDeps['connection'] = async (m) => {
   });
 };
 
-export interface OutboxSnapshot {
-  items: OutboxItem[];
-  syncing: boolean;
-  lastSyncError: string | null;
+export { getOutboxSnapshot, subscribeOutbox, type OutboxSnapshot } from './outbox-state';
+
+/** Resultado de uma passada para quem a acompanha. */
+export interface OutboxSyncedEvent {
+  /** Itens enviados nesta passada (ações e solicitações). */
+  sent: number;
 }
 
-let snapshot: OutboxSnapshot = { items: [], syncing: false, lastSyncError: null };
-const listeners = new Set<() => void>();
-const syncedListeners = new Set<() => void>();
+const syncedListeners = new Set<(event: OutboxSyncedEvent) => void>();
 
-function emit(patch: Partial<OutboxSnapshot>): void {
-  snapshot = { ...snapshot, ...patch };
-  for (const listener of listeners) listener();
-}
-
-export function subscribeOutbox(listener: () => void): () => void {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
-}
-
-export const getOutboxSnapshot = (): OutboxSnapshot => snapshot;
-
-/** Avisa depois de cada passada da fila (o Laboratório atualiza a lista dele). */
-export function onOutboxSynced(listener: () => void): () => void {
+/** Avisa depois de cada passada da fila (o Laboratório e a tela 4 atualizam as listas). */
+export function onOutboxSynced(listener: (event: OutboxSyncedEvent) => void): () => void {
   syncedListeners.add(listener);
   return () => syncedListeners.delete(listener);
-}
-
-let chain: Promise<unknown> = Promise.resolve();
-
-/** Roda as tarefas da fila uma de cada vez, na ordem em que chegaram. */
-function exclusive<T>(task: () => Promise<T>): Promise<T> {
-  const run = chain.then(task, task);
-  chain = run.catch(() => undefined);
-  return run;
 }
 
 /** Solicitação enviada não precisa mais ficar na tabela (as fotos já saíram com o `done`). */
@@ -78,7 +67,7 @@ async function pruneSentRequests(store: SqliteOutboxStore): Promise<void> {
 /** Relê a fila para as telas. */
 export async function refreshOutbox(): Promise<void> {
   const store = await openOutboxStore();
-  emit({ items: await store.list() });
+  setOutboxItems(await store.list());
 }
 
 let retryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -94,23 +83,40 @@ async function scheduleRetry(): Promise<void> {
   retryTimer = setTimeout(() => void syncOutbox(), Math.max(next - Date.now(), 0) + 200);
 }
 
+/** Guarda as solicitações enviadas (com o id do servidor) antes de elas saírem da fila. */
+async function rememberCreated(store: SqliteOutboxStore, created: readonly CreatedRequest[]) {
+  if (created.length === 0) return;
+  const byId = new Map((await store.list()).map((item) => [item.id, item]));
+  const sent: SentRequest[] = [];
+  for (const { itemId, requestId } of created) {
+    const item = byId.get(itemId);
+    if (item) sent.push({ item, requestId });
+  }
+  rememberSentRequests(sent);
+}
+
 async function syncPass(): Promise<void> {
-  emit({ syncing: true });
+  emitOutbox({ syncing: true });
+  let sent = 0;
   try {
     const store = await openOutboxStore();
     // Montado a cada passada: pega a sessão (e a prefeitura do Laboratório) do login atual.
     const transport = await createSessionTransport();
-    await processOutbox({ store, transport, connection });
+    const ownerId = await secureStore.getItem(OUTBOX_OWNER_KEY);
+    const result = await processOutbox({ store, transport, connection, ownerId });
+    sent = result.sent;
+    // O cartão da enviada fica na tela 4 até a lista do servidor trazer a solicitação.
+    await rememberCreated(store, result.created);
     await pruneSentRequests(store);
-    emit({ lastSyncError: null });
+    emitOutbox({ lastSyncError: null });
   } catch (error) {
     // Uma passada que falha não pode derrubar o rearme do timer nem virar rejeição solta.
     console.warn('Falha na sincronização da fila', error);
-    emit({ lastSyncError: error instanceof Error ? error.message : String(error) });
+    emitOutbox({ lastSyncError: error instanceof Error ? error.message : String(error) });
   } finally {
-    emit({ syncing: false });
+    emitOutbox({ syncing: false });
     await refreshOutbox().catch((error: unknown) => console.warn('Falha ao ler a fila', error));
-    for (const listener of syncedListeners) listener();
+    for (const listener of syncedListeners) listener({ sent });
   }
   await scheduleRetry().catch((error: unknown) => console.warn('Falha ao reagendar a fila', error));
 }

@@ -41,6 +41,7 @@ import {
   MAX_DESCRIPTION_LENGTH,
   buildCreateInput,
   canSubmit,
+  categoryAfterLocate,
   closestSimilar,
   decideFlow,
   formatAddress,
@@ -334,6 +335,20 @@ export default function NovaSolicitacao() {
         try {
           located = await sessionApi.locate(draft.location);
           if (located.status === 'served') {
+            // A grade pode ter vindo da última prefeitura guardada: passa a ser a desta.
+            const served = located;
+            setCategories({ phase: 'ready', list: served.categories });
+            void openAppDatabase()
+              .then((db) => new PlaceCache(db).save(placeFromLocate(served, Date.now())))
+              .catch(() => undefined);
+            const kept = categoryAfterLocate(draft.category, served.categories);
+            if (!kept) {
+              // Esta prefeitura não tem o tipo escolhido: o cidadão escolhe outro na grade nova.
+              setDraft((d) => ({ ...d, category: null }));
+              setError(CATEGORY_UNAVAILABLE);
+              return;
+            }
+            setDraft((d) => ({ ...d, category: kept }));
             found = await sessionApi
               .similar({ ...draft.location, categoryId: draft.category.id })
               .catch(() => []);
@@ -529,7 +544,11 @@ export default function NovaSolicitacao() {
                         icon={c.icon}
                         group={c.iconGroup}
                         selected={draft.category?.id === c.id}
-                        onPress={() => setDraft((d) => ({ ...d, category: c }))}
+                        onPress={() => {
+                          setDraft((d) => ({ ...d, category: c }));
+                          // Escolheu de novo depois do tipo indisponível: o aviso sai.
+                          setError((e) => (e === CATEGORY_UNAVAILABLE ? null : e));
+                        }}
                       />
                     ))}
                     {Array.from({ length: 3 - row.length }, (_, i) => (

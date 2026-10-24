@@ -92,6 +92,7 @@ Os demais itens deste plano continuam em aberto e passaram para o Plano 4 (Labor
 - O mesmo token de push em duas contas: ao registrar, apagar o token dos outros aparelhos (função `SECURITY DEFINER`).
 - Avisos por push ao cidadão nas mudanças de status da solicitação (o app já diz "Você recebe um aviso a cada mudança").
 - Conclusão automática em 7 dias: solicitação aguardando a confirmação do cidadão é confirmada sozinha (o texto da tela já promete).
+- Aviso da contestação: as outras solicitações reabertas ganham o evento 'Outro morador informou que o problema continua; a prefeitura vai reavaliar.', mas o detalhe não mostra comentários; levar esse aviso no push (ou expor como aviso do sistema no detalhe).
 
 ## Plano 8 — Infraestrutura
 

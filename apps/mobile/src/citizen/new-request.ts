@@ -138,6 +138,18 @@ export function sendMode(
   return { online, sendNow, syncAfter: online && !sendNow };
 }
 
+/**
+ * O tipo escolhido diante dos tipos da prefeitura que o `locate` do envio achou: o mesmo tipo
+ * (como essa prefeitura o descreve) ou `null` quando ela não o oferece (o cidadão escolhe de
+ * novo). Acontece quando a grade veio da última prefeitura guardada.
+ */
+export function categoryAfterLocate(
+  chosen: CategoryOption,
+  categories: readonly CategoryOption[],
+): CategoryOption | null {
+  return categories.find((c) => c.id === chosen.id) ?? null;
+}
+
 /** A ocorrência parecida mais perto (a que a 5b mostra). */
 export function closestSimilar(list: readonly SimilarOccurrence[]): SimilarOccurrence | null {
   return list.reduce<SimilarOccurrence | null>(

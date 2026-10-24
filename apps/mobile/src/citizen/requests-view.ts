@@ -1,6 +1,7 @@
 import type { IconGroup, RequestCard } from '@alocidadao/shared';
 import { CircleX, WifiOff } from 'lucide-react-native';
 import type { CreateRequestPayload, OutboxItem } from '../offline/outbox';
+import type { SentRequest } from '../offline/outbox-state';
 import { statusBadge, type StatusBadgeStyle } from '../ui/category';
 import { formatShortDate } from '../ui/format';
 import { colors } from '../ui/theme';
@@ -140,12 +141,27 @@ function queuedRejection(item: OutboxItem): QueuedRejection | null {
   return { code: 'send_failed' };
 }
 
-/** Solicitações da fila offline para a tela 4, a mais nova primeiro. */
-export function toQueuedRequests(items: readonly OutboxItem[]): QueuedRequest[] {
+/**
+ * Solicitações da fila offline para a tela 4, a mais nova primeiro. As enviadas por uma
+ * passada (`sent`) continuam como cartão da fila até a lista do servidor (`serverRequestIds`,
+ * `null` antes de ela chegar) trazê-las: o cartão nunca some sem o do servidor no lugar.
+ */
+export function toQueuedRequests(
+  items: readonly OutboxItem[],
+  sent: readonly SentRequest[] = [],
+  serverRequestIds: ReadonlySet<string> | null = null,
+): QueuedRequest[] {
+  const visible = items.filter(
+    (item) => item.kind === 'create_request' && VISIBLE_STATUSES.includes(item.status),
+  );
+  const shown = new Set(visible.map((item) => item.id));
+  const delivered = sent
+    .filter((s) => !shown.has(s.item.id) && !serverRequestIds?.has(s.requestId))
+    // Enviada: sem recusa, o cartão é o mesmo de quando esperava a internet.
+    .map((s): OutboxItem => ({ ...s.item, status: 'sending', rejection: null }));
   return (
-    items
-      .filter((item) => item.kind === 'create_request' && VISIBLE_STATUSES.includes(item.status))
-      // O Hermes não tem `toSorted`; `filter` já devolve uma cópia, então ordenar nela é seguro.
+    [...visible, ...delivered]
+      // O Hermes não tem `toSorted`; o spread já é uma cópia, então ordenar nela é seguro.
       // oxlint-disable-next-line unicorn/no-array-sort
       .sort((a, b) => b.createdAt - a.createdAt)
       .map((item) => {
@@ -161,4 +177,13 @@ export function toQueuedRequests(items: readonly OutboxItem[]): QueuedRequest[] 
         };
       })
   );
+}
+
+/** Ids (do servidor) das enviadas que a lista do servidor já trouxe. */
+export function settledSentRequests(
+  sent: readonly SentRequest[],
+  cards: readonly RequestCard[],
+): string[] {
+  const ids = new Set(cards.map((card) => card.id));
+  return sent.filter((s) => ids.has(s.requestId)).map((s) => s.requestId);
 }

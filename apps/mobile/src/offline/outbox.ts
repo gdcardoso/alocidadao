@@ -131,6 +131,17 @@ export interface ProcessOutboxDeps {
     sentOffline: boolean;
   }) => Promise<ConnectionContext>;
   now?: () => number;
+  /**
+   * Dono da fila guardado no aparelho (`OUTBOX_OWNER_KEY`). Com ele, itens de outra pessoa
+   * ficam de fora da passada; itens sem dono (`''`) seguem.
+   */
+  ownerId?: string | null;
+}
+
+/** Solicitação que a passada criou: o item da fila e o id que ela ganhou no servidor. */
+export interface CreatedRequest {
+  itemId: string;
+  requestId: string;
 }
 
 export interface ProcessOutboxResult {
@@ -139,6 +150,7 @@ export interface ProcessOutboxResult {
   /** Itens que falharam ou foram recusados (os dois são finais). */
   failed: number;
   stoppedByNetwork: boolean;
+  created: CreatedRequest[];
 }
 
 /** Como terminou o envio de um item. `retry`: voltou para a fila com espera. */
@@ -295,10 +307,15 @@ export async function processOutbox(deps: ProcessOutboxDeps): Promise<ProcessOut
     conflicts: 0,
     failed: 0,
     stoppedByNetwork: false,
+    created: [],
   };
 
   await store.resetInFlight();
-  const items = await store.listPending();
+  const owner = deps.ownerId ?? null;
+  // Defesa extra: a troca de conta já apaga a fila, mas item de outra pessoa nunca é enviado.
+  const items = (await store.listPending()).filter(
+    (item) => owner === null || item.userId === '' || item.userId === owner,
+  );
 
   for (const item of items) {
     // Fila estritamente FIFO: um item em espera de backoff trava os mais novos.
@@ -308,8 +325,11 @@ export async function processOutbox(deps: ProcessOutboxDeps): Promise<ProcessOut
       result.stoppedByNetwork = true;
       break;
     }
-    if (outcome.kind === 'sent') result.sent++;
-    else if (outcome.kind === 'conflict') result.conflicts++;
+    if (outcome.kind === 'sent') {
+      result.sent++;
+      if (outcome.result)
+        result.created.push({ itemId: item.id, requestId: outcome.result.requestId });
+    } else if (outcome.kind === 'conflict') result.conflicts++;
     else result.failed++;
   }
   return result;

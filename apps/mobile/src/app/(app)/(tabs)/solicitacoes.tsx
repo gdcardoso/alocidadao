@@ -2,11 +2,12 @@ import { ApiError } from '@alocidadao/api-client';
 import type { RequestCard as RequestCardData, RequestListFilter } from '@alocidadao/shared';
 import { router, useFocusEffect, type Href } from 'expo-router';
 import { useBottomTabBarHeight } from 'expo-router/js-tabs';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { sessionApi } from '../../../auth/native-session';
 import { useSession } from '../../../auth/use-session';
 import {
+  settledSentRequests,
   toCardModel,
   toQueuedCardModel,
   type CardModel,
@@ -14,6 +15,7 @@ import {
 } from '../../../citizen/requests-view';
 import { useCurrentPlace } from '../../../citizen/use-current-place';
 import { useQueuedRequests } from '../../../citizen/use-queued-requests';
+import { onOutboxSynced } from '../../../offline/outbox-service';
 import { SecondaryButton, TextButton } from '../../../ui/Button';
 import { CityChip, FilterChip } from '../../../ui/Chip';
 import { firstName } from '../../../ui/format';
@@ -83,15 +85,41 @@ export default function MinhasSolicitacoes() {
     }, [filter, load, reloadQueue]),
   );
 
+  // A fila enviou algo sozinha (ex.: a rede voltou): a lista busca as solicitações novas.
+  const filterRef = useRef(filter);
+  useEffect(() => {
+    filterRef.current = filter;
+  }, [filter]);
+  useEffect(
+    () =>
+      onOutboxSynced(({ sent }) => {
+        if (sent > 0) void load(filterRef.current);
+      }),
+    [load],
+  );
+
+  const state = lists[filter] ?? { phase: 'loading' };
+  const serverCards = state.phase === 'ready' ? state.cards : null;
+  const { sent, forgetSent } = queue;
+  // A lista do servidor trouxe as enviadas: os cartões delas saem da fila em memória.
+  useEffect(() => {
+    if (!serverCards) return;
+    const settled = settledSentRequests(sent, serverCards);
+    if (settled.length > 0) forgetSent(settled);
+  }, [serverCards, sent, forgetSent]);
+
   const refresh = async () => {
     setRefreshing(true);
     await Promise.all([load(filter), queue.reload()]);
     setRefreshing(false);
   };
 
-  const state = lists[filter] ?? { phase: 'loading' };
-  // As da fila ainda não têm status da prefeitura: entram em "Todas" e "Em andamento".
-  const queued = filter === 'done' ? [] : queue.items.map((item) => toQueuedCardModel(item, now));
+  // As da fila ainda não têm status da prefeitura: entram em "Todas" e "Em andamento". Uma
+  // enviada fica com o cartão da fila até a lista do servidor trazê-la.
+  const queued =
+    filter === 'done'
+      ? []
+      : queue.withSent(serverCards).map((item) => toQueuedCardModel(item, now));
   const rows: Row[] = [
     ...queued.map((model): Row => ({ kind: 'queued', model })),
     ...(state.phase === 'ready'

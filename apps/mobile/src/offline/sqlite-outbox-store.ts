@@ -19,6 +19,7 @@ import {
   toOutboxRow,
   type OutboxRow,
 } from './outbox-schema';
+import { clearOutbox } from './outbox-state';
 import { WorkOrderCache } from './work-order-cache';
 
 const DB_NAME = 'alocidadao.db';
@@ -133,9 +134,14 @@ export class SqliteOutboxStore implements OutboxStore {
 
 /**
  * Apaga o que a pessoa deixou no aparelho ao sair: fila, caches (atividades e última
- * prefeitura) e fotos guardadas. O id da instalação (SecureStore) fica.
+ * prefeitura) e fotos guardadas. O id da instalação (SecureStore) fica. Roda na vez da fila
+ * (depois da passada em andamento) e esvazia também a fila que as telas mostram.
  */
-export async function clearOfflineData(): Promise<void> {
+export function clearOfflineData(): Promise<void> {
+  return clearOutbox(wipeOfflineData);
+}
+
+async function wipeOfflineData(): Promise<void> {
   const db = await openAppDatabase();
   // Garante as tabelas dos caches, que só existem depois do primeiro uso.
   await new WorkOrderCache(db).init();

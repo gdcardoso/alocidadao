@@ -68,7 +68,13 @@ describe('processOutbox', () => {
     await store.add(makeItem({ id: 'a', createdAt: 1, photoPaths: [], photoKeys: [] }));
     await store.add(makeItem({ id: 'b', createdAt: 2, photoPaths: [], photoKeys: [] }));
     const result = await processOutbox(deps());
-    expect(result).toEqual({ sent: 3, conflicts: 0, failed: 0, stoppedByNetwork: false });
+    expect(result).toEqual({
+      sent: 3,
+      conflicts: 0,
+      failed: 0,
+      stoppedByNetwork: false,
+      created: [],
+    });
     expect(transport.sent.map((s) => s.input.clientActionId)).toEqual(['a', 'b', 'c']);
     expect((await store.get('a')).status).toBe('done');
   });
@@ -129,7 +135,13 @@ describe('processOutbox', () => {
     await store.add(makeItem({ id: 'b', createdAt: 2, photoPaths: [], photoKeys: [] }));
     transport.failNextSendWith(new NetworkError('offline'));
     const result = await processOutbox(deps());
-    expect(result).toEqual({ sent: 0, conflicts: 0, failed: 0, stoppedByNetwork: true });
+    expect(result).toEqual({
+      sent: 0,
+      conflicts: 0,
+      failed: 0,
+      stoppedByNetwork: true,
+      created: [],
+    });
     expect(transport.sent).toEqual([]);
     expect((await store.get('b')).attempts).toBe(0);
   });
@@ -407,5 +419,44 @@ describe('create_request', () => {
     const outcome = await processOutboxItem(deps(), await store.get('a'));
     expect(outcome).toEqual({ kind: 'retry', error: 'timeout' });
     expect(await store.get('a')).toMatchObject({ status: 'pending', photoKeys: ['k1', null] });
+  });
+});
+
+describe('pass results and owner', () => {
+  it('reports the requests it created with their server ids', async () => {
+    await store.add(makeRequestItem({ id: 'r-1', photoPaths: [], photoKeys: [] }));
+    await store.add(makeItem({ id: 'a-1', createdAt: 2, photoPaths: [], photoKeys: [] }));
+    const result = await processOutbox(deps());
+    expect(result.sent).toBe(2);
+    expect(result.created).toEqual([
+      { itemId: 'r-1', requestId: '33333333-3333-4333-8333-333333333333' },
+    ]);
+  });
+
+  it('skips items of another user when the owner is known', async () => {
+    await store.add(
+      makeItem({ id: 'mine', userId: 'user-1', createdAt: 1, photoPaths: [], photoKeys: [] }),
+    );
+    await store.add(
+      makeItem({ id: 'other', userId: 'user-2', createdAt: 2, photoPaths: [], photoKeys: [] }),
+    );
+    await store.add(
+      makeItem({ id: 'unknown', userId: '', createdAt: 3, photoPaths: [], photoKeys: [] }),
+    );
+    const result = await processOutbox({ ...deps(), ownerId: 'user-1' });
+    expect(transport.sent.map((s) => s.input.clientActionId)).toEqual(['mine', 'unknown']);
+    expect(result.sent).toBe(2);
+    expect((await store.get('other')).status).toBe('pending');
+  });
+
+  it('sends every item when the owner is not known', async () => {
+    await store.add(
+      makeItem({ id: 'a', userId: 'user-1', createdAt: 1, photoPaths: [], photoKeys: [] }),
+    );
+    await store.add(
+      makeItem({ id: 'b', userId: 'user-2', createdAt: 2, photoPaths: [], photoKeys: [] }),
+    );
+    await processOutbox({ ...deps(), ownerId: null });
+    expect(transport.sent.map((s) => s.input.clientActionId)).toEqual(['a', 'b']);
   });
 });

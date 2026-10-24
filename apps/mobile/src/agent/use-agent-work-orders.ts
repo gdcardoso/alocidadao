@@ -54,6 +54,8 @@ export interface AgentWorkOrdersState {
   error: boolean;
   refresh(): Promise<void>;
   online: boolean;
+  /** Posição do aparelho (o agente no mapa); `null` sem localização. */
+  here: GeoPoint | null;
   /** Faixa offline da A1 (`null` com rede). */
   banner: string | null;
   /** Nome da equipe ou `{n} equipes`; `null` sem atividades. */
@@ -108,8 +110,16 @@ export function useAgentWorkOrders(): AgentWorkOrdersState {
     // A posição vem à parte: esperar o GPS não segura o "atualizando".
     void readHere().catch(() => undefined);
     const tenants = tenantsRef.current;
-    // Sem `me` (app aberto sem rede) não se sabe as prefeituras: fica o cache.
-    if (tenants === null || !(await isOnline())) {
+    if (!(await isOnline())) {
+      setAttempted(true);
+      return;
+    }
+    // Sem `me` (app aberto sem rede) não se sabe as prefeituras: fica o cache. Com a rede de
+    // volta, busca `me`; as prefeituras chegam por ele e disparam a atualização.
+    if (tenants === null) {
+      await refreshMeRef.current().catch((cause: unknown) => {
+        console.warn('Falha ao buscar o usuário', cause);
+      });
       setAttempted(true);
       return;
     }
@@ -224,6 +234,7 @@ export function useAgentWorkOrders(): AgentWorkOrdersState {
     error,
     refresh,
     online,
+    here,
     banner: offlineBanner(online, pendingSendCount(queue)),
     team: teamHeader(cards ?? []),
     removeSend,

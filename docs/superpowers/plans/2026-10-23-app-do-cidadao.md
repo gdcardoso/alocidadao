@@ -709,12 +709,12 @@
 
 - Modify: `docs/design-system.md`, `docs/superpowers/plans/2026-10-22-spikes-pendencias.md`, `docs/planejamento-mvp.md`
 
-- [ ] **Step 1:** Em `docs/design-system.md`:
+- [x] **Step 1:** Em `docs/design-system.md`:
   - registrar os valores que o Pencil usa: raios, escala de 12 a 26, pesos 500, tokens `on-brand-*`, literais de sobreposição e "Aberta" com `#F1F5F9`;
   - registrar que o gradiente sobre foto e o escurecimento do painel são exceções permitidas;
   - registrar a barra de abas flutuante;
   - trocar "opções de categoria com 56" pela grade de 100.
-- [ ] **Step 2:** Em `spikes-pendencias.md`:
+- [x] **Step 2:** Em `spikes-pendencias.md`:
   - marcar `[x]` os itens do Plano 3 resolvidos:
     - endereço da API;
     - título repetido (some com as telas novas);
@@ -732,8 +732,8 @@
   - Os demais itens do Plano 3 continuam em aberto e passam para o Plano 4 ou o Plano 8, conforme o assunto.
   - Acrescentar no Plano 6: usar `municipalities` ao criar prefeitura.
   - Acrescentar no Plano 7: avisos por push nas mudanças de status do cidadão; conclusão automática em 7 dias.
-- [ ] **Step 3:** Em `planejamento-mvp.md`, na lista "Planos do MVP", marcar o Plano 3 como feito.
-- [ ] **Step 4:** Passada final no emulador, do zero:
+- [x] **Step 3:** Em `planejamento-mvp.md`, na lista "Planos do MVP", marcar o Plano 3 como feito.
+- [x] **Step 4:** Passada final no emulador, do zero:
   - desinstalar o app;
   - abertura → entrar com número novo → Quase lá → lista vazia;
   - nova solicitação com 2 fotos;
@@ -743,7 +743,7 @@
 
   Registrar o resultado em `docs/superpowers/plans/2026-10-23-app-do-cidadao.md`, numa seção "Resultado no emulador" no fim, com data e o que falhou, se algo falhou.
 
-- [ ] **Step 5:** `pnpm format:check` → PASS. Commit: `Design system e pendências após o app do cidadão`.
+- [x] **Step 5:** `pnpm format:check` → PASS. Commit: `Design system e pendências após o app do cidadão`.
 
 ## Resultado no emulador
 
@@ -759,7 +759,8 @@ Passada final em 24/10/2026 no emulador Android `AloCidadao_API36`, com o app de
 O que falhou ou chamou atenção:
 
 - **Sugestão do chip (corrigido):** a lista de números do Google aparece ao tocar no campo de celular. O emulador sugere `+15551234567` (EUA, sem E.164), que virava "(15) 55123-4567" porque tinha 11 dígitos. Agora só número do Brasil preenche o campo (`phoneHintDigits`, com teste); o de fora deixa o campo vazio (03 a 05).
-- **Código:** com o teclado aberto, o botão "Confirmar" fica escondido atrás dele (na entrada e no nome, o botão sobe com o teclado). Registrado nas pendências.
+- **Código (corrigido):** a tela nascia com o teclado já aberto (vindo da entrada) e o `KeyboardAvoidingView` só aprende a altura num evento de "teclado abriu", então "Confirmar" ficava atrás do teclado. O `FormLayout` passou a usar `useKeyboardHeight`, que lê o teclado já aberto ao montar; conferido no código da entrada, em "Confirme que a conta é sua" e no código da troca de número (`task-11-fix-*.png`).
 - **Câmera do emulador:** as fotos saem pretas (cena virtual do emulador); o fluxo de fotos funcionou.
 - **Localização:** logo depois de ligar a precisão do Android, a primeira leitura falhou ("Não foi possível obter a localização"); "Tentar de novo" resolveu.
 - **Metro:** depois de editar `src/app/(auth)/entrar.tsx`, o Metro continuou servindo a versão antiga até ser reiniciado com `--clear`.
+- **Textos visíveis:** revisados os textos das telas de entrada, lista, nova, detalhe, galeria e perfil contra o Pencil; só o aviso do "Sair" estava errado no singular (corrigido: "1 envio … ele será apagado").

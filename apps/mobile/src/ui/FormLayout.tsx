@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react';
 import {
-  KeyboardAvoidingView,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,6 +11,7 @@ import {
 import { Footer } from './Footer';
 import { Screen } from './Screen';
 import { colors, fonts, space } from './theme';
+import { useKeyboardHeight } from './use-keyboard-height';
 
 export interface FormLayoutProps {
   /** Topo fixo (ex.: Voltar). */
@@ -25,9 +25,11 @@ export interface FormLayoutProps {
 
 /** Base das telas de cadastro (1, 2, 3): conteúdo com rolagem e rodapé acima do teclado. */
 export function FormLayout({ header, children, footer, contentStyle }: FormLayoutProps) {
+  // No lugar do KeyboardAvoidingView, que ignora o teclado já aberto quando a tela monta.
+  const keyboardHeight = useKeyboardHeight();
   return (
     <Screen>
-      <KeyboardAvoidingView behavior="padding" style={styles.flex}>
+      <View style={[styles.flex, { paddingBottom: keyboardHeight }]}>
         {header}
         <ScrollView
           style={styles.flex}
@@ -37,7 +39,7 @@ export function FormLayout({ header, children, footer, contentStyle }: FormLayou
           {children}
         </ScrollView>
         <Footer variant="plain">{footer}</Footer>
-      </KeyboardAvoidingView>
+      </View>
     </Screen>
   );
 }

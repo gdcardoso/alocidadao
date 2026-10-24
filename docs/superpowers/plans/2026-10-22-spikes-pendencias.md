@@ -57,7 +57,6 @@ Os demais itens deste plano continuam em aberto e passaram para o Plano 4 (Labor
 - iOS: desligar os textos de microfone e de localização "sempre" antes do primeiro TestFlight.
 - Decidir quais status o agente vê na lista (hoje `/dev` lista todos os ativos, inclusive `awaiting_review` e `impeded`).
 - Login do Laboratório pode terminar sem prefeitura salva se `me` falhar. (veio do Plano 3)
-- Tela de código da entrada (conferir também a da troca de número): com o teclado aberto, o botão "Confirmar" fica atrás dele; conferir o `FormLayout` com o `CodeInput` (achado na passada final do Plano 3).
 
 ## Plano 5 — Painel
 

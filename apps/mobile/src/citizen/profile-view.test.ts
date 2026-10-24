@@ -8,9 +8,9 @@ import {
 } from './profile-view';
 
 describe('profile view', () => {
-  it('sign out warning counts the waiting uploads', () => {
+  it('sign out warning agrees in number with the waiting uploads', () => {
     expect(signOutWarning(1)).toBe(
-      'Você tem 1 envio aguardando internet. Se sair agora, eles serão apagados.',
+      'Você tem 1 envio aguardando internet. Se sair agora, ele será apagado.',
     );
     expect(signOutWarning(3)).toBe(
       'Você tem 3 envios aguardando internet. Se sair agora, eles serão apagados.',

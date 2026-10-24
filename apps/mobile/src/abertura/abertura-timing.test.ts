@@ -2,14 +2,19 @@ import { describe, expect, it } from 'vitest';
 import { aberturaLogoFrame, MIN_ABERTURA_MS, minimumSplash } from './abertura-timing';
 
 describe('minimumSplash', () => {
+  it('stays while the screen 0 has not appeared yet', () =>
+    expect(minimumSplash(null, 10_000, true)).toEqual({ leaving: false, waitMs: null }));
   it('waits for the minimum time even when ready', () =>
-    expect(minimumSplash(1000, 1500, true)).toEqual({ done: false, waitMs: 1000 }));
-  it('finishes once ready and the minimum time has passed', () =>
-    expect(minimumSplash(1000, 1000 + MIN_ABERTURA_MS, true)).toEqual({ done: true, waitMs: 0 }));
+    expect(minimumSplash(1000, 1500, true)).toEqual({ leaving: false, waitMs: 1000 }));
+  it('leaves once ready and the minimum time has passed', () =>
+    expect(minimumSplash(1000, 1000 + MIN_ABERTURA_MS, true)).toEqual({
+      leaving: true,
+      waitMs: 0,
+    }));
   it('keeps waiting while not ready, even after the minimum time', () =>
-    expect(minimumSplash(0, 10_000, false)).toEqual({ done: false, waitMs: 0 }));
+    expect(minimumSplash(0, 10_000, false)).toEqual({ leaving: false, waitMs: 0 }));
   it('accepts a custom minimum', () =>
-    expect(minimumSplash(0, 100, true, 300)).toEqual({ done: false, waitMs: 200 }));
+    expect(minimumSplash(0, 100, true, 300)).toEqual({ leaving: false, waitMs: 200 }));
 });
 
 describe('aberturaLogoFrame', () => {

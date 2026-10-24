@@ -6,24 +6,25 @@ const FRAME = { width: 390, height: 844 };
 const LOGO = { x: 45, y: 250, width: 300, height: 130 };
 
 export interface SplashState {
-  /** A abertura já pode sair (tempo mínimo cumprido e app pronto). */
-  done: boolean;
-  /** Quanto falta do tempo mínimo, em ms (0 quando já passou). */
-  waitMs: number;
+  /** A abertura já pode sair: tela 0 visível há pelo menos `minMs` e app pronto. */
+  leaving: boolean;
+  /** Quanto falta do tempo mínimo, em ms (0 quando já passou; null antes da tela 0 aparecer). */
+  waitMs: number | null;
 }
 
 /**
- * Decide se a abertura pode sair: fica pelo menos `minMs` desde `startedAt` ou até o app
- * ficar pronto, o que vier depois.
+ * Regra de saída da abertura: a tela 0 fica pelo menos `minMs` desde que apareceu (`shownAt`)
+ * e até o app ficar pronto, o que vier depois. Antes de aparecer, não sai.
  */
 export function minimumSplash(
-  startedAt: number,
+  shownAt: number | null,
   now: number,
   ready: boolean,
   minMs: number = MIN_ABERTURA_MS,
 ): SplashState {
-  const waitMs = Math.max(0, startedAt + minMs - now);
-  return { done: ready && waitMs === 0, waitMs };
+  if (shownAt === null) return { leaving: false, waitMs: null };
+  const waitMs = Math.max(0, shownAt + minMs - now);
+  return { leaving: ready && waitMs === 0, waitMs };
 }
 
 /**

@@ -28,7 +28,7 @@ export default function RootLayout() {
   // A pilha só entra com as fontes (sem piscar a fonte do sistema); a tela 0 fica por cima.
   return (
     <SessionProvider>
-      <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
+      <View style={{ flex: 1, backgroundColor: colors.surface }}>
         {fontsReady ? <RootStack /> : null}
         <Gate fontsReady={fontsReady} />
       </View>

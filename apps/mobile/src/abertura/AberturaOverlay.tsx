@@ -19,18 +19,21 @@ interface Props {
  * ou na hora com "reduzir movimento".
  */
 export function AberturaOverlay({ ready }: Props) {
-  const [minElapsed, setMinElapsed] = useState(false);
   const [gone, setGone] = useState(false);
   const [opacity] = useState(() => new Animated.Value(1));
-  const leaving = ready && minElapsed;
 
   // Momento em que a tela 0 apareceu de fato (a abertura nativa saiu): base do tempo mínimo.
   // Contar daqui (e não da carga do JS) garante os 1,5 s visíveis mesmo com o JS lento.
   const [shownAt, setShownAt] = useState<number | null>(null);
+  // Relógio da regra: anda quando a tela 0 aparece e quando o tempo mínimo termina.
+  const [now, setNow] = useState(() => Date.now());
+  const { leaving, waitMs } = minimumSplash(shownAt, now, ready);
 
   const show = useCallback(() => {
     SplashScreen.hide();
-    setShownAt((current) => current ?? Date.now());
+    const at = Date.now();
+    setShownAt((current) => current ?? at);
+    setNow(at);
   }, []);
 
   useEffect(() => {
@@ -39,13 +42,12 @@ export function AberturaOverlay({ ready }: Props) {
     return () => clearTimeout(fallback);
   }, [show, shownAt]);
 
-  // A prontidão do app entra em `leaving`; aqui só o tempo mínimo.
+  // Acorda a regra quando o tempo mínimo termina (se o timer disparar cedo, agenda de novo).
   useEffect(() => {
-    if (shownAt === null) return;
-    const { waitMs } = minimumSplash(shownAt, Date.now(), true);
-    const timer = setTimeout(() => setMinElapsed(true), waitMs);
+    if (!waitMs) return;
+    const timer = setTimeout(() => setNow(Date.now()), waitMs);
     return () => clearTimeout(timer);
-  }, [shownAt]);
+  }, [waitMs]);
 
   useEffect(() => {
     if (!leaving) return;
@@ -59,11 +61,17 @@ export function AberturaOverlay({ ready }: Props) {
           return;
         }
         Animated.timing(opacity, { toValue: 0, duration: FADE_MS, useNativeDriver: true }).start(
-          () => active && setGone(true),
+          ({ finished }) => {
+            if (active && finished) setGone(true);
+          },
         );
       });
     return () => {
       active = false;
+      // Se a saída for cancelada no meio do fade, a tela 0 volta inteira: nunca fica uma
+      // camada invisível por cima do app pegando os toques.
+      opacity.stopAnimation();
+      opacity.setValue(1);
     };
   }, [leaving, opacity]);
 
@@ -72,6 +80,9 @@ export function AberturaOverlay({ ready }: Props) {
   return (
     <Animated.View
       style={[StyleSheet.absoluteFill, { opacity, pointerEvents: leaving ? 'none' : 'auto' }]}
+      // Saindo, o leitor de tela já vai para a próxima tela.
+      importantForAccessibility={leaving ? 'no-hide-descendants' : 'auto'}
+      accessibilityElementsHidden={leaving}
     >
       <AberturaView onImagesReady={show} />
     </Animated.View>

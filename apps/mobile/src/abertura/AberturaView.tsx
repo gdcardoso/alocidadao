@@ -1,5 +1,6 @@
 import { useRef } from 'react';
 import { Image, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { colors } from '../ui/theme';
 import { aberturaLogoFrame } from './abertura-timing';
 
 interface Props {
@@ -42,7 +43,7 @@ export function AberturaView({ onImagesReady }: Props) {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#FFFFFF' },
+  screen: { flex: 1, backgroundColor: colors.surface },
   background: { ...StyleSheet.absoluteFill, width: '100%', height: '100%' },
   logo: { position: 'absolute' },
 });

@@ -6,8 +6,8 @@ import type { OutboxStatus } from '../offline/outbox';
 
 /** Aviso do "Sair da conta" quando há envios na fila (decisões do plano). */
 export function signOutWarning(count: number): string {
-  const uploads = count === 1 ? 'envio' : 'envios';
-  return `Você tem ${count} ${uploads} aguardando internet. Se sair agora, eles serão apagados.`;
+  if (count === 1) return 'Você tem 1 envio aguardando internet. Se sair agora, ele será apagado.';
+  return `Você tem ${count} envios aguardando internet. Se sair agora, eles serão apagados.`;
 }
 
 /** Itens da fila que ainda vão ser enviados (de qualquer tipo). */

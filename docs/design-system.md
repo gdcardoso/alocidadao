@@ -40,23 +40,24 @@ A paleta vem do guia de marca. Verde e amarelo **não passam no contraste para t
 
 ### Cores da interface
 
-| Token              | Hex       | Uso                                                 | Contraste           |
-| ------------------ | --------- | --------------------------------------------------- | ------------------- |
-| `surface`          | `#FFFFFF` | Campos, cartões, rodapé                             | —                   |
-| `text-primary`     | `#0F172A` | Texto principal                                     | 16,6:1 sobre `bg`   |
-| `text-secondary`   | `#475569` | Texto de apoio, legendas                            | 7,1:1 sobre `bg`    |
-| `text-placeholder` | `#64748B` | Exemplo dentro de campos                            | 4,8:1 sobre branco  |
-| `border`           | `#E2E8F0` | Divisórias (decorativas)                            | —                   |
-| `border-input`     | `#7C8798` | Contorno de campos e opções tocáveis                | 3,6:1 sobre branco  |
-| `primary-strong`   | `#003F87` | Botão pressionado                                   | 10,2:1 sobre branco |
-| `primary-soft`     | `#E6EFFA` | Fundo de opção selecionada                          | `primary` 5,9:1     |
-| `on-primary`       | `#FFFFFF` | Texto e ícone sobre `primary`                       | 6,9:1               |
-| `success`          | `#007A4A` | Concluída, confirmações (verde da marca escurecido) | 5,4:1 sobre branco  |
-| `success-soft`     | `#E6F5EE` | Fundo de status concluída                           | `success` 4,8:1     |
-| `warning`          | `#B45309` | Prazo vencendo, impedimento                         | 5,0:1 sobre branco  |
-| `warning-soft`     | `#FEF3C7` | Fundo de aviso                                      | —                   |
-| `danger`           | `#B91C1C` | Erros, ações destrutivas                            | 6,5:1 sobre branco  |
-| `danger-soft`      | `#FEE2E2` | Fundo de erro                                       | —                   |
+| Token              | Hex       | Uso                                                 | Contraste                  |
+| ------------------ | --------- | --------------------------------------------------- | -------------------------- |
+| `surface`          | `#FFFFFF` | Campos, cartões, rodapé                             | —                          |
+| `text-primary`     | `#0F172A` | Texto principal                                     | 16,6:1 sobre `bg`          |
+| `text-secondary`   | `#475569` | Texto de apoio, legendas                            | 7,1:1 sobre `bg`           |
+| `text-placeholder` | `#64748B` | Exemplo dentro de campos                            | 4,8:1 sobre branco         |
+| `border`           | `#E2E8F0` | Divisórias (decorativas)                            | —                          |
+| `border-input`     | `#7C8798` | Contorno de campos e opções tocáveis                | 3,6:1 sobre branco         |
+| `primary-strong`   | `#003F87` | Botão pressionado                                   | 10,2:1 sobre branco        |
+| `primary-soft`     | `#E6EFFA` | Fundo de opção selecionada                          | `primary` 5,9:1            |
+| `on-primary`       | `#FFFFFF` | Texto e ícone sobre `primary`                       | 6,9:1                      |
+| `success`          | `#007A4A` | Concluída, confirmações (verde da marca escurecido) | 5,4:1 sobre branco         |
+| `success-soft`     | `#E6F5EE` | Fundo de status concluída                           | `success` 4,8:1            |
+| `warning`          | `#B45309` | Prazo vencendo, impedimento                         | 5,0:1 sobre branco         |
+| `warning-soft`     | `#FEF3C7` | Fundo de aviso                                      | —                          |
+| `danger`           | `#B91C1C` | Erros, ações destrutivas                            | 6,5:1 sobre branco         |
+| `danger-soft`      | `#FEE2E2` | Fundo de erro                                       | —                          |
+| `warning-strong`   | `#78350F` | Texto âmbar sobre `warning-soft` (app do agente)    | 8,1:1 sobre `warning-soft` |
 
 Cor nunca é o único sinal: seleção leva ícone de check, status leva rótulo em texto.
 
@@ -86,7 +87,7 @@ Usados nas telas sem virar token da marca (no app ficam nomeados em `apps/mobile
 | `#CBD5E1`            | Alça do painel e textos da galeria                           |
 | `#334155`            | Borda das fotos vizinhas na galeria                          |
 | `#94A3B8`, `#64748B` | Fundos da pilha de fotos                                     |
-| `#78350F`            | Texto do aviso offline (app do agente)                       |
+| `#78350F`            | Virou o token `warning-strong` (`warningStrong` no app)      |
 
 ### Categorias
 
@@ -105,7 +106,7 @@ Na categoria selecionada, o ícone continua visível e ganha um selo verde com c
 ## Tipografia
 
 - **Títulos:** Lexend (600; 500 nos rótulos de campo). Criada para leitura fácil.
-- **Texto:** Source Sans 3 (400, 500 em chips e itens, 600).
+- **Texto:** Source Sans 3 (400, 500 em chips e itens, 600). Peso 700 só no selo "Nova" do cartão de atividade do agente (12/700 no Pencil); o app carrega só até 600, então desenha o selo em 600 até a fonte 700 entrar.
 - Escala usada no Pencil, de 12 a 26:
   - Lexend: 26 título das telas de cadastro · 24 título de lista, perfil e 5c · 22 título do painel 5b · 20 título do detalhe · 18 cabeçalho da tela 5 e seções · 17 seções do detalhe · 16/500 rótulos de campo.
   - Source Sans 3: 17 botões e valores de campo · 16 corpo · 15 secundário, chips, termos e avisos · 14 legendas · 13 metadados do cartão · 12 rótulos da barra de abas.
@@ -121,11 +122,28 @@ Na categoria selecionada, o ícone continua visível e ganha um selo verde com c
 - Sem sombras e gradientes na interface; separação por contorno e fundo. Exceções permitidas:
   - os fundos da marca (cidade e faixa verde e amarela), só na abertura do app e no login do painel;
   - o gradiente escuro sobre a foto da Nova solicitação (de `#0F172A00` a `#0F172AD9`), para a pílula de local e o contador terem contraste;
-  - o escurecimento translúcido (`#0F172A8C`) atrás do painel que sobe de baixo (5b).
+  - o escurecimento translúcido (`#0F172A8C`) atrás do painel que sobe de baixo (5b);
+  - a sombra externa da barra de abas flutuante (cidadão e agente): `#0F172A1F`, y 4, blur 20. O app ainda não a desenha.
 
 ## Barra de abas
 
 Barra flutuante em pílula (68 de altura, raio 34, fundo `#FFFFFFF2`, borda `border`), afastada das bordas da tela. Duas abas (Solicitações e Perfil) com rótulo de 12 e, no meio, o botão "Nova" (câmera) sempre destacado em `primary`. O ícone da aba ativa tem fundo `primary-soft`.
+
+No modo agente, a mesma barra tem só duas abas, `Atividades` (`clipboard-list`) e `Perfil` (`user`), distribuídas por igual, sem o vão do botão central.
+
+## Componentes do app do agente
+
+Telas em `docs/superpowers/specs/2026-10-24-telas-agente-pencil.md`; no app, em `apps/mobile/src/ui/agent/` e `apps/mobile/src/ui/ModePill.tsx`.
+
+- **Faixa offline** (A1): largura total, fundo `warning-soft`, ícone `wifi-off` 18 em `warning`, texto 15/600 em `warning-strong`. Some quando há rede. Nas telas de envio (A3/A4) o aviso fica no rodapé: "Funciona sem internet: enviamos quando conectar."
+- **Pílula de modo** (topo): padding 8/12, gap 6, raio 20, ícone 16, texto 14/600; toque chega a 44 com `hitSlop`. `Agente` (`hard-hat`): fundo `text-primary`, ícone e texto brancos. `Cidadão` (`user`): fundo `surface`, borda `border`, texto `text-primary` (sem desenho no Pencil).
+- **Controle segmentado** (Lista/Mapa da A1): trilho `border` de 48, padding 4, raio 24; segmento ativo `surface` com ícone e texto `text-primary`, inativo transparente em `text-secondary`. Segmentos com 40 de altura útil.
+- **Cartão de atividade** (A1): raio 20, fundo `surface`, borda `border` 1; a atividade nova tem borda `primary` 2 e o selo "Nova" (`primary`, texto branco 12). Tipo 17/600, endereço 15 em `text-secondary`, distância 15/600 em `primary` com `navigation`. Embaixo: selo de status, chip de relatos (fundo `bg`, `users` 14, texto 14) e o tempo (13).
+- **Selo de status do agente**: sem ícone (o rótulo é o sinal além da cor). Atribuída `border`/`text-secondary`; Em execução `primary-soft`/`primary`; Ajuste pedido `warning-soft`/`warning`; Aguardando revisão `success-soft`/`success`; Impedida `danger-soft`/`danger`.
+- **Cartão do gestor** (A2/A5): raio 20, padding 16, borda 1. Azul nas instruções (`primary-soft`, borda e título `primary`); âmbar no ajuste pedido (`warning-soft`, borda `warning`, título `warning-strong`). Texto 16 em `text-primary`, autor 14 em `text-secondary`.
+- **Opção de motivo** (A4, escolha única): linha de 56, raio 16, fundo `surface`, borda `border-input`. Selecionada: `primary-soft`, borda `primary` 2, texto 600 em `primary` e o ícone trocado por `circle-check` (diferente da categoria, que mantém o ícone e ganha selo).
+- **Botão primário em `warning`** ("Enviar ao gestor" da A4): pílula `warning` com texto branco (5,0:1), pressionado em `warning-strong`.
+- **Faixa de local** (A3): raio 16, padding 14, gap 10, texto 15/600. No local: `success-soft` com texto `success`. Longe ou sem posição: `warning-soft` com `map-pin-x`/`map-pin-off` e texto `warning-strong`. Lendo a posição: fundo `#F1F5F9`, indicador e texto `text-secondary`. Nunca bloqueia o envio.
 
 ## Padrões de interação
 

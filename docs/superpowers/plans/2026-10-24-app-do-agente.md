@@ -459,3 +459,25 @@ Decididas neste plano:
   Registrar o resultado neste plano, numa seção "Resultado no emulador" no fim, com data e o que falhou.
 
 - [ ] **Step 5:** `pnpm format:check` → PASS. Commit: `Design system e pendências após o app do agente`.
+
+## Resultado no emulador
+
+24/10/2026, AVD `AloCidadao_API36` (Android 16), dev build reinstalado do zero (`adb uninstall` + `npx expo run:android`), Metro com `npx expo start --clear`, `pnpm db:seed:dev`, GPS em `-46.6333 -23.5505`. Capturas em `.superpowers/sdd/2026-10-24-app-do-agente/task-11-*.png`.
+
+| Passo                                                          | Resultado                                                                                                                                                                                         |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Entrar com o agente do seed (+5511900000001)                   | OK: pede notificação e localização, abre direto no modo agente; A1 com 4 atividades "ordenadas pela distância" (3 "Nova" e 1 "Ajuste pedido").                                                    |
+| Abrir a nova, iniciar                                          | OK: A2 com instruções, autor e prazo; "Iniciar atendimento" volta à A1 com "Em execução · Iniciada agora" e sem o selo "Nova".                                                                    |
+| Concluir com 2 fotos                                           | OK: faixa "Você está no local da ocorrência (a 51 m)"; com 2 fotos e relato, "Aguardando revisão · Enviada agora"; no servidor, `awaiting_review`.                                                |
+| Modo avião, impedimento com foto                               | OK: faixa "Sem conexão", depois "Sem conexão · 1 envio aguardando sinal"; cartão "Impedida · Aguardando envio".                                                                                   |
+| Reconectar                                                     | OK: a faixa some, o cartão passa a "Enviada agora"; no servidor, `impeded`.                                                                                                                       |
+| Atender ao ajuste pedido                                       | OK: A5 "Gestor pediu novas fotos" com a mensagem e "devolvido há 1 h"; "Enviar novas fotos" abre a A3 com o relato anterior e sem fotos; faixa de 270 m em âmbar; reenvio vira `awaiting_review`. |
+| Cidadão pela pílula, registrar solicitação, agente pelo Perfil | OK: pílula "Agente" leva a "Minhas solicitações" com a pílula "Cidadão"; Nova (Iluminação, 1 foto) cria o protocolo 2026-000037; "Usar o app como agente" volta à A1.                             |
+| Sair e entrar de novo                                          | OK: saindo no modo cidadão, a nova entrada abre no modo cidadão (último modo); a pílula leva de volta ao agente.                                                                                  |
+
+O que falhou ou chamou atenção (nada no app do agente):
+
+- `pnpm db:seed:dev` num banco já usado não devolve as atividades ao estado inicial: só cria as que não estão ativas. As 4 do dia estavam em execução, impedida e aguardando revisão de passadas anteriores; foi preciso cancelá-las por `POST /dev/work-orders/:id/cancel` e rodar o seed de novo. Para uma passada do zero, falta um modo de reiniciar as atividades de exemplo.
+- O seed não tem endereço nas ocorrências: cartões, A2 e A3 mostram as coordenadas no lugar do endereço.
+- Na Nova solicitação do cidadão, o geocodificador do emulador devolve "Se" (Praça da Sé sem acento) como local; vem do aparelho, não do app.
+- A câmera do emulador gera fotos pretas (esperado).

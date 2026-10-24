@@ -75,6 +75,8 @@ Roteiro: 3 atividades, início e conclusão (com 1 ou 2 fotos e relato) em modo 
 
 Nada abaixo foi executado. Preencha a tabela do fim ao concluir.
 
+Atualização de 24/10/2026 (Plano 4): o fluxo offline do agente saiu do Laboratório para o modo agente do app (telas A1 a A5). As telas `laboratorio/offline` e `laboratorio/entrar` foram removidas; o Laboratório ficou só com rede, câmera e notificações. A fila é a mesma, agora com a prefeitura em cada item (`tenantId`) e as rotas reais `/agent/*`.
+
 ### 1. Android real
 
 1. Ative a depuração USB no aparelho e confira com `adb devices`.
@@ -83,7 +85,7 @@ Nada abaixo foi executado. Preencha a tabela do fim ao concluir.
 4. Em `apps/mobile`, rode `EXPO_PUBLIC_API_URL=http://<IP-DO-MAC>:3333 npx expo run:android --device`.
 5. Em Wi-Fi, abra Laboratório > Rede: anote tipo de rede e latência.
 6. Laboratório > Câmera e localização: negue e depois aceite as permissões, anotando se foram pedidas só ao tocar. Tire uma foto real e anote dimensões e tamanho (alvo: até 300 KB). Anote a precisão da localização, ao ar livre e em ambiente fechado.
-7. Laboratório > Atividades offline, com dados do `db:seed:dev`: ligue o modo avião, inicie e conclua 3 atividades (fotos reais, relato), cancele uma pelo `curl` do roteiro, desligue o modo avião. Confira: fila vazia, sem duplicatas (`client_actions` e `status_events` no banco), aviso de conflito na cancelada.
+7. Entre com o agente do `db:seed:dev` (modo agente, A1 Minhas atividades): ligue o modo avião, inicie e conclua 3 atividades (fotos reais, relato), cancele uma pela rota `/dev/work-orders/:id/cancel`, desligue o modo avião. Confira: fila vazia, sem duplicatas (`client_actions` e `status_events` no banco), aviso de envio recusado na cancelada (topo da A1, `Remover envio`).
 8. Repita o passo 7 e force o fechamento do app (arrastar dos recentes) durante o envio; reabra e confira que termina sem duplicar.
 9. Anote o tempo de envio por foto em Wi-Fi.
 10. Desligue o Wi-Fi do aparelho e repita 5 a 9 em dados móveis (o Mac precisa ser alcançável pelo celular: use um túnel ou deixe o celular numa rede com acesso ao Mac e simule 4G com limitação de banda). Anote o tempo de envio por foto em 4G.

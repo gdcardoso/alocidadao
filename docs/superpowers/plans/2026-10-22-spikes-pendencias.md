@@ -42,21 +42,21 @@ Os demais itens deste plano continuam em aberto e passaram para o Plano 4 (Labor
 
 ## Plano 4 — App do agente
 
-- Rotas reais substituem `/dev/*`: schema de resposta em todas as rotas (hoje só a lista de atividades declara o seu).
-- Chave de foto já usada em outra conclusão responde 409 `client_action_conflict`: o 23505 de `photos.storage_key` cai no mesmo ramo do id de ação repetido.
+- [x] Rotas reais substituem `/dev/*`: schema de resposta em todas as rotas (hoje só a lista de atividades declara o seu).
+- [x] Chave de foto já usada em outra conclusão responde 409 `client_action_conflict`: o 23505 de `photos.storage_key` cai no mesmo ramo do id de ação repetido.
 - [x] `useOutboxSync` está só na tela do Laboratório: mover para o layout raiz.
 - [x] 408 e 429 no envio de foto viram falha definitiva: tratar como nova tentativa.
-- Foto de conclusão recusada por conflito fica órfã no armazenamento; pastas de itens em conflito ou falha não são apagadas; `dir.delete` com erro interrompe a passada.
+- [x] Foto de conclusão recusada por conflito fica órfã no armazenamento; pastas de itens em conflito ou falha não são apagadas; `dir.delete` com erro interrompe a passada. (No aparelho, resolvido; a foto já enviada ao armazenamento passou para o Plano 8.)
 - [x] Tempo limite de 30 s também no envio da foto (3G fraco); corpo da resposta lido sem tempo limite.
-- Banco SQLite sem versão de esquema; `openAppDatabase` guarda a promessa rejeitada.
-- Máximo de 3 fotos não é imposto em `enqueueWorkOrderAction`; `occurredAt` e `createdAt` vêm de chamadas diferentes de `now()`.
-- Página de login de Wi-Fi público com 200 no envio da foto passa (o servidor recusa depois com 422).
-- Estado `online` começa verdadeiro antes do primeiro evento do NetInfo; cartão em conflito mostra o status otimista até atualizar; lista do servidor sem validação; `fetchChain` frágil; `reloadLocal` sem `catch`; sem testes do hook.
-- Câmera: decodifica a foto duas vezes; pode passar de 1 MB sem aviso; JPEGs intermediários não são apagados; temporizador da localização não é limpo; mensagem técnica mostrada ao usuário.
+- [x] Banco SQLite sem versão de esquema; `openAppDatabase` guarda a promessa rejeitada.
+- [x] Máximo de 3 fotos não é imposto em `enqueueWorkOrderAction`; `occurredAt` e `createdAt` vêm de chamadas diferentes de `now()`.
+- Página de login de Wi-Fi público com 200 no envio da foto passa (o servidor recusa depois com 422). Passou para o Plano 8.
+- [x] Estado `online` começa verdadeiro antes do primeiro evento do NetInfo; cartão em conflito mostra o status otimista até atualizar; lista do servidor sem validação; `fetchChain` frágil; `reloadLocal` sem `catch`; sem testes do hook. (A tela do Laboratório saiu; o que sobrou no modo agente passou para o Plano 8.)
+- [x] Câmera: decodifica a foto duas vezes; pode passar de 1 MB sem aviso; JPEGs intermediários não são apagados; temporizador da localização não é limpo; mensagem técnica mostrada ao usuário.
 - [x] `PhotoCapture` mora num arquivo de rota.
-- iOS: desligar os textos de microfone e de localização "sempre" antes do primeiro TestFlight.
-- Decidir quais status o agente vê na lista (hoje `/dev` lista todos os ativos, inclusive `awaiting_review` e `impeded`).
-- Login do Laboratório pode terminar sem prefeitura salva se `me` falhar. (veio do Plano 3)
+- [x] iOS: desligar os textos de microfone e de localização "sempre" antes do primeiro TestFlight.
+- [x] Decidir quais status o agente vê na lista (hoje `/dev` lista todos os ativos, inclusive `awaiting_review` e `impeded`).
+- [x] Login do Laboratório pode terminar sem prefeitura salva se `me` falhar. (veio do Plano 3) (A tela saiu: o modo agente usa `me.agentTenants`.)
 
 ## Plano 5 — Painel
 
@@ -75,6 +75,10 @@ Os demais itens deste plano continuam em aberto e passaram para o Plano 4 (Labor
 - Categorias na ordem do Pencil: falta um campo de ordenação na categoria (hoje a grade da Nova solicitação vem em ordem alfabética).
 - Fotos da contestação aparecem como "Sua foto · abertura" no detalhe e na galeria: o `PhotoView` não diz a origem da foto; falta decidir no Pencil uma legenda para fotos da contestação.
 
+- Ajuste pedido: o painel grava o evento para `rework_requested` no formato `reworkDetailsSchema` (mensagem em `comment`; `{ reasons, discardedPhotoIds }` em `details`) e usa `POST /dev/work-orders/:id/manager` como referência.
+- Revisão (W3): mostrar a distância da conclusão ao local da ocorrência (`details.distanceM` do evento de conclusão).
+- Textos do app do agente criados sem Pencil para confirmar: 'Foto do cidadão'; 'Esta atividade não está mais com você' / 'Ela foi concluída, cancelada ou passada para outra equipe.' / 'Voltar para minhas atividades'; 'Não foi possível carregar a atividade' / 'Confira sua internet e tente de novo.'; 'Não foi possível iniciar. Tente de novo.'; 'Não foi possível enviar. Tente de novo.'; 'O gestor revisa as fotos e o relato.'; pílula 'Cidadão' (fundo surface com borda).
+
 ## Plano 6 — Backoffice
 
 - `municipality_leads.updated_by` não é forçado a `app_current_user()` e `updated_at` não muda no `UPDATE`.
@@ -92,6 +96,7 @@ Os demais itens deste plano continuam em aberto e passaram para o Plano 4 (Labor
 - O mesmo token de push em duas contas: ao registrar, apagar o token dos outros aparelhos (função `SECURITY DEFINER`).
 - Avisos por push ao cidadão nas mudanças de status da solicitação (o app já diz "Você recebe um aviso a cada mudança").
 - Conclusão automática em 7 dias: solicitação aguardando a confirmação do cidadão é confirmada sozinha (o texto da tela já promete).
+- Push de nova atividade e de ajuste pedido para os agentes da equipe.
 - Aviso da contestação: as outras solicitações reabertas ganham o evento 'Outro morador informou que o problema continua; a prefeitura vai reavaliar.', mas o detalhe não mostra comentários; levar esse aviso no push (ou expor como aviso do sistema no detalhe).
 
 ## Plano 8 — Infraestrutura
@@ -115,3 +120,6 @@ Os demais itens deste plano continuam em aberto e passaram para o Plano 4 (Labor
 - Falha no envio de SMS ou e-mail ainda gasta a janela de 60 s e conta no limite por hora. (veio do Plano 3)
 - `409 email_in_use` com o e-mail de uma conta congelada impede o antigo dono de reaproveitar o próprio e-mail. (veio do Plano 3)
 - Testes que faltam: código de `phone_login` em `recovery/verify`; 503 `sms_not_configured`; `expires_at` da sessão do painel; RLS de `devices` e `sessions` entre usuários; nas rotas `/dev`, a validação do corpo responde 400 antes do 401. (veio do Plano 3)
+- Foto de conclusão ou impedimento enviada ao armazenamento e recusada depois (conflito, vínculo encerrado) fica órfã no MinIO: falta uma limpeza periódica das chaves sem linha em `photos`. (veio do Plano 4)
+- Página de login de Wi-Fi público com 200 no envio da foto passa (o servidor recusa depois com 422). (veio do Plano 4)
+- Modo agente: o estado `online` de `useAgentWorkOrders` e `useAgentWorkOrder` começa verdadeiro antes do primeiro evento do NetInfo; os hooks do agente não têm teste próprio (a lógica está nos módulos puros testados). (veio do Plano 4)

@@ -6,6 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/icone-app.png",
     "userInterfaceStyle": "light",
+    "backgroundColor": "#FFFFFF",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "br.com.alocidadao.app"

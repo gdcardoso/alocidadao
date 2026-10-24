@@ -2,13 +2,14 @@ import * as Notifications from 'expo-notifications';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { View } from 'react-native';
+import { AberturaOverlay } from '../abertura/AberturaOverlay';
 import { SessionProvider } from '../auth/session-context';
 import { useSession } from '../auth/use-session';
 import { useAppFonts } from '../ui/fonts';
 import { colors } from '../ui/theme';
 
-// A abertura nativa fica até as fontes carregarem (sem piscar a fonte do sistema).
+// A abertura nativa (branca) fica até a tela 0 desenhar as imagens (AberturaOverlay).
 void SplashScreen.preventAutoHideAsync();
 
 // Mostra o push também com o app aberto (por padrão o Expo o esconde em primeiro plano).
@@ -22,20 +23,24 @@ Notifications.setNotificationHandler({
 });
 
 export default function RootLayout() {
-  const ready = useAppFonts();
+  const fontsReady = useAppFonts();
 
-  useEffect(() => {
-    if (ready) SplashScreen.hide();
-  }, [ready]);
-
-  if (!ready) return null;
-
+  // A pilha só entra com as fontes (sem piscar a fonte do sistema); a tela 0 fica por cima.
   return (
     <SessionProvider>
-      <RootStack />
+      <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
+        {fontsReady ? <RootStack /> : null}
+        <Gate fontsReady={fontsReady} />
+      </View>
       <StatusBar style="dark" />
     </SessionProvider>
   );
+}
+
+/** Tela 0 até as fontes e a sessão ficarem prontas (no mínimo 1,5 s). */
+function Gate({ fontsReady }: { fontsReady: boolean }) {
+  const { status } = useSession();
+  return <AberturaOverlay ready={fontsReady && status !== 'loading'} />;
 }
 
 /**

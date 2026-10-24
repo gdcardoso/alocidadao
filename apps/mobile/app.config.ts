@@ -20,11 +20,13 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       ...(config.plugins ?? []),
       'expo-notifications',
       'expo-font',
-      // Abertura nativa: só o símbolo, inteiro dentro da máscara circular do Android 12+ (a logo larga aparece na tela 0).
+      // Abertura nativa: só o fundo branco. O Android 12+ só mostra um ícone num círculo, então
+      // a imagem é um PNG transparente (sem `image` o plugin ainda aponta para splashscreen_logo).
+      // A cidade e a logo aparecem logo em seguida na tela 0 (AberturaOverlay).
       [
         'expo-splash-screen',
         {
-          image: './assets/splash-icon.png',
+          image: './assets/splash-transparent.png',
           imageWidth: 200,
           resizeMode: 'contain',
           backgroundColor: '#FFFFFF',

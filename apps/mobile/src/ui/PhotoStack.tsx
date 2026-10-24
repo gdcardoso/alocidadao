@@ -1,4 +1,5 @@
-import { Images } from 'lucide-react-native';
+import { ImageOff, Images } from 'lucide-react-native';
+import { useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, fonts } from './theme';
 
@@ -13,6 +14,9 @@ export interface PhotoStackProps {
 
 /** Pilha de fotos do Pencil (170x162): dois fundos, a foto com borda branca e o contador. */
 export function PhotoStack({ uri, count, onPress, accessibilityLabel }: PhotoStackProps) {
+  // Sem rede, a URL assinada pode ter vencido: fica o fundo da pilha com `image-off`.
+  const [failed, setFailed] = useState<string | null>(null);
+  const broken = uri !== null && failed === uri;
   return (
     <Pressable
       onPress={onPress}
@@ -23,7 +27,19 @@ export function PhotoStack({ uri, count, onPress, accessibilityLabel }: PhotoSta
       <View style={styles.back} />
       <View style={styles.middle} />
       <View style={styles.photo}>
-        {uri ? <Image source={{ uri }} style={styles.image} resizeMode="cover" /> : null}
+        {uri && !broken ? (
+          <Image
+            source={{ uri }}
+            style={styles.image}
+            resizeMode="cover"
+            onError={() => setFailed(uri)}
+          />
+        ) : null}
+        {broken ? (
+          <View style={styles.broken}>
+            <ImageOff size={32} color={colors.textSecondary} />
+          </View>
+        ) : null}
         <View style={styles.count}>
           <Images size={16} color={colors.onPrimary} />
           <Text style={styles.countText} allowFontScaling={false}>
@@ -68,6 +84,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   image: { width: '100%', height: '100%' },
+  broken: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center' },
   count: {
     position: 'absolute',
     right: 8,

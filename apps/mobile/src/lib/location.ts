@@ -24,3 +24,15 @@ export async function getCurrentPoint(): Promise<CurrentPoint> {
     return { error: 'unavailable' };
   }
 }
+
+/** Última posição conhecida do aparelho, sem pedir permissão nem esperar o GPS; `null` sem ela. */
+export async function getLastKnownPoint(): Promise<GeoPoint | null> {
+  try {
+    const permission = await Location.getForegroundPermissionsAsync();
+    if (!permission.granted) return null;
+    const position = await Location.getLastKnownPositionAsync({ maxAge: 5 * 60_000 });
+    return position ? { lat: position.coords.latitude, lng: position.coords.longitude } : null;
+  } catch {
+    return null;
+  }
+}

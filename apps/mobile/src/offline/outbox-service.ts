@@ -23,6 +23,7 @@ import {
 import { createSingleFlight } from './single-flight';
 import {
   enqueueCreateRequestNative,
+  enqueueNative,
   openOutboxStore,
   type SqliteOutboxStore,
 } from './sqlite-outbox-store';
@@ -183,4 +184,21 @@ export function removeOutboxItem(id: string): Promise<void> {
     await store.remove(id);
     await refreshOutbox();
   });
+}
+
+/**
+ * Ação do agente (iniciar, concluir, impedimento): sempre pela fila, com ou sem rede, e a fila
+ * sai em seguida. A tela mostra o status otimista que vem da fila.
+ */
+export async function submitWorkOrderAction(
+  input: Parameters<typeof enqueueNative>[1],
+): Promise<OutboxItem> {
+  const item = await exclusive(async () => {
+    const store = await openOutboxStore();
+    const queued = await enqueueNative(store, input);
+    await refreshOutbox();
+    return queued;
+  });
+  void syncOutbox();
+  return item;
 }

@@ -114,6 +114,11 @@ export function formatDateTime(iso: string): string {
   return `${dayMonth(p)} ${p.year}, ${time(p)}`;
 }
 
+/** `'23 out'` (prazo da atividade do agente). */
+export function formatDayMonth(iso: string): string {
+  return dayMonth(localParts(iso));
+}
+
 /** `'21 out, 15:40'` (linha do tempo e relato da equipe). */
 export function formatDayTime(iso: string): string {
   const p = localParts(iso);

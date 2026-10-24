@@ -14,6 +14,8 @@ interface BaseButtonProps {
   label: string;
   onPress: () => void;
   icon?: LucideIcon;
+  /** Cor do ícone, quando difere do texto (ex.: `octagon-alert` em `warning`). */
+  iconColor?: string;
   /** Enviando: mostra o indicador e não aceita toque. */
   loading?: boolean;
   disabled?: boolean;
@@ -35,6 +37,7 @@ function BaseButton({
   label,
   onPress,
   icon: Icon,
+  iconColor,
   loading = false,
   disabled = false,
   size = 'large',
@@ -71,7 +74,7 @@ function BaseButton({
         </View>
       ) : (
         <View style={styles.content}>
-          {Icon ? <Icon size={large ? 20 : 18} color={palette.fg} /> : null}
+          {Icon ? <Icon size={large ? 20 : 18} color={iconColor ?? palette.fg} /> : null}
           <Text style={[styles.label, { color: palette.fg, fontSize: large ? 17 : 16 }]}>
             {label}
           </Text>

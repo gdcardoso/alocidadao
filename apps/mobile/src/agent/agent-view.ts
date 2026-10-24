@@ -92,11 +92,12 @@ const WAITING_SEND = 'Aguardando envio';
 const QUEUED_STATUSES: readonly OutboxItem['status'][] = ['pending', 'sending'];
 const NOT_APPLIED_STATUSES: readonly OutboxItem['status'][] = ['conflict', 'failed', 'rejected'];
 
-const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+export const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
-type ActionItem = OutboxItem & { payload: WorkOrderActionPayload };
+export type ActionItem = OutboxItem & { payload: WorkOrderActionPayload };
 
-function agentItems(queue: readonly OutboxItem[]): ActionItem[] {
+/** Ações do agente na fila, da mais antiga para a mais nova. */
+export function agentItems(queue: readonly OutboxItem[]): ActionItem[] {
   return (
     queue
       .filter((item): item is ActionItem => item.kind === 'work_order_action')
@@ -107,7 +108,7 @@ function agentItems(queue: readonly OutboxItem[]): ActionItem[] {
 }
 
 /** Status e hora da última mudança, contando a fila. */
-interface Effective {
+export interface Effective {
   status: WorkOrderStatus;
   changedAt: string;
   queued: boolean;
@@ -119,7 +120,7 @@ interface Effective {
  * atividade está num status de onde a ação parte. Não se compara a hora do aparelho com a do
  * servidor (os relógios podem divergir).
  */
-function effectiveStatus(card: AgentWorkOrderCard, items: readonly ActionItem[]): Effective {
+export function effectiveStatus(card: AgentWorkOrderCard, items: readonly ActionItem[]): Effective {
   let result: Effective = {
     status: card.status,
     changedAt: card.statusChangedAt,

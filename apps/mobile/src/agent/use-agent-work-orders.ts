@@ -117,9 +117,17 @@ export function useAgentWorkOrders(): AgentWorkOrdersState {
     // Sem `me` (app aberto sem rede) não se sabe as prefeituras: fica o cache. Com a rede de
     // volta, busca `me`; as prefeituras chegam por ele e disparam a atualização.
     if (tenants === null) {
-      await refreshMeRef.current().catch((cause: unknown) => {
-        console.warn('Falha ao buscar o usuário', cause);
-      });
+      // Enquanto `me` chega, a A1 mostra "carregando" (não "Não foi possível carregar"). Com
+      // `me`, as prefeituras disparam a próxima atualização, que desliga o `refreshing`.
+      setRefreshing(true);
+      const ok = await refreshMeRef.current().then(
+        () => true,
+        (cause: unknown) => {
+          console.warn('Falha ao buscar o usuário', cause);
+          return false;
+        },
+      );
+      if (!ok) setRefreshing(false);
       setAttempted(true);
       return;
     }

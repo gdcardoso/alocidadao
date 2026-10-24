@@ -13,6 +13,7 @@ import { registerAppAuthRoutes } from './auth/app-routes.js';
 import { registerPanelAuthRoutes } from './auth/panel-routes.js';
 import { registerAuth } from './auth/plugin.js';
 import { registerCitizenRoutes } from './citizen/routes.js';
+import { registerDevManagerActions } from './dev/manager-actions.js';
 import { registerDevPush, type PushSenders } from './dev/push.js';
 import { registerDevWorkOrders } from './dev/work-orders.js';
 import type { EmailSender } from './messaging/email.js';
@@ -141,8 +142,11 @@ export async function buildApp({
   }
 
   if (devRoutes) {
-    // As ações simuladas dependem da sessão; sem `auth` só o /dev/push existe.
-    if (auth) registerDevWorkOrders(app, database, storage);
+    // As decisões simuladas do gestor dependem da sessão; sem `auth` só o /dev/push existe.
+    if (auth) {
+      registerDevWorkOrders(app, database);
+      registerDevManagerActions(app, database);
+    }
     registerDevPush(app, push);
   }
 

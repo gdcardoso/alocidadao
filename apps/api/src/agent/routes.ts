@@ -5,6 +5,7 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { requireAuth } from '../auth/plugin.js';
 import { requireTenantMember } from '../auth/tenant-context.js';
 import { newPhotoKey, type Storage } from '../storage/s3.js';
+import { registerAgentActionRoutes } from './actions.js';
 import { registerAgentWorkOrderRoutes } from './work-orders.js';
 
 export interface AgentDeps {
@@ -23,6 +24,7 @@ export function registerAgentRoutes(instance: FastifyInstance, deps: AgentDeps) 
   const { db, storage } = deps;
 
   registerAgentWorkOrderRoutes(instance, deps);
+  registerAgentActionRoutes(instance, deps);
 
   app.post(
     '/agent/uploads',

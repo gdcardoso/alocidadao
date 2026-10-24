@@ -31,9 +31,9 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { asActiveUser, enterTenant, INACTIVE } from '../auth/active-user.js';
 import { requireAuth } from '../auth/plugin.js';
-import { isUniqueViolation, violatedConstraint } from '../db-errors.js';
+import { PHOTO_KEY_CONSTRAINT, isUniqueViolation, violatedConstraint } from '../db-errors.js';
 import type { Storage } from '../storage/s3.js';
-import { PHOTO_KEY_CONSTRAINT, photosExist } from './create-request.js';
+import { photosExist } from './create-request.js';
 import type { CitizenDeps } from './routes.js';
 
 const {

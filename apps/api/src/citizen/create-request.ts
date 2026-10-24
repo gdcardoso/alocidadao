@@ -21,7 +21,7 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { asActiveUser, enterTenant, INACTIVE } from '../auth/active-user.js';
 import { requireAuth } from '../auth/plugin.js';
-import { isUniqueViolation, violatedConstraint } from '../db-errors.js';
+import { PHOTO_KEY_CONSTRAINT, isUniqueViolation, violatedConstraint } from '../db-errors.js';
 import { isOwnRequestPhotoKey, type Storage } from '../storage/s3.js';
 import type { CitizenDeps } from './routes.js';
 
@@ -29,8 +29,6 @@ const { categories, occurrences, requests, photos, statusEvents, clientActions }
 
 /** Tipo gravado em `client_actions` para a criação de solicitação. */
 const CREATE_REQUEST_KIND = 'create_request';
-/** Restrição única de `photos.storage_key` (nome gerado pelo Drizzle). */
-export const PHOTO_KEY_CONSTRAINT = 'photos_storage_key_unique';
 
 const municipalitySchema = z.object({ ibgeCode: z.string(), name: z.string(), state: z.string() });
 /** 422 com o município do ponto, quando há; os outros 422 trazem só o código. */

@@ -1,3 +1,6 @@
+/** Restrição única de `photos.storage_key` (nome gerado pelo Drizzle). */
+export const PHOTO_KEY_CONSTRAINT = 'photos_storage_key_unique';
+
 /** Drizzle embrulha o erro do Postgres em `cause`; procura o código nos dois níveis. */
 export function isUniqueViolation(error: unknown): boolean {
   const e = error as { code?: string; cause?: { code?: string } };

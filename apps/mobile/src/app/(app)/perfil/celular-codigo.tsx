@@ -3,6 +3,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Timer } from 'lucide-react-native';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { profileRouteFor } from '../../../auth/app-mode';
 import { apiErrorCode, apiRetryAfterSeconds, formatCountdown } from '../../../auth/login-flow';
 import { sessionApi } from '../../../auth/native-session';
 import { useCountdown } from '../../../auth/use-countdown';
@@ -20,7 +21,7 @@ type Params = { phone: string; challengeId: string; resendInSeconds?: string };
 /** Perfil · código do novo número: igual à tela 2, com a troca no lugar do login. */
 export default function CodigoNovoCelular() {
   const params = useLocalSearchParams<Params>();
-  const { refreshMe } = useSession();
+  const { refreshMe, mode } = useSession();
   const [challengeId, setChallengeId] = useState(params.challengeId);
   const [code, setCode] = useState('');
   const [error, setError] = useState<{ code: string | null; message: string } | null>(null);
@@ -44,7 +45,8 @@ export default function CodigoNovoCelular() {
     try {
       await sessionApi.phoneChangeVerify({ challengeId, code });
       await refreshMe().catch(() => undefined);
-      router.dismissTo('/(app)/(tabs)/perfil');
+      // Volta ao Perfil do modo atual (as abas do outro modo não existem).
+      router.dismissTo(profileRouteFor(mode));
     } catch (e) {
       fail(e);
     } finally {

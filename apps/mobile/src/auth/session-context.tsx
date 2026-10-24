@@ -11,8 +11,7 @@ import {
   hasAgentRole,
   homeFor,
   modeAfterMeUpdate,
-  parseStoredMode,
-  resolveMode,
+  startMode,
   storedModeValue,
   type AppMode,
 } from './app-mode';
@@ -34,19 +33,16 @@ async function saveMode(mode: AppMode, userId: string | null): Promise<void> {
   }
 }
 
-/**
- * Modo ao abrir ou entrar, com o aviso de vínculo encerrado quando o último modo era o de
- * agente e o vínculo acabou com o app fechado.
- */
+/** Modo ao abrir ou entrar (ver `startMode`); grava o resultado para a próxima abertura. */
 async function initialMode(me: MeResponse | null) {
-  const raw = await secureStore.getItem(APP_MODE_KEY).catch(() => null);
-  const stored = parseStoredMode(raw, me?.id ?? null);
-  const after = modeAfterMeUpdate(stored ?? 'citizen', me);
-  if (after.agentAccessEnded) void saveMode('citizen', me?.id ?? null);
-  return {
-    mode: resolveMode(me, after.agentAccessEnded ? 'citizen' : stored),
-    agentAccessEnded: after.agentAccessEnded,
-  };
+  const [raw, outboxOwner] = await Promise.all([
+    secureStore.getItem(APP_MODE_KEY).catch(() => null),
+    secureStore.getItem(OUTBOX_OWNER_KEY).catch(() => null),
+  ]);
+  const start = startMode({ raw, me, outboxOwner });
+  // Com `me`, o modo resolvido passa a ser desta pessoa (um modo de outra pessoa não fica).
+  if (me) void saveMode(start.mode, me.id);
+  return start;
 }
 
 /** Sessão do app para as telas: lê o token guardado na abertura e acompanha login e saída. */

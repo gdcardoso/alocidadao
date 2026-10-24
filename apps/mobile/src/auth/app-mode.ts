@@ -40,17 +40,24 @@ export function storedModeValue(mode: AppMode, userId: string): string {
   return `${mode}:${userId}`;
 }
 
+/** Perfil de cada modo (volta das telas de edição do perfil). */
+export function profileRouteFor(
+  mode: AppMode,
+): '/(app)/agente/(tabs)/perfil' | '/(app)/(tabs)/perfil' {
+  return mode === 'agent' ? '/(app)/agente/(tabs)/perfil' : '/(app)/(tabs)/perfil';
+}
+
 /**
- * Modo gravado, se é da pessoa logada. Outra pessoa no mesmo aparelho começa do zero. Sem o id
- * (app aberto sem rede, mesma sessão de antes), vale o que estiver gravado.
+ * Modo gravado, se é da pessoa logada (`userId`). Outra pessoa no mesmo aparelho começa do
+ * zero; sem dono conhecido, nada vale.
  */
 export function parseStoredMode(raw: string | null, userId: string | null): AppMode | null {
-  if (!raw) return null;
+  if (!raw || userId === null) return null;
   const sep = raw.indexOf(':');
   const mode = sep < 0 ? raw : raw.slice(0, sep);
   const owner = sep < 0 ? null : raw.slice(sep + 1);
   if (mode !== 'agent' && mode !== 'citizen') return null;
-  if (userId !== null && owner !== userId) return null;
+  if (owner !== userId) return null;
   return mode;
 }
 
@@ -66,4 +73,25 @@ export function modeAfterMeUpdate(
     return { mode: 'citizen', agentAccessEnded: true };
   }
   return { mode, agentAccessEnded: false };
+}
+
+/**
+ * Modo ao abrir ou entrar. A pessoa é a de `me` ou, sem `me` (app aberto sem rede), a dona da
+ * fila offline (`OUTBOX_OWNER_KEY`, que a abertura sem rede mantém). O aviso de vínculo
+ * encerrado aparece quando o último modo dela era o de agente e o vínculo acabou com o app
+ * fechado.
+ */
+export function startMode({
+  raw,
+  me,
+  outboxOwner,
+}: {
+  raw: string | null;
+  me: MeResponse | null;
+  outboxOwner: string | null;
+}): { mode: AppMode; agentAccessEnded: boolean } {
+  const stored = parseStoredMode(raw, me?.id ?? outboxOwner);
+  const after = modeAfterMeUpdate(stored ?? 'citizen', me);
+  if (after.agentAccessEnded) return after;
+  return { mode: resolveMode(me, stored), agentAccessEnded: false };
 }

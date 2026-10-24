@@ -5,6 +5,7 @@ import { router, useFocusEffect, useLocalSearchParams, type Href } from 'expo-ro
 import { CircleX, ThumbsDown, ThumbsUp } from 'lucide-react-native';
 import { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { homeFor } from '../../../auth/app-mode';
 import { sessionApi } from '../../../auth/native-session';
 import { useSession } from '../../../auth/use-session';
 import {
@@ -27,7 +28,8 @@ import { TeamReport } from '../../../ui/TeamReport';
 import { Timeline } from '../../../ui/Timeline';
 import { colors, fonts, radius, space } from '../../../ui/theme';
 
-const HOME_ROUTE = '/(app)/(tabs)/solicitacoes';
+// Fluxo do cidadão: volta sempre à lista do cidadão.
+const HOME_ROUTE = homeFor('citizen');
 const GALLERY_ROUTE = '/(app)/galeria';
 
 type LoadState =

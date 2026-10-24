@@ -4,7 +4,8 @@ import { useOutboxSync } from '../../offline/use-outbox-sync';
 import { colors } from '../../ui/theme';
 
 // Abrindo direto numa tela interna (ex.: link de push), as abas ficam embaixo para o Voltar.
-// O Expo Router lê esta constante do arquivo do layout.
+// O Expo Router lê esta constante do arquivo do layout. A âncora `(tabs)` só existe no modo
+// cidadão; no modo agente ela fica proibida e a âncora do agente é a de `agente/_layout.tsx`.
 // oxlint-disable-next-line react/only-export-components
 export const unstable_settings = { initialRouteName: '(tabs)' };
 

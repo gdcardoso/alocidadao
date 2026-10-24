@@ -2,6 +2,7 @@ import { router, useLocalSearchParams, type Href } from 'expo-router';
 import { Check, MapPinOff, Megaphone, Phone, PhoneCall } from 'lucide-react-native';
 import { useState } from 'react';
 import { Linking, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { homeFor } from '../../auth/app-mode';
 import { sessionApi } from '../../auth/native-session';
 import { notServedTexts } from '../../citizen/new-request';
 import { PrimaryButton, SecondaryButton, TextButton } from '../../ui/Button';
@@ -10,7 +11,8 @@ import { Header } from '../../ui/Header';
 import { Screen } from '../../ui/Screen';
 import { colors, fonts, radius } from '../../ui/theme';
 
-const HOME_ROUTE = '/(app)/(tabs)/solicitacoes';
+// Fluxo do cidadão: volta sempre à lista do cidadão.
+const HOME_ROUTE = homeFor('citizen');
 const DEFAULT_PHONE = '156';
 
 /** Tela 5c · A cidade do ponto ainda não usa o Alô Cidadão. */

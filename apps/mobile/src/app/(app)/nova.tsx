@@ -33,6 +33,7 @@ import {
   type ScrollViewInstance,
 } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
+import { homeFor } from '../../auth/app-mode';
 import { OUTBOX_OWNER_KEY } from '../../auth/login-flow';
 import { sessionApi } from '../../auth/native-session';
 import { useSession } from '../../auth/use-session';
@@ -80,7 +81,8 @@ import { colors, fonts, radius, space } from '../../ui/theme';
 const PERMISSION_ROUTE = '/(app)/permissao-local';
 const NOT_SERVED_ROUTE = '/(app)/nao-atende';
 const ADJUST_ROUTE = '/(app)/ajustar-local';
-const HOME_ROUTE = '/(app)/(tabs)/solicitacoes';
+// Fluxo do cidadão: volta sempre à lista do cidadão.
+const HOME_ROUTE = homeFor('citizen');
 
 const SEND_ERROR = 'Não foi possível enviar a solicitação. Tente de novo.';
 const CATEGORY_UNAVAILABLE = 'Este tipo de solicitação não está disponível nesta cidade.';

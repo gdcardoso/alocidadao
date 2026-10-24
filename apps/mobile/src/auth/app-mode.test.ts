@@ -8,7 +8,9 @@ import {
   homeFor,
   modeAfterMeUpdate,
   parseStoredMode,
+  profileRouteFor,
   resolveMode,
+  startMode,
   storedModeValue,
 } from './app-mode';
 
@@ -57,9 +59,21 @@ describe('app mode', () => {
     expect(parseStoredMode(null, USER)).toBeNull();
     expect(parseStoredMode('lixo', USER)).toBeNull();
 
-    // App aberto sem rede (sem `me`): vale o último modo guardado neste aparelho.
-    expect(resolveMode(null, parseStoredMode(storedModeValue('agent', USER), null))).toBe('agent');
-    expect(resolveMode(null, null)).toBe('citizen');
+    // Sem dono conhecido, o valor gravado não vale.
+    expect(parseStoredMode(stored, null)).toBeNull();
+
+    // App aberto sem rede (sem `me`): vale o último modo da pessoa dona da fila.
+    expect(startMode({ raw: storedModeValue('agent', USER), me: null, outboxOwner: USER })).toEqual(
+      { mode: 'agent', agentAccessEnded: false },
+    );
+    expect(startMode({ raw: null, me: null, outboxOwner: USER })).toEqual({
+      mode: 'citizen',
+      agentAccessEnded: false,
+    });
+    expect(startMode({ raw: null, me: agent, outboxOwner: USER })).toEqual({
+      mode: 'agent',
+      agentAccessEnded: false,
+    });
   });
 
   it('losing the agent role switches to citizen mode with the notice', () => {
@@ -82,10 +96,33 @@ describe('app mode', () => {
     expect(modeAfterMeUpdate('agent', null)).toEqual({ mode: 'agent', agentAccessEnded: false });
   });
 
+  it('offline start ignores the mode saved by another person', () => {
+    // A (agente) saiu e deixou "agent:A"; B (cidadão) entrou e abre o app sem rede.
+    expect(
+      startMode({ raw: storedModeValue('agent', OTHER), me: null, outboxOwner: USER }),
+    ).toEqual({ mode: 'citizen', agentAccessEnded: false });
+    // Sem dono da fila também não vale.
+    expect(
+      startMode({ raw: storedModeValue('agent', OTHER), me: null, outboxOwner: null }),
+    ).toEqual({ mode: 'citizen', agentAccessEnded: false });
+  });
+
+  it('agent mode saved by the same person ends with the notice when the role is gone', () => {
+    expect(
+      startMode({ raw: storedModeValue('agent', USER), me: citizen, outboxOwner: USER }),
+    ).toEqual({ mode: 'citizen', agentAccessEnded: true });
+    // O modo agente de outra pessoa não gera aviso.
+    expect(
+      startMode({ raw: storedModeValue('agent', OTHER), me: citizen, outboxOwner: USER }),
+    ).toEqual({ mode: 'citizen', agentAccessEnded: false });
+  });
+
   it('home route follows the mode', () => {
     expect(homeFor('agent')).toBe('/(app)/agente/(tabs)/atividades');
     expect(homeFor('citizen')).toBe('/(app)/(tabs)/solicitacoes');
     expect(AGENT_HOME_ROUTE).toBe(homeFor('agent'));
     expect(CITIZEN_HOME_ROUTE).toBe(homeFor('citizen'));
+    expect(profileRouteFor('agent')).toBe('/(app)/agente/(tabs)/perfil');
+    expect(profileRouteFor('citizen')).toBe('/(app)/(tabs)/perfil');
   });
 });

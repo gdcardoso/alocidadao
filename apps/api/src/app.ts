@@ -8,12 +8,12 @@ import {
   validatorCompiler,
   type ZodTypeProvider,
 } from 'fastify-type-provider-zod';
+import { registerAgentRoutes } from './agent/routes.js';
 import { registerAppAuthRoutes } from './auth/app-routes.js';
 import { registerPanelAuthRoutes } from './auth/panel-routes.js';
 import { registerAuth } from './auth/plugin.js';
 import { registerCitizenRoutes } from './citizen/routes.js';
 import { registerDevPush, type PushSenders } from './dev/push.js';
-import { registerDevUploads } from './dev/uploads.js';
 import { registerDevWorkOrders } from './dev/work-orders.js';
 import type { EmailSender } from './messaging/email.js';
 import { createLogSmsSender, type SmsSender } from './messaging/sms.js';
@@ -44,7 +44,10 @@ export interface AppOptions {
   push?: PushSenders;
   /** Registra as rotas /dev/*; nunca em produção. */
   devRoutes?: boolean;
-  /** Login sem senha. As rotas /auth/*, /me* e /citizen/* só existem com `auth` e `database`. */
+  /**
+   * Login sem senha. As rotas /auth/*, /me* e /citizen/* só existem com `auth` e `database`;
+   * as /agent/*, só com `auth`.
+   */
   auth?: AuthOptions;
 }
 
@@ -130,12 +133,16 @@ export async function buildApp({
     });
   }
 
+  if (auth) {
+    // Agente: só depende da sessão; sem banco, as rotas respondem 503 database_not_configured.
+    await app.register(async (scope) => {
+      registerAgentRoutes(scope, { db: database, storage });
+    });
+  }
+
   if (devRoutes) {
-    // Uploads e atividades dependem da sessão; sem `auth` só o /dev/push existe.
-    if (auth) {
-      registerDevUploads(app, database, storage);
-      registerDevWorkOrders(app, database, storage);
-    }
+    // As ações simuladas dependem da sessão; sem `auth` só o /dev/push existe.
+    if (auth) registerDevWorkOrders(app, database, storage);
     registerDevPush(app, push);
   }
 

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { createDatabase, geoPoint, schema, withContext } from '@alocidadao/db';
 import { seedDev } from '@alocidadao/db/seed';
-import { ACTIVE_WORK_ORDER_STATUSES, type ConnectionContext } from '@alocidadao/shared';
+import type { ConnectionContext } from '@alocidadao/shared';
 import { DeleteObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { asc, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -247,7 +247,7 @@ describe('work order actions', () => {
     const res = await act(wo[0]!, complete({ photoKeys: [await uploadPhoto()] }));
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ workOrderId: wo[0], status: 'awaiting_review', duplicate: false });
-    const list = (await inject('GET', '/dev/work-orders')).json();
+    const list = (await inject('GET', '/agent/work-orders')).json();
     expect(list.find((w: { id: string }) => w.id === wo[0])).toMatchObject({
       status: 'awaiting_review',
     });
@@ -474,7 +474,11 @@ describe('work order actions', () => {
   });
 
   it('missing token is 401', async () => {
-    const res = await app.inject({ method: 'GET', url: '/dev/work-orders' });
+    const res = await app.inject({
+      method: 'POST',
+      url: `/dev/work-orders/${wo[1]!}/actions`,
+      payload: start(),
+    });
     expect(res.statusCode).toBe(401);
     expect(res.json()).toEqual({ code: 'unauthorized' });
   });
@@ -482,9 +486,10 @@ describe('work order actions', () => {
   it('missing tenant header is 400', async () => {
     const { authorization } = await headers();
     const res = await app.inject({
-      method: 'GET',
-      url: '/dev/work-orders',
+      method: 'POST',
+      url: `/dev/work-orders/${wo[1]!}/actions`,
       headers: { authorization: authorization! },
+      payload: start(),
     });
     expect(res.statusCode).toBe(400);
     expect(res.json()).toEqual({ code: 'tenant_required' });
@@ -493,79 +498,13 @@ describe('work order actions', () => {
   it('answers 503 without a database', async () => {
     const bare = await buildApp({ devRoutes: true, auth: testAuthOptions });
     const res = await bare.inject({
-      method: 'GET',
-      url: '/dev/work-orders',
+      method: 'POST',
+      url: `/dev/work-orders/${wo[1]!}/actions`,
       headers: await headers(),
+      payload: start(),
     });
     expect(res.statusCode).toBe(503);
     expect(res.json()).toEqual({ code: 'database_not_configured' });
     await bare.close();
-  });
-});
-
-describe('GET /dev/work-orders', () => {
-  it('lists only active work orders of the agent teams', async () => {
-    const res = await inject('GET', '/dev/work-orders');
-    expect(res.statusCode).toBe(200);
-    const list = res.json();
-    expect(list.length).toBeGreaterThan(0);
-    expect(
-      list.every((w: { status: string }) => ACTIVE_WORK_ORDER_STATUSES.includes(w.status as never)),
-    ).toBe(true);
-    expect(list.map((w: { id: string }) => w.id)).not.toContain(otherTenantWorkOrder);
-    expect(list.map((w: { id: string }) => w.id)).not.toContain(wo[2]);
-    expect(list[0]).toMatchObject({
-      categoryName: expect.any(String),
-      protocol: expect.any(String),
-      location: { lat: expect.any(Number), lng: expect.any(Number) },
-    });
-    expect(list[0].location.lat).toBeLessThan(-23);
-    expect(list[0].location.lng).toBeLessThan(-46);
-    // Protocolo, descrição e endereço vêm da solicitação mais antiga da ocorrência (a primeira
-    // atividade da demo tem 3 relatos).
-    expect(list.find((w: { id: string }) => w.id === wo[0])).toMatchObject({
-      description: 'Buraco na via em frente ao número 100',
-      categoryName: 'Buraco na via',
-    });
-  });
-
-  it('takes protocol and description from the earliest request of the occurrence', async () => {
-    const id = await freshWorkOrder();
-    const [order] = await owner.db
-      .select({ occurrenceId: schema.workOrders.occurrenceId })
-      .from(schema.workOrders)
-      .where(eq(schema.workOrders.id, id));
-    const [first] = await owner.db
-      .select()
-      .from(requests)
-      .where(eq(requests.occurrenceId, order!.occurrenceId));
-    // Outro cidadão apoia o relato depois: a lista continua mostrando o primeiro.
-    await withContext(owner.db, { tenantId }, (tx) =>
-      tx.insert(requests).values({
-        tenantId,
-        citizenId,
-        categoryId,
-        occurrenceId: order!.occurrenceId,
-        status: 'in_progress',
-        description: 'Relato posterior do mesmo buraco',
-        address: 'Rua de outro relato, 2',
-        location: first!.location,
-        gpsLocation: first!.gpsLocation,
-        createdAt: new Date(first!.createdAt.getTime() + 60_000),
-      }),
-    );
-    const list = (await inject('GET', '/dev/work-orders')).json();
-    const matches = list.filter((w: { id: string }) => w.id === id);
-    expect(matches).toHaveLength(1);
-    expect(matches[0]).toMatchObject({
-      protocol: first!.protocol,
-      description: first!.description,
-      address: first!.address,
-    });
-  });
-
-  it('lists nothing for a person without teams', async () => {
-    const res = await inject('GET', '/dev/work-orders', undefined, outsider);
-    expect(res.json()).toEqual([]);
   });
 });

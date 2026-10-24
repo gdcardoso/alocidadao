@@ -1,16 +1,14 @@
 import { schema, withContext, type Database, type Transaction } from '@alocidadao/db';
 import {
-  ACTIVE_WORK_ORDER_STATUSES,
   PHOTO_MAX_BYTES,
   applyWorkOrderAction,
   workOrderActionInputSchema,
   workOrderActionResultSchema,
-  workOrderSummarySchema,
   type WorkOrderActionInput,
   type WorkOrderActionResult,
   type WorkOrderStatus,
 } from '@alocidadao/shared';
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
@@ -19,16 +17,7 @@ import { requireTenantMember } from '../auth/tenant-context.js';
 import { isUniqueViolation } from '../db-errors.js';
 import type { Storage } from '../storage/s3.js';
 
-const {
-  workOrders,
-  occurrences,
-  requests,
-  categories,
-  teamMembers,
-  statusEvents,
-  clientActions,
-  photos,
-} = schema;
+const { workOrders, teamMembers, statusEvents, clientActions, photos } = schema;
 
 /** Quem chama: a pessoa da sessão e a prefeitura conferida pelo vínculo. */
 interface DevIdentity {
@@ -190,65 +179,6 @@ export function registerDevWorkOrders(
   storage: Storage | undefined,
 ) {
   const app = instance.withTypeProvider<ZodTypeProvider>();
-
-  app.get(
-    '/dev/work-orders',
-    {
-      preHandler: requireAuth(['app']),
-      schema: {
-        response: {
-          200: z.array(workOrderSummarySchema),
-          503: z.object({ code: z.literal('database_not_configured') }),
-        },
-      },
-    },
-    async (request, reply) => {
-      if (!database) return reply.code(503).send({ code: 'database_not_configured' });
-      const identity = await requireTenantMember(database, request, reply, ['field_agent']);
-      if (!identity) return reply;
-
-      const rows = await withContext(database, identity, (tx) => {
-        // Protocolo, descrição e endereço vêm da solicitação mais antiga de cada ocorrência.
-        const firstRequest = tx
-          .selectDistinctOn([requests.occurrenceId], {
-            occurrenceId: requests.occurrenceId,
-            protocol: requests.protocol,
-            description: requests.description,
-            address: requests.address,
-          })
-          .from(requests)
-          .orderBy(requests.occurrenceId, asc(requests.createdAt), asc(requests.id))
-          .as('first_request');
-        return tx
-          .select({
-            id: workOrders.id,
-            status: workOrders.status,
-            protocol: firstRequest.protocol,
-            description: firstRequest.description,
-            categoryName: categories.name,
-            address: firstRequest.address,
-            location: occurrences.location,
-            dueAt: workOrders.dueAt,
-          })
-          .from(workOrders)
-          .innerJoin(
-            teamMembers,
-            and(eq(teamMembers.teamId, workOrders.teamId), eq(teamMembers.userId, identity.userId)),
-          )
-          .innerJoin(occurrences, eq(occurrences.id, workOrders.occurrenceId))
-          .innerJoin(firstRequest, eq(firstRequest.occurrenceId, occurrences.id))
-          .innerJoin(categories, eq(categories.id, occurrences.categoryId))
-          .where(inArray(workOrders.status, [...ACTIVE_WORK_ORDER_STATUSES]))
-          .orderBy(asc(workOrders.createdAt));
-      });
-      // geometry em modo xy: x = longitude, y = latitude.
-      return rows.map(({ location, dueAt, ...row }) => ({
-        ...row,
-        location: { lat: location.y, lng: location.x },
-        dueAt: dueAt?.toISOString() ?? null,
-      }));
-    },
-  );
 
   app.post(
     '/dev/work-orders/:id/actions',

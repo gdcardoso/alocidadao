@@ -114,9 +114,10 @@ interface Effective {
 }
 
 /**
- * Envio na fila (pendente ou enviando) vale sobre o servidor. Envio já feito vale só enquanto
- * a lista do servidor não o mostra: a atividade ainda está num status de onde a ação parte e
- * não mudou depois dela (ex.: o gestor reagendou).
+ * Envio na fila (pendente ou enviando) vale sobre o servidor. Envio já feito (`done`) só cobre
+ * o intervalo até a próxima lista da prefeitura, que tira o item da fila: vale enquanto a
+ * atividade está num status de onde a ação parte. Não se compara a hora do aparelho com a do
+ * servidor (os relógios podem divergir).
  */
 function effectiveStatus(card: AgentWorkOrderCard, items: readonly ActionItem[]): Effective {
   let result: Effective = {
@@ -131,8 +132,7 @@ function effectiveStatus(card: AgentWorkOrderCard, items: readonly ActionItem[])
     } else if (
       item.status === 'done' &&
       !result.queued &&
-      (WORK_ORDER_TRANSITIONS[action].from as readonly WorkOrderStatus[]).includes(result.status) &&
-      Date.parse(occurredAt) >= Date.parse(result.changedAt)
+      (WORK_ORDER_TRANSITIONS[action].from as readonly WorkOrderStatus[]).includes(result.status)
     ) {
       result = { status: ACTION_RESULT[action], changedAt: occurredAt, queued: false };
     }

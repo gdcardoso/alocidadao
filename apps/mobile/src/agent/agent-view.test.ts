@@ -148,13 +148,11 @@ describe('agent list', () => {
       badge: { label: 'Em execução' },
       timeLabel: 'Iniciada há 2 min',
     });
-    // O servidor já mostra a ação (ou o gestor mudou a atividade depois): vale o servidor.
+    // O servidor já mostra a ação: vale o servidor.
     const caughtUp = makeCard({ id: wo(1), status: 'in_execution', statusChangedAt: ago(MIN) });
     expect(list({ cards: [caughtUp], queue: [sent] }).items[0]?.timeLabel).toBe(
       'Iniciada há 1 min',
     );
-    const rescheduled = makeCard({ id: wo(1), assignedAt: ago(MIN), statusChangedAt: ago(MIN) });
-    expect(list({ cards: [rescheduled], queue: [sent] }).items[0]?.badge.label).toBe('Atribuída');
   });
 
   it('conflicting agent action shows the notice and removal deletes its photos', async () => {

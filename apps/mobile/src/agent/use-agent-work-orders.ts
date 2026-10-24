@@ -1,4 +1,3 @@
-import { ApiError } from '@alocidadao/api-client';
 import type { AgentWorkOrderCard, AgentWorkOrderDetail, GeoPoint } from '@alocidadao/shared';
 import NetInfo from '@react-native-community/netinfo';
 import { useFocusEffect } from 'expo-router';
@@ -7,8 +6,12 @@ import { sessionApi } from '../auth/native-session';
 import { useSession } from '../auth/use-session';
 import { getCurrentPoint } from '../lib/location';
 import { isOnline } from '../lib/net-info';
-import { onOutboxSynced, removeOutboxItem } from '../offline/outbox-service';
-import { openAppDatabase } from '../offline/sqlite-outbox-store';
+import {
+  onOutboxSynced,
+  removeOutboxItem,
+  removeSentAgentActions,
+} from '../offline/outbox-service';
+import { openAppDatabase, openOutboxStore } from '../offline/sqlite-outbox-store';
 import { useOutbox } from '../offline/use-outbox-sync';
 import {
   offlineBanner,
@@ -17,6 +20,7 @@ import {
   toAgentList,
   type AgentList,
 } from './agent-view';
+import { refreshAgentWorkOrders } from './agent-refresh';
 import { AgentWorkOrderStore } from './work-order-store';
 
 // Lista do agente (A1): cache no SQLite, atualizado de todas as prefeituras do agente.
@@ -34,32 +38,6 @@ export async function markWorkOrderSeen(id: string, assignedAt: string): Promise
 /** Detalhe guardado no cache (para abrir sem rede). */
 export async function cachedWorkOrderDetail(id: string): Promise<AgentWorkOrderDetail | null> {
   return (await openAgentStore()).detail(id);
-}
-
-const errorCode = (error: unknown) =>
-  error instanceof ApiError ? (error.body as { code?: unknown } | null)?.code : undefined;
-
-/** O detalhe dá 404 quando a atividade foi concluída, cancelada ou saiu da equipe. */
-const isGone = (error: unknown) => error instanceof ApiError && error.status === 404;
-
-/** Sessão recusada (401) ou vínculo encerrado (403 `not_a_member`): relê `me`. */
-const needsMe = (error: unknown) =>
-  error instanceof ApiError &&
-  (error.status === 401 || (error.status === 403 && errorCode(error) === 'not_a_member'));
-
-/** Detalhes baixados ao mesmo tempo. */
-const DETAIL_CONCURRENCY = 4;
-
-async function eachLimited<T>(
-  list: readonly T[],
-  limit: number,
-  run: (item: T) => Promise<void>,
-): Promise<void> {
-  let next = 0;
-  const worker = async () => {
-    while (next < list.length) await run(list[next++]!);
-  };
-  await Promise.all(Array.from({ length: Math.min(limit, list.length) }, worker));
 }
 
 /**
@@ -106,11 +84,9 @@ export function useAgentWorkOrders(): AgentWorkOrdersState {
   const tenantKey = me ? me.agentTenants.map((t) => t.tenantId).join(',') : null;
   const tenantsRef = useRef<string[] | null>(null);
   const refreshMeRef = useRef(refreshMe);
-  // Declarado antes dos efeitos que atualizam: eles já leem as prefeituras novas.
   useEffect(() => {
-    tenantsRef.current = tenantKey === null ? null : tenantKey.split(',').filter(Boolean);
     refreshMeRef.current = refreshMe;
-  }, [tenantKey, refreshMe]);
+  }, [refreshMe]);
 
   const reloadCache = useCallback(async () => {
     const store = await openAgentStore();
@@ -127,12 +103,10 @@ export function useAgentWorkOrders(): AgentWorkOrdersState {
     else if (current.error === 'permission_denied') setHere(null);
   }, []);
 
-  const handleApiError = useCallback((cause: unknown) => {
-    if (needsMe(cause)) void refreshMeRef.current().catch(() => undefined);
-  }, []);
-
   /** Uma atualização: listas de todas as prefeituras, depois os detalhes. */
   const pass = useCallback(async () => {
+    // A posição vem à parte: esperar o GPS não segura o "atualizando".
+    void readHere().catch(() => undefined);
     const tenants = tenantsRef.current;
     // Sem `me` (app aberto sem rede) não se sabe as prefeituras: fica o cache.
     if (tenants === null || !(await isOnline())) {
@@ -140,32 +114,16 @@ export function useAgentWorkOrders(): AgentWorkOrdersState {
       return;
     }
     setRefreshing(true);
-    const location = readHere().catch(() => undefined);
     try {
-      const store = await openAgentStore();
-      let failed = false;
-      const fetched: AgentWorkOrderCard[] = [];
-      for (const tenantId of tenants) {
-        try {
-          const list = await sessionApi.agentWorkOrders(tenantId);
-          await store.replaceTenant(tenantId, list);
-          fetched.push(...list);
-        } catch (cause) {
-          failed = true;
-          handleApiError(cause);
-          console.warn('Falha ao atualizar as atividades', tenantId, cause);
-        }
-      }
-      await store.keepTenants(tenants);
-      await reloadCache();
-      await eachLimited(fetched, DETAIL_CONCURRENCY, async (card) => {
-        try {
-          await store.saveDetail(await sessionApi.agentWorkOrder(card.tenantId, card.id));
-        } catch (cause) {
-          // Concluída ou cancelada no meio do caminho: sai do cache (não é erro).
-          if (isGone(cause)) await store.remove(card.id);
-          else handleApiError(cause);
-        }
+      const { failed } = await refreshAgentWorkOrders({
+        store: await openAgentStore(),
+        tenants,
+        fetchList: (tenantId) => sessionApi.agentWorkOrders(tenantId),
+        fetchDetail: (tenantId, id) => sessionApi.agentWorkOrder(tenantId, id),
+        listOutbox: async () => (await openOutboxStore()).list(),
+        removeSent: removeSentAgentActions,
+        refreshMe: () => refreshMeRef.current(),
+        onListsSaved: reloadCache,
       });
       await reloadCache();
       setError(failed);
@@ -174,11 +132,10 @@ export function useAgentWorkOrders(): AgentWorkOrdersState {
       console.warn('Falha ao atualizar as atividades', cause);
       setError(true);
     } finally {
-      await location;
       setRefreshing(false);
       setAttempted(true);
     }
-  }, [handleApiError, readHere, reloadCache]);
+  }, [readHere, reloadCache]);
 
   // Uma atualização por vez; um pedido durante a atual roda de novo no fim (ex.: `me` mudou).
   const running = useRef<Promise<void> | null>(null);
@@ -200,16 +157,11 @@ export function useAgentWorkOrders(): AgentWorkOrdersState {
     return running.current;
   }, [pass]);
 
-  // Posição do aparelho para a distância (relida a cada atualização).
+  // Ao abrir e quando as prefeituras do agente mudam (ex.: vínculo encerrado): atualiza. Cada
+  // atualização também relê a posição do aparelho (mesmo sem rede).
   useEffect(() => {
-    void (async () => {
-      await readHere().catch(() => undefined);
-    })();
-  }, [readHere]);
-
-  // Prefeituras do agente conhecidas ou mudadas (ex.: vínculo encerrado): atualiza.
-  useEffect(() => {
-    if (tenantKey !== null) void refresh();
+    tenantsRef.current = tenantKey === null ? null : tenantKey.split(',').filter(Boolean);
+    void refresh();
   }, [tenantKey, refresh]);
 
   // Ao abrir e ao voltar para a tela (ex.: depois do detalhe), relê o cache e as atividades

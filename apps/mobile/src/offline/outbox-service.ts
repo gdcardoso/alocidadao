@@ -159,6 +159,23 @@ export function submitCreateRequest(
   });
 }
 
+/**
+ * Tira da fila as ações do agente já enviadas que a lista do servidor já mostra (a lista do
+ * agente só usa a ação enviada até a próxima lista da prefeitura chegar).
+ */
+export function removeSentAgentActions(ids: readonly string[]): Promise<void> {
+  return exclusive(async () => {
+    const store = await openOutboxStore();
+    const wanted = new Set(ids);
+    for (const item of await store.list()) {
+      if (wanted.has(item.id) && item.kind === 'work_order_action' && item.status === 'done') {
+        await store.remove(item.id);
+      }
+    }
+    await refreshOutbox();
+  });
+}
+
 /** Tira o item da fila (e as fotos guardadas dele). */
 export function removeOutboxItem(id: string): Promise<void> {
   return exclusive(async () => {

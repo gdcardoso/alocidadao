@@ -22,7 +22,7 @@ import { z } from 'zod';
 import { asActiveUser, enterTenant, INACTIVE } from '../auth/active-user.js';
 import { requireAuth } from '../auth/plugin.js';
 import { isUniqueViolation, violatedConstraint } from '../db-errors.js';
-import type { Storage } from '../storage/s3.js';
+import { isOwnRequestPhotoKey, type Storage } from '../storage/s3.js';
 import type { CitizenDeps } from './routes.js';
 
 const { categories, occurrences, requests, photos, statusEvents, clientActions } = schema;
@@ -77,10 +77,15 @@ async function findStoredRequest(
   return { kind: 'duplicate', result: { ...parsed, duplicate: true } };
 }
 
-/** As fotos precisam estar no prefixo do próprio cidadão e já enviadas ao armazenamento. */
-export async function photosExist(storage: Storage, userId: string, keys: string[]) {
+/** As fotos precisam ter o selo do próprio cidadão e já estar no armazenamento. */
+export async function photosExist(
+  storage: Storage,
+  secret: string,
+  userId: string,
+  keys: string[],
+) {
   for (const key of keys) {
-    if (!key.startsWith(`requests/${userId}/`)) return false;
+    if (!isOwnRequestPhotoKey(secret, userId, key)) return false;
     if (!(await storage.head(key))) return false;
   }
   return true;
@@ -99,7 +104,7 @@ async function enterTenantAt(
 
 async function createRequest(
   tx: Transaction,
-  storage: Storage | undefined,
+  { storage, secret }: Pick<CitizenDeps, 'storage' | 'secret'>,
   userId: string,
   input: CreateRequestInput,
 ): Promise<Outcome> {
@@ -126,7 +131,8 @@ async function createRequest(
   if (!category) return { kind: 'category_unavailable' };
 
   if (!storage) return { kind: 'storage_not_configured' };
-  if (!(await photosExist(storage, userId, input.photoKeys))) return { kind: 'photo_missing' };
+  if (!(await photosExist(storage, secret, userId, input.photoKeys)))
+    return { kind: 'photo_missing' };
 
   let occurrenceId: string;
   let status: RequestStatus;
@@ -238,7 +244,7 @@ async function afterUniqueViolation(
 /** Criação de solicitação pelo cidadão, online ou vinda da fila offline. */
 export function registerCreateRequestRoutes(
   instance: FastifyInstance,
-  { db, storage }: CitizenDeps,
+  { db, storage, secret }: CitizenDeps,
 ) {
   const app = instance.withTypeProvider<ZodTypeProvider>();
 
@@ -264,7 +270,9 @@ export function registerCreateRequestRoutes(
 
       let outcome: Outcome | typeof INACTIVE;
       try {
-        outcome = await asActiveUser(db, userId, (tx) => createRequest(tx, storage, userId, input));
+        outcome = await asActiveUser(db, userId, (tx) =>
+          createRequest(tx, { storage, secret }, userId, input),
+        );
       } catch (error) {
         if (!isUniqueViolation(error)) throw error;
         outcome = await afterUniqueViolation(db, userId, input, error);

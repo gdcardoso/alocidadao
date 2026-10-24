@@ -354,7 +354,7 @@ async function moveOccurrence(
 
 async function runAction(
   tx: Transaction,
-  storage: Storage | undefined,
+  { storage, secret }: Pick<CitizenDeps, 'storage' | 'secret'>,
   tenantId: string,
   userId: string,
   requestId: string,
@@ -369,7 +369,7 @@ async function runAction(
   const comment = 'comment' in body ? body.comment : null;
   if (photoKeys.length > 0) {
     if (!storage) return { kind: 'storage_not_configured' };
-    if (!(await photosExist(storage, userId, photoKeys))) return { kind: 'photo_missing' };
+    if (!(await photosExist(storage, secret, userId, photoKeys))) return { kind: 'photo_missing' };
   }
 
   const { occurrence, linked } = await lockOccurrence(tx, requestId);
@@ -461,8 +461,7 @@ type PerformOutcome = ActionOutcome | typeof NOT_FOUND | typeof INACTIVE;
 
 /** Roda a ação; numa violação de unicidade, relê o que o envio concorrente gravou. */
 async function performAction(
-  db: Database,
-  storage: Storage | undefined,
+  { db, storage, secret }: CitizenDeps,
   userId: string,
   requestId: string,
   action: CitizenAction,
@@ -470,7 +469,7 @@ async function performAction(
 ): Promise<PerformOutcome> {
   try {
     return await withOwnRequest(db, userId, requestId, (tx, tenantId) =>
-      runAction(tx, storage, tenantId, userId, requestId, action, body),
+      runAction(tx, { storage, secret }, tenantId, userId, requestId, action, body),
     );
   } catch (error) {
     if (!isUniqueViolation(error)) throw error;
@@ -504,7 +503,8 @@ async function respond(reply: FastifyReply, pending: Promise<PerformOutcome>) {
 }
 
 /** Lista, detalhe e ações do cidadão sobre as próprias solicitações. */
-export function registerRequestRoutes(instance: FastifyInstance, { db, storage }: CitizenDeps) {
+export function registerRequestRoutes(instance: FastifyInstance, deps: CitizenDeps) {
+  const { db, storage } = deps;
   const app = instance.withTypeProvider<ZodTypeProvider>();
 
   app.get(
@@ -572,7 +572,7 @@ export function registerRequestRoutes(instance: FastifyInstance, { db, storage }
     (request, reply) =>
       respond(
         reply,
-        performAction(db, storage, request.auth!.userId, request.params.id, 'cancel', request.body),
+        performAction(deps, request.auth!.userId, request.params.id, 'cancel', request.body),
       ),
   );
   app.post(
@@ -584,14 +584,7 @@ export function registerRequestRoutes(instance: FastifyInstance, { db, storage }
     (request, reply) =>
       respond(
         reply,
-        performAction(
-          db,
-          storage,
-          request.auth!.userId,
-          request.params.id,
-          'confirm',
-          request.body,
-        ),
+        performAction(deps, request.auth!.userId, request.params.id, 'confirm', request.body),
       ),
   );
   app.post(
@@ -600,14 +593,7 @@ export function registerRequestRoutes(instance: FastifyInstance, { db, storage }
     (request, reply) =>
       respond(
         reply,
-        performAction(
-          db,
-          storage,
-          request.auth!.userId,
-          request.params.id,
-          'contest',
-          request.body,
-        ),
+        performAction(deps, request.auth!.userId, request.params.id, 'contest', request.body),
       ),
   );
 }

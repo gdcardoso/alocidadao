@@ -16,7 +16,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp } from '../app.js';
 import { createStorage, newRequestPhotoKey } from '../storage/s3.js';
 import { testStorageConfig } from '../storage/test-fixtures.js';
-import { appAuthHeader, testAuthOptions } from '../test/session.js';
+import { appAuthHeader, TEST_AUTH_SECRET, testAuthOptions } from '../test/session.js';
 import { API_TEST_APP_URL, API_TEST_OWNER_URL } from '../test/urls.js';
 
 const {
@@ -70,7 +70,7 @@ async function createCitizen(): Promise<Citizen> {
 }
 
 async function uploadPhoto(userId: string) {
-  const key = newRequestPhotoKey(userId);
+  const key = newRequestPhotoKey(TEST_AUTH_SECRET, userId);
   const { url, headers: putHeaders } = await storage.presignUpload(key);
   const res = await fetch(url, { method: 'PUT', headers: putHeaders, body: new Uint8Array(500) });
   if (!res.ok) throw new Error(`Falha ao enviar a foto de teste: ${res.status}`);
@@ -139,7 +139,7 @@ async function seedOccurrence(
         .returning({ id: requests.id });
       const requestId = request!.id;
       requestIds.push(requestId);
-      const key = newRequestPhotoKey(member.citizenId);
+      const key = newRequestPhotoKey(TEST_AUTH_SECRET, member.citizenId);
       photoKeys.push(key);
       await tx.insert(photos).values({
         tenantId: tenant.tenantId,

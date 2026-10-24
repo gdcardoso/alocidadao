@@ -13,7 +13,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp } from '../app.js';
 import { createStorage, newRequestPhotoKey } from '../storage/s3.js';
 import { testStorageConfig } from '../storage/test-fixtures.js';
-import { appAuthHeader, testAuthOptions } from '../test/session.js';
+import { appAuthHeader, TEST_AUTH_SECRET, testAuthOptions } from '../test/session.js';
 import { API_TEST_APP_URL, API_TEST_OWNER_URL } from '../test/urls.js';
 
 const {
@@ -61,7 +61,7 @@ async function createCitizen() {
 
 /** Envia uma foto de teste ao MinIO no prefixo do usuário e devolve a chave. */
 async function uploadPhoto(userId = citizenId) {
-  const key = newRequestPhotoKey(userId);
+  const key = newRequestPhotoKey(TEST_AUTH_SECRET, userId);
   const { url, headers: putHeaders } = await storage.presignUpload(key);
   const res = await fetch(url, { method: 'PUT', headers: putHeaders, body: new Uint8Array(500) });
   if (!res.ok) throw new Error(`Falha ao enviar a foto de teste: ${res.status}`);
@@ -359,7 +359,9 @@ describe('POST /citizen/requests', () => {
   });
 
   it('photo key not uploaded is 422 photo_missing', async () => {
-    const res = await post(await body({ photoKeys: [newRequestPhotoKey(citizenId)] }));
+    const res = await post(
+      await body({ photoKeys: [newRequestPhotoKey(TEST_AUTH_SECRET, citizenId)] }),
+    );
     expect(res.statusCode).toBe(422);
     expect(res.json()).toEqual({ code: 'photo_missing' });
   });

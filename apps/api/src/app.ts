@@ -129,7 +129,7 @@ export async function buildApp({
     });
     // Cidadão: escopo próprio, sem o limite por IP do /auth/*.
     await app.register(async (scope) => {
-      registerCitizenRoutes(scope, { db: database, storage });
+      registerCitizenRoutes(scope, { db: database, storage, secret: auth.secret });
     });
   }
 

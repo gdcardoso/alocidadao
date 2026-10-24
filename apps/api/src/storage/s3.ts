@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import {
   GetObjectCommand,
   HeadObjectCommand,
@@ -79,7 +79,27 @@ export function newPhotoKey(tenantId: string, now: Date = new Date()): string {
   return `${tenantId}/uploads/${yyyy}/${mm}/${randomUUID()}.jpg`;
 }
 
-/** Chave da foto de uma solicitação do cidadão: `requests/<userId>/<yyyy>/<uuid>.jpg`. */
-export function newRequestPhotoKey(userId: string, now: Date = new Date()): string {
-  return `requests/${userId}/${now.getUTCFullYear()}/${randomUUID()}.jpg`;
+/** Selo da chave: HMAC de `userId|uuid` com o segredo da API, em 16 dígitos hexadecimais. */
+function requestPhotoSeal(secret: string, userId: string, id: string): string {
+  return createHmac('sha256', secret).update(`${userId}|${id}`).digest('hex').slice(0, 16);
+}
+
+const REQUEST_PHOTO_KEY = /^requests\/\d{4}\/([0-9a-f-]{36})-([0-9a-f]{16})\.jpg$/;
+
+/**
+ * Chave da foto de uma solicitação do cidadão: `requests/<yyyy>/<uuid>-<selo>.jpg`. O caminho
+ * não traz o id do cidadão (a URL assinada chega ao agente); o selo prova de quem é a foto.
+ */
+export function newRequestPhotoKey(secret: string, userId: string, now: Date = new Date()): string {
+  const id = randomUUID();
+  return `requests/${now.getUTCFullYear()}/${id}-${requestPhotoSeal(secret, userId, id)}.jpg`;
+}
+
+/** Diz se a chave foi gerada por newRequestPhotoKey para este cidadão. */
+export function isOwnRequestPhotoKey(secret: string, userId: string, key: string): boolean {
+  const match = REQUEST_PHOTO_KEY.exec(key);
+  if (!match) return false;
+  const expected = Buffer.from(requestPhotoSeal(secret, userId, match[1]!));
+  const given = Buffer.from(match[2]!);
+  return given.length === expected.length && timingSafeEqual(given, expected);
 }

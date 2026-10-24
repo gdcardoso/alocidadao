@@ -9,9 +9,9 @@ import {
 import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp } from '../app.js';
-import { createStorage, newPhotoKey } from '../storage/s3.js';
+import { createStorage, newPhotoKey, newRequestPhotoKey } from '../storage/s3.js';
 import { testStorageConfig } from '../storage/test-fixtures.js';
-import { appAuthHeader, testAuthOptions } from '../test/session.js';
+import { appAuthHeader, TEST_AUTH_SECRET, testAuthOptions } from '../test/session.js';
 import { API_TEST_APP_URL, API_TEST_OWNER_URL } from '../test/urls.js';
 
 const {
@@ -447,9 +447,10 @@ describe('GET /agent/work-orders/:id', () => {
       ],
     });
     const [first, second, cancelled] = order.created;
-    const reportKey = newPhotoKey(tenantId);
-    const contestKey = newPhotoKey(tenantId);
-    const cancelledKey = newPhotoKey(tenantId);
+    // Chaves como o app do cidadão as recebe de /citizen/uploads.
+    const reportKey = newRequestPhotoKey(TEST_AUTH_SECRET, citizenIds[0]!);
+    const contestKey = newRequestPhotoKey(TEST_AUTH_SECRET, citizenIds[1]!);
+    const cancelledKey = newRequestPhotoKey(TEST_AUTH_SECRET, citizenIds[2]!);
     const completionKey = newPhotoKey(tenantId);
     const base = Date.now() - 30 * 60_000;
     await owner.db.insert(photos).values([
@@ -511,6 +512,8 @@ describe('GET /agent/work-orders/:id', () => {
       expect(body).not.toContain(citizen.phone);
       expect(body).not.toContain(citizen.email);
     }
+    // Nem o id do cidadão, nem mesmo dentro das URLs assinadas das fotos.
+    for (const citizenId of citizenIds) expect(body).not.toContain(citizenId);
   });
 
   it('detail shows rework with reasons, message and author', async () => {

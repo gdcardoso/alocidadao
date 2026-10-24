@@ -11,7 +11,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp } from '../app.js';
 import { startSession } from '../auth/session.js';
-import { createStorage } from '../storage/s3.js';
+import { createStorage, isOwnRequestPhotoKey } from '../storage/s3.js';
 import { testStorageConfig } from '../storage/test-fixtures.js';
 import { appAuthHeader, TEST_AUTH_SECRET, testAuthOptions } from '../test/session.js';
 import { API_TEST_APP_URL, API_TEST_OWNER_URL } from '../test/urls.js';
@@ -234,12 +234,14 @@ describe('GET /citizen/similar', () => {
 });
 
 describe('POST /citizen/uploads', () => {
-  it("uploads returns a key under the user's prefix", async () => {
+  it('uploads returns a sealed key without the user id', async () => {
     const res = await app.inject({ method: 'POST', url: '/citizen/uploads', headers });
     expect(res.statusCode).toBe(200);
     const body = res.json<UploadResponse>();
     const year = new Date().getUTCFullYear();
-    expect(body.key).toMatch(new RegExp(`^requests/${citizenId}/${year}/[0-9a-f-]{36}\\.jpg$`));
+    expect(body.key).toMatch(new RegExp(`^requests/${year}/[0-9a-f-]{36}-[0-9a-f]{16}\\.jpg$`));
+    expect(body.key).not.toContain(citizenId);
+    expect(isOwnRequestPhotoKey(TEST_AUTH_SECRET, citizenId, body.key)).toBe(true);
     expect(body.url).toContain(body.key);
     expect(new URL(body.url).searchParams.get('X-Amz-Expires')).toBe('600');
     expect(body.headers).toEqual({ 'Content-Type': 'image/jpeg' });

@@ -58,15 +58,14 @@ async function lastEventTo(tx: Transaction, workOrderId: string, status: string)
  * restringe mais (por exemplo, uma atividade só). Roda na prefeitura do contexto.
  */
 function selectCards(tx: Transaction, userId: string, extra?: SQL) {
-  // Protocolo e endereço vêm da solicitação mais antiga da ocorrência.
+  // Protocolo e endereço vêm da solicitação mais antiga da ocorrência (LATERAL: uma busca
+  // por atividade, pelo índice da ocorrência, em vez de varrer as solicitações da prefeitura).
   const firstRequest = tx
-    .selectDistinctOn([requests.occurrenceId], {
-      occurrenceId: requests.occurrenceId,
-      protocol: requests.protocol,
-      address: requests.address,
-    })
+    .select({ protocol: requests.protocol, address: requests.address })
     .from(requests)
-    .orderBy(requests.occurrenceId, asc(requests.createdAt), asc(requests.id))
+    .where(eq(requests.occurrenceId, workOrders.occurrenceId))
+    .orderBy(asc(requests.createdAt), asc(requests.id))
+    .limit(1)
     .as('first_request');
 
   return tx
@@ -108,7 +107,7 @@ function selectCards(tx: Transaction, userId: string, extra?: SQL) {
     .innerJoin(teams, eq(teams.id, workOrders.teamId))
     .innerJoin(departments, eq(departments.id, teams.departmentId))
     .innerJoin(occurrences, eq(occurrences.id, workOrders.occurrenceId))
-    .innerJoin(firstRequest, eq(firstRequest.occurrenceId, occurrences.id))
+    .innerJoinLateral(firstRequest, sql`true`)
     .innerJoin(categories, eq(categories.id, occurrences.categoryId))
     .where(and(inArray(workOrders.status, [...ACTIVE_WORK_ORDER_STATUSES]), extra))
     .orderBy(asc(workOrders.createdAt), asc(workOrders.id));

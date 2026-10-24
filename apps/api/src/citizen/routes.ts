@@ -14,6 +14,8 @@ export interface CitizenDeps {
   db: Database;
   /** Sem ele, o envio de foto responde 503 storage_not_configured. */
   storage?: Storage;
+  /** Segredo da API (AUTH_SECRET): sela as chaves das fotos do cidadão. */
+  secret: string;
 }
 
 /**
@@ -22,7 +24,7 @@ export interface CitizenDeps {
  */
 export function registerCitizenRoutes(instance: FastifyInstance, deps: CitizenDeps) {
   const app = instance.withTypeProvider<ZodTypeProvider>();
-  const { db, storage } = deps;
+  const { db, storage, secret } = deps;
 
   registerLocateRoutes(instance, deps);
   registerCreateRequestRoutes(instance, deps);
@@ -41,8 +43,8 @@ export function registerCitizenRoutes(instance: FastifyInstance, deps: CitizenDe
       const active = await asActiveUser(db, userId, async () => true);
       if (active === INACTIVE) return reply.code(401).send({ code: 'unauthorized' });
       if (!storage) return reply.code(503).send({ code: 'storage_not_configured' });
-      // A foto fica no prefixo do cidadão, que identifica de quem ela é.
-      const key = newRequestPhotoKey(userId);
+      // O selo da chave identifica de quem é a foto, sem pôr o id do cidadão no caminho.
+      const key = newRequestPhotoKey(secret, userId);
       const { url, headers } = await storage.presignUpload(key);
       return { key, url, headers };
     },

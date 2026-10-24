@@ -362,6 +362,7 @@ Decididas neste plano:
   - mapa com os pinos e o cartão ao tocar.
 
   Comparar com `docs/superpowers/specs/telas-agente/A1-minhas-atividades.png`.
+
 - [ ] **Step 2:** `pnpm --filter @alocidadao/mobile test`, `pnpm typecheck`, `pnpm lint` → PASS.
 - [ ] **Step 3:** Commit: `A1: minhas atividades em lista e mapa`.
 
@@ -432,6 +433,7 @@ Decididas neste plano:
   - reagendar uma impedida e ver o selo "Nova" de novo.
 
   Comparar com `A3-concluir-atendimento.png` e `A4-nao-consigo-resolver.png`.
+
 - [ ] **Step 4:** `pnpm --filter @alocidadao/mobile test`, `pnpm typecheck`, `pnpm lint` → PASS.
 - [ ] **Step 5:** Commit: `A3 e A4: concluir atendimento e relatar impedimento`.
 
@@ -455,4 +457,5 @@ Decididas neste plano:
   - sair → entrar de novo: volta no último modo.
 
   Registrar o resultado neste plano, numa seção "Resultado no emulador" no fim, com data e o que falhou.
+
 - [ ] **Step 5:** `pnpm format:check` → PASS. Commit: `Design system e pendências após o app do agente`.

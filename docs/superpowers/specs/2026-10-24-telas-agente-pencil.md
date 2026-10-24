@@ -10,13 +10,13 @@ Capturas (exportadas do Pencil, 2x): `docs/superpowers/specs/telas-agente/` — 
 
 Telas encontradas: 5.
 
-| Tela | Frame | Id | Altura |
-| --- | --- | --- | --- |
-| A1 | Agente · A1 Minhas atividades | `IkMPH` | 924 |
-| A2 | Agente · A2 Detalhe da atividade | `LYt2q` | 1174 |
-| A5 | Agente · A5 Ajuste pedido pelo gestor | `m8Jtg` | 1174 |
-| A3 | Agente · A3 Concluir atendimento | `AzS84` | 718 |
-| A4 | Agente · A4 Não consigo resolver | `HsFq7` | 982 |
+| Tela | Frame                                 | Id      | Altura |
+| ---- | ------------------------------------- | ------- | ------ |
+| A1   | Agente · A1 Minhas atividades         | `IkMPH` | 924    |
+| A2   | Agente · A2 Detalhe da atividade      | `LYt2q` | 1174   |
+| A5   | Agente · A5 Ajuste pedido pelo gestor | `m8Jtg` | 1174   |
+| A3   | Agente · A3 Concluir atendimento      | `AzS84` | 718    |
+| A4   | Agente · A4 Não consigo resolver      | `HsFq7` | 982    |
 
 Não há variantes, estados nem painéis do agente além desses cinco quadros: **não existe modo Mapa desenhado**, nem Perfil do agente, troca de modo, lista vazia, diálogos ou estado "Em execução". Ver seção 5.
 
@@ -156,14 +156,14 @@ Não usados no agente: Timeline/Andamento, Relato da equipe, Antes e depois, Avi
 
 ## 3. Status da atividade mostrados
 
-| Status (6.2) | Onde aparece | Selo |
-| --- | --- | --- |
-| Atribuída | A1 | fundo `border`, texto `text-secondary` (igual "Aberta" do cidadão) |
-| Ajuste pedido | A1, A5 | fundo `warning-soft`, texto `warning` |
-| Em execução | — | não desenhado |
-| Aguardando revisão | — | não desenhado (some da lista? fica com selo?) |
-| Impedida | — | não desenhado |
-| Concluída / Cancelada | — | não desenhado (presume-se que saem da lista) |
+| Status (6.2)          | Onde aparece | Selo                                                               |
+| --------------------- | ------------ | ------------------------------------------------------------------ |
+| Atribuída             | A1           | fundo `border`, texto `text-secondary` (igual "Aberta" do cidadão) |
+| Ajuste pedido         | A1, A5       | fundo `warning-soft`, texto `warning`                              |
+| Em execução           | —            | não desenhado                                                      |
+| Aguardando revisão    | —            | não desenhado (some da lista? fica com selo?)                      |
+| Impedida              | —            | não desenhado                                                      |
+| Concluída / Cancelada | —            | não desenhado (presume-se que saem da lista)                       |
 
 "Nova" não é status: é um marcador de não vista sobre "Atribuída".
 

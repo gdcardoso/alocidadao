@@ -75,8 +75,8 @@ export function clearDraftPhotos(): void {
 }
 
 /**
- * Apaga o que a pessoa deixou no aparelho ao sair: fila, cache da última prefeitura e fotos
- * guardadas. O id da instalação (SecureStore) fica. Roda na vez da fila
+ * Apaga o que a pessoa deixou no aparelho ao sair: fila, cache da última prefeitura, cache das
+ * atividades do agente e fotos guardadas. O id da instalação (SecureStore) fica. Roda na vez da fila
  * (depois da passada em andamento) e esvazia também a fila que as telas mostram.
  */
 export function clearOfflineData(): Promise<void> {
@@ -91,6 +91,9 @@ async function wipeOfflineData(): Promise<void> {
   await db.withTransactionAsync(async () => {
     await db.runAsync('DELETE FROM outbox');
     await db.runAsync('DELETE FROM place_cache');
+    // Cache das atividades do agente e as que ele já abriu (tabelas da versão 3).
+    await db.runAsync('DELETE FROM agent_work_orders');
+    await db.runAsync('DELETE FROM agent_seen');
   });
   const photos = outboxRoot();
   if (photos.exists) photos.delete();

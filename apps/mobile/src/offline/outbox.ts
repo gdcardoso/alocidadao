@@ -47,6 +47,15 @@ export interface OutboxItem {
 
 export type WorkOrderAction = WorkOrderActionInput['action'];
 
+/**
+ * O que o aviso de envio não aplicado mostra (`{Categoria} · {endereço}`) quando a atividade
+ * já saiu do cache. Não vai para a API.
+ */
+export interface WorkOrderActionDisplay {
+  categoryName: string;
+  address: string | null;
+}
+
 export interface WorkOrderActionPayload {
   /** Prefeitura da atividade (`x-tenant-id` do envio). */
   tenantId: string;
@@ -58,6 +67,8 @@ export interface WorkOrderActionPayload {
   impedimentReason: ImpedimentReason | null;
   /** Posição do aparelho no momento da ação; `null` quando não foi possível ler. */
   location: DeviceLocation | null;
+  /** Ausente nos itens gravados antes da versão 3 do banco. */
+  display?: WorkOrderActionDisplay | null;
 }
 
 /** Máximo de fotos de cada ação do agente. */
@@ -448,6 +459,8 @@ export interface EnqueueWorkOrderActionInput {
   impedimentReason?: ImpedimentReason;
   location?: DeviceLocation | null;
   photoUris?: string[];
+  /** Categoria e endereço da atividade, para o aviso se o envio não for aplicado. */
+  display?: WorkOrderActionDisplay | null;
   online: boolean;
   userId: string;
 }
@@ -474,6 +487,7 @@ export async function enqueueWorkOrderAction(
     note: input.note ?? null,
     impedimentReason: input.impedimentReason ?? null,
     location: input.location ?? null,
+    display: input.display ?? null,
   };
   return enqueue(
     store,

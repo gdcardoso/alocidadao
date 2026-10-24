@@ -78,6 +78,27 @@ export function formatAgo(since: string, now: Date = new Date()): string {
   return `há ${days} ${days === 1 ? 'dia' : 'dias'}`;
 }
 
+/**
+ * Tempo desde `since` para os cartões do agente: `'agora'` (menos de 1 min), `'há N min'`,
+ * `'há N h'` ou `'há N dias'` (`'há 1 dia'`), em tempo corrido.
+ */
+export function formatAgoPrecise(since: string, now: Date = new Date()): string {
+  const minutes = Math.floor((now.getTime() - new Date(since).getTime()) / 60_000);
+  if (minutes < 1) return 'agora';
+  if (minutes < 60) return `há ${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `há ${hours} h`;
+  const days = Math.floor(hours / 24);
+  return `há ${days} ${days === 1 ? 'dia' : 'dias'}`;
+}
+
+/** `'350 m'` abaixo de 1 km; `'1,2 km'` com uma casa e vírgula. */
+export function formatDistance(meters: number): string {
+  const rounded = Math.round(meters);
+  if (rounded < 1000) return `${rounded} m`;
+  return `${(meters / 1000).toFixed(1).replace('.', ',')} km`;
+}
+
 /** `'Aberta há 3 dias'`, `'Em atendimento há 1 dia'` ou `'Aberta hoje'`, em dias de calendário. */
 export function formatElapsed(
   status: RequestStatus,

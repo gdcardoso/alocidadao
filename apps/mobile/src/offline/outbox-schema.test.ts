@@ -1,5 +1,5 @@
-import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it, vi } from 'vitest';
+import { nodeDb, type NodeDb } from './node-db';
 import { processOutbox, type OutboxItem } from './outbox';
 import {
   OUTBOX_SCHEMA_VERSION,
@@ -12,38 +12,6 @@ import {
   type OutboxRow,
 } from './outbox-schema';
 import { FakeTransport, actionOf, fakeConnection, makeItem, makeRequestItem } from './test-helpers';
-
-type Bind = string | number | null;
-
-/** Adaptador do SQLite do Node com a parte da API do expo-sqlite que a migração usa. */
-function nodeDb(): AppDb & { raw: DatabaseSync } {
-  const raw = new DatabaseSync(':memory:');
-  return {
-    raw,
-    async execAsync(sql) {
-      raw.exec(sql);
-    },
-    async getAllAsync<T>(sql: string, params: Bind[] = []) {
-      return raw.prepare(sql).all(...params) as T[];
-    },
-    async getFirstAsync<T>(sql: string, params: Bind[] = []) {
-      return (raw.prepare(sql).get(...params) as T | undefined) ?? null;
-    },
-    async runAsync(sql, params = []) {
-      raw.prepare(sql).run(...params);
-    },
-    async withTransactionAsync(fn) {
-      raw.exec('BEGIN');
-      try {
-        await fn();
-        raw.exec('COMMIT');
-      } catch (error) {
-        raw.exec('ROLLBACK');
-        throw error;
-      }
-    },
-  };
-}
 
 /** Tabela da fila antes do `user_version` (só ações do agente). */
 const V0_TABLE = `
@@ -65,7 +33,7 @@ const V0_TABLE = `
   CREATE INDEX outbox_due ON outbox (status, next_attempt_at, created_at);
 `;
 
-const userVersion = (db: AppDb & { raw: DatabaseSync }) =>
+const userVersion = (db: NodeDb) =>
   (db.raw.prepare('PRAGMA user_version').get() as { user_version: number }).user_version;
 
 const listItems = async (db: AppDb) =>
@@ -251,7 +219,7 @@ describe('outbox schema version 2', () => {
 
     await migrateOutbox(db, async () => 'owner-1');
 
-    expect(userVersion(db)).toBe(2);
+    expect(userVersion(db)).toBe(OUTBOX_SCHEMA_VERSION);
     expect(await listItems(db)).toEqual([
       {
         ...pending,
@@ -281,6 +249,50 @@ describe('outbox schema version 2', () => {
     await insertRow(db, item);
     await migrateOutbox(db, async () => null);
     expect(await listItems(db)).toEqual([item]);
+  });
+  it('a work order item with an unreadable payload becomes rejected instead of blocking the open', async () => {
+    const db = nodeDb();
+    db.raw.exec(V1_TABLE);
+    const broken = v1Action({ id: 'a', createdAt: 1 });
+    const nullPayload = v1Action({ id: 'b', createdAt: 2 });
+    const notObject = v1Action({ id: 'c', createdAt: 3 });
+    for (const item of [broken, nullPayload, notObject]) await insertRow(db, item);
+    db.raw.prepare("UPDATE outbox SET payload = '{oops' WHERE id = 'a'").run();
+    db.raw.prepare("UPDATE outbox SET payload = 'null' WHERE id = 'b'").run();
+    db.raw.prepare("UPDATE outbox SET payload = '42' WHERE id = 'c'").run();
+
+    await migrateOutbox(db, async () => null);
+
+    expect(userVersion(db)).toBe(OUTBOX_SCHEMA_VERSION);
+    const rows = db.raw
+      .prepare('SELECT id, status, rejection, last_error FROM outbox ORDER BY created_at')
+      .all();
+    expect(rows).toEqual(
+      ['a', 'b', 'c'].map((id) => ({
+        id,
+        status: 'rejected',
+        rejection: JSON.stringify({ code: 'missing_tenant' }),
+        last_error: 'missing_tenant',
+      })),
+    );
+  });
+});
+
+describe('outbox schema version 3', () => {
+  it('creates the agent work order cache and seen tables', async () => {
+    const db = nodeDb();
+    db.raw.exec(V1_TABLE);
+    await migrateOutbox(db, async () => null);
+    expect(userVersion(db)).toBe(3);
+    const tables = db.raw
+      .prepare(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'agent_%' ORDER BY name",
+      )
+      .all();
+    expect(tables).toEqual([{ name: 'agent_seen' }, { name: 'agent_work_orders' }]);
+    // Rodar de novo não faz nada.
+    await migrateOutbox(db, async () => null);
+    expect(userVersion(db)).toBe(3);
   });
 });
 

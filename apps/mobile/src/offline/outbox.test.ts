@@ -333,6 +333,27 @@ describe('enqueueWorkOrderAction', () => {
     expect(await store.get('uuid-1')).toEqual(item);
   });
 
+  it('keeps the category and address for the notice, without sending them', async () => {
+    const item = await enqueueWorkOrderAction(
+      store,
+      {
+        tenantId: TENANT_ID,
+        workOrderId: 'wo',
+        action: 'start',
+        display: { categoryName: 'Buraco na via', address: 'Rua das Flores, 120' },
+        online: true,
+        userId: 'user-1',
+      },
+      enqueueDeps,
+    );
+    expect(item.payload).toMatchObject({
+      display: { categoryName: 'Buraco na via', address: 'Rua das Flores, 120' },
+    });
+    const sender = new FakeTransport();
+    await processOutbox({ store, transport: sender, connection: fakeConnection() });
+    expect(sender.sent[0]?.input).not.toHaveProperty('display');
+  });
+
   it('enqueue rejects a second impediment photo', async () => {
     const stashed: string[] = [];
     const input = {

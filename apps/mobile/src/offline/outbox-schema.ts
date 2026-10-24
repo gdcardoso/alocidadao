@@ -15,9 +15,10 @@ export interface AppDb {
 
 /**
  * Versão atual do banco do app (`PRAGMA user_version`). 1: fila com `kind`; 2: ação do agente
- * com a prefeitura no item e sem o cache de atividades do Laboratório.
+ * com a prefeitura no item e sem o cache de atividades do Laboratório; 3: cache das atividades
+ * do agente e as atividades que ele já abriu.
  */
-export const OUTBOX_SCHEMA_VERSION = 2;
+export const OUTBOX_SCHEMA_VERSION = 3;
 
 const CREATE_OUTBOX_V1 = (table: string) => `
   CREATE TABLE ${table} (
@@ -181,6 +182,7 @@ export async function migrateOutbox(
     0;
   if (version < 1) await migrateToV1(db, getOwner);
   if (version < 2) await migrateToV2(db);
+  if (version < 3) await migrateToV3(db);
 }
 
 /**
@@ -209,6 +211,19 @@ async function migrateToV1(db: AppDb, getOwner: () => Promise<string | null>): P
 
 const MISSING_TENANT: OutboxRejection = { code: 'missing_tenant' };
 
+/** Prefeitura gravada no payload; payload ilegível ou que não é objeto conta como sem prefeitura. */
+function payloadTenant(payload: string | null): string | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(payload ?? '');
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== 'object' || parsed === null) return null;
+  const { tenantId } = parsed as { tenantId?: unknown };
+  return typeof tenantId === 'string' && tenantId !== '' ? tenantId : null;
+}
+
 /**
  * Versão 2: a ação do agente leva a prefeitura no item. As que ainda não foram enviadas sem
  * ela (do Laboratório) ficam recusadas com `missing_tenant`; o cache de atividades do
@@ -221,8 +236,8 @@ async function migrateToV2(db: AppDb): Promise<void> {
       [],
     );
     for (const row of rows) {
-      const { tenantId } = JSON.parse(row.payload) as { tenantId?: unknown };
-      if (typeof tenantId === 'string' && tenantId !== '') continue;
+      // Um payload estragado não pode impedir o banco de abrir: o item fica recusado.
+      if (payloadTenant(row.payload) !== null) continue;
       await db.runAsync(
         `UPDATE outbox SET status = 'rejected', rejection = ?, last_error = ? WHERE id = ?`,
         [JSON.stringify(MISSING_TENANT), MISSING_TENANT.code, row.id],
@@ -230,6 +245,29 @@ async function migrateToV2(db: AppDb): Promise<void> {
     }
     await db.execAsync('DROP TABLE IF EXISTS work_orders_cache');
     await db.execAsync('PRAGMA user_version = 2');
+  });
+}
+
+/**
+ * Versão 3: cache das atividades do agente (cartão e, quando baixado, o detalhe) e as
+ * atividades já abertas neste aparelho (`{id}:{assignedAt}`, para o selo "Nova").
+ */
+async function migrateToV3(db: AppDb): Promise<void> {
+  await db.withTransactionAsync(async () => {
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS agent_work_orders (
+        id TEXT PRIMARY KEY NOT NULL,
+        tenant_id TEXT NOT NULL,
+        card_json TEXT NOT NULL,
+        detail_json TEXT,
+        updated_at INTEGER NOT NULL
+      )
+    `);
+    await db.execAsync(
+      'CREATE INDEX IF NOT EXISTS agent_work_orders_tenant ON agent_work_orders (tenant_id)',
+    );
+    await db.execAsync('CREATE TABLE IF NOT EXISTS agent_seen (key TEXT PRIMARY KEY NOT NULL)');
+    await db.execAsync('PRAGMA user_version = 3');
   });
 }
 

@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   firstName,
   formatDateTime,
+  formatAgoPrecise,
   formatDayTime,
+  formatDistance,
   formatElapsed,
   formatPhoneBR,
   formatShortDate,
@@ -117,5 +119,38 @@ describe('names', () => {
   it('takes the first name', () => {
     expect(firstName('Maria da Silva')).toBe('Maria');
     expect(firstName('  Ana ')).toBe('Ana');
+  });
+});
+
+describe('agent times and distances', () => {
+  const NOW = new Date('2026-10-24T12:00:00.000Z');
+  const ago = (ms: number) => new Date(NOW.getTime() - ms).toISOString();
+  const MIN = 60_000;
+
+  it('formatAgoPrecise covers minutes, hours and days', () => {
+    expect(formatAgoPrecise(ago(0), NOW)).toBe('agora');
+    expect(formatAgoPrecise(ago(59_000), NOW)).toBe('agora');
+    // Relógio do servidor um pouco à frente: não vira tempo negativo.
+    expect(formatAgoPrecise(ago(-30_000), NOW)).toBe('agora');
+    expect(formatAgoPrecise(ago(MIN), NOW)).toBe('há 1 min');
+    expect(formatAgoPrecise(ago(20 * MIN), NOW)).toBe('há 20 min');
+    expect(formatAgoPrecise(ago(59 * MIN + 59_000), NOW)).toBe('há 59 min');
+    expect(formatAgoPrecise(ago(60 * MIN), NOW)).toBe('há 1 h');
+    expect(formatAgoPrecise(ago(23 * 60 * MIN + 59 * MIN), NOW)).toBe('há 23 h');
+    expect(formatAgoPrecise(ago(24 * 60 * MIN), NOW)).toBe('há 1 dia');
+    expect(formatAgoPrecise(ago(3 * 24 * 60 * MIN + 5 * MIN), NOW)).toBe('há 3 dias');
+  });
+
+  it('formatDistance uses meters below 1 km and a comma above', () => {
+    expect(formatDistance(0)).toBe('0 m');
+    expect(formatDistance(8.4)).toBe('8 m');
+    expect(formatDistance(350)).toBe('350 m');
+    expect(formatDistance(999.4)).toBe('999 m');
+    // Arredondar para 1000 m já é quilômetro.
+    expect(formatDistance(999.6)).toBe('1,0 km');
+    expect(formatDistance(1000)).toBe('1,0 km');
+    expect(formatDistance(1234)).toBe('1,2 km');
+    expect(formatDistance(2_780)).toBe('2,8 km');
+    expect(formatDistance(41_060)).toBe('41,1 km');
   });
 });

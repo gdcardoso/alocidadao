@@ -3,8 +3,8 @@ import { X } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import type { PhotoResult } from '../lib/photo';
-import { compressPhoto, fileSize } from '../lib/photo-native';
+import { cameraErrorMessage, type PhotoResult } from '../lib/photo';
+import { compressPhoto, deleteFile, fileSize } from '../lib/photo-native';
 import { PrimaryButton } from '../ui/Button';
 import { colors, fonts } from '../ui/theme';
 
@@ -43,14 +43,20 @@ export function PhotoCapture({ visible, onClose, onCaptured }: PhotoCaptureProps
     if (!camera.current || busy) return;
     setBusy(true);
     setError(null);
+    let rawUri: string | null = null;
     try {
       const raw = await camera.current.takePictureAsync({ quality: 1 });
+      rawUri = raw.uri;
       const original = { width: raw.width, height: raw.height, bytes: fileSize(raw.uri) };
       const compressed = await compressPhoto(raw.uri);
       onCaptured({ ...compressed, original });
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Não foi possível tirar a foto.');
+      console.warn('Falha ao tirar a foto', e);
+      // A tela nunca mostra a mensagem técnica.
+      setError(cameraErrorMessage(e));
     } finally {
+      // A foto original (em tamanho cheio) não serve mais: só a reduzida segue.
+      if (rawUri) deleteFile(rawUri);
       setBusy(false);
     }
   };

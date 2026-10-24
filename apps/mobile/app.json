@@ -30,13 +30,17 @@
         "expo-camera",
         {
           "cameraPermission": "Para registrar a foto do problema.",
+          "microphonePermission": false,
           "recordAudioAndroid": false
         }
       ],
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Para saber onde está o problema e qual prefeitura atende."
+          "locationWhenInUsePermission": "Para saber onde está o problema e qual prefeitura atende.",
+          "locationAlwaysAndWhenInUsePermission": false,
+          "locationAlwaysPermission": false,
+          "motionUsagePermission": false
         }
       ],
       "expo-sqlite"

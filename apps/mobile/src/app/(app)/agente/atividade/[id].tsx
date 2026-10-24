@@ -1,7 +1,7 @@
 import { router, useLocalSearchParams, type Href } from 'expo-router';
 import { Camera, CircleCheck, Info, OctagonAlert, Play } from 'lucide-react-native';
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { toAgentDetail, type AgentDetailView } from '../../../../agent/detail-view';
 import { useAgentWorkOrder } from '../../../../agent/use-agent-work-order';
 import { homeFor } from '../../../../auth/app-mode';
@@ -21,6 +21,7 @@ import { Screen } from '../../../../ui/Screen';
 import { LocationCard } from '../../../../ui/agent/LocationCard';
 import { ManagerCard } from '../../../../ui/agent/ManagerCard';
 import { ReportList } from '../../../../ui/agent/ReportList';
+import { WorkOrderUnavailable } from '../../../../ui/agent/WorkOrderUnavailable';
 import { colors, fonts, space } from '../../../../ui/theme';
 
 const HOME_ROUTE = homeFor('agent');
@@ -52,33 +53,11 @@ export default function DetalheAtividade() {
     return (
       <Screen>
         <Header nav="back" onNavPress={backToList} />
-        <View style={styles.state}>
-          {state.phase === 'loading' ? (
-            <ActivityIndicator
-              size="large"
-              color={colors.primary}
-              accessibilityLabel="Carregando"
-            />
-          ) : state.phase === 'gone' ? (
-            <>
-              <Text style={styles.stateTitle}>Esta atividade não está mais com você</Text>
-              <Text style={styles.stateText}>
-                Ela foi concluída, cancelada ou passada para outra equipe.
-              </Text>
-              <SecondaryButton
-                label="Voltar para minhas atividades"
-                size="medium"
-                onPress={backToList}
-              />
-            </>
-          ) : (
-            <>
-              <Text style={styles.stateTitle}>Não foi possível carregar a atividade</Text>
-              <Text style={styles.stateText}>Confira sua internet e tente de novo.</Text>
-              <SecondaryButton label="Tentar de novo" size="medium" onPress={() => void reload()} />
-            </>
-          )}
-        </View>
+        <WorkOrderUnavailable
+          phase={state.phase}
+          onBack={backToList}
+          onRetry={() => void reload()}
+        />
       </Screen>
     );
   }
@@ -89,7 +68,12 @@ export default function DetalheAtividade() {
       setActionError(null);
       setStarting(true);
       try {
-        const userId = me?.id ?? (await secureStore.getItem(OUTBOX_OWNER_KEY)) ?? '';
+        // Sem dono conhecido, o item ficaria órfão na fila: não enfileira.
+        const userId = me?.id ?? (await secureStore.getItem(OUTBOX_OWNER_KEY));
+        if (!userId) {
+          setActionError('Não foi possível iniciar. Tente de novo.');
+          return;
+        }
         await submitWorkOrderAction({
           tenantId: detail.tenantId,
           workOrderId: detail.id,
@@ -248,18 +232,4 @@ const styles = StyleSheet.create({
   moreText: { fontFamily: fonts.bodySemibold, fontSize: 16, color: colors.primary },
   pressed: { opacity: 0.6 },
   error: { fontFamily: fonts.body, fontSize: 15, color: colors.danger, textAlign: 'center' },
-  state: { paddingHorizontal: space.gutter, paddingTop: 32, gap: 8, alignItems: 'center' },
-  stateTitle: {
-    fontFamily: fonts.heading,
-    fontSize: 18,
-    color: colors.textPrimary,
-    textAlign: 'center',
-  },
-  stateText: {
-    fontFamily: fonts.body,
-    fontSize: 16,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    marginBottom: 8,
-  },
 });

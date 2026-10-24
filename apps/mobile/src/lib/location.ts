@@ -8,12 +8,15 @@ export type CurrentPoint =
 
 /** Adaptador nativo: pede a permissão e lê a posição atual, com limite de 15 s. */
 export async function getCurrentPoint(): Promise<CurrentPoint> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     const permission = await Location.requestForegroundPermissionsAsync();
     if (!permission.granted) return { error: 'permission_denied' };
     const position = await Promise.race([
       Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
-      new Promise<null>((resolve) => setTimeout(() => resolve(null), LOCATION_TIMEOUT_MS)),
+      new Promise<null>((resolve) => {
+        timer = setTimeout(() => resolve(null), LOCATION_TIMEOUT_MS);
+      }),
     ]);
     if (position === null) return { error: 'unavailable' };
     return {
@@ -22,6 +25,9 @@ export async function getCurrentPoint(): Promise<CurrentPoint> {
     };
   } catch {
     return { error: 'unavailable' };
+  } finally {
+    // O GPS respondeu antes: o temporizador não fica pendurado.
+    if (timer !== undefined) clearTimeout(timer);
   }
 }
 

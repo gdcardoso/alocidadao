@@ -85,8 +85,11 @@ function BaseButton({
 }
 
 export interface PrimaryButtonProps extends BaseButtonProps {
-  /** `danger`: confirmação destrutiva (ex.: "Excluir conta"). */
-  variant?: 'default' | 'danger';
+  /**
+   * `danger`: confirmação destrutiva (ex.: "Excluir conta"). `warning`: "Enviar ao gestor" da A4
+   * (branco sobre `warning`).
+   */
+  variant?: 'default' | 'danger' | 'warning';
 }
 
 /** Botão principal: pílula `primary`, texto `on-primary`. */
@@ -100,13 +103,21 @@ export function PrimaryButton({ variant = 'default', ...props }: PrimaryButtonPr
           borderWidth: 0,
           fg: colors.onPrimary,
         }
-      : {
-          bg: colors.primary,
-          pressedBg: colors.primaryStrong,
-          border: colors.primary,
-          borderWidth: 0,
-          fg: colors.onPrimary,
-        };
+      : variant === 'warning'
+        ? {
+            bg: colors.warning,
+            pressedBg: colors.warningStrong,
+            border: colors.warning,
+            borderWidth: 0,
+            fg: colors.onPrimary,
+          }
+        : {
+            bg: colors.primary,
+            pressedBg: colors.primaryStrong,
+            border: colors.primary,
+            borderWidth: 0,
+            fg: colors.onPrimary,
+          };
   return <BaseButton {...props} palette={palette} />;
 }
 

@@ -186,6 +186,10 @@ export function toAgentDetail(
  */
 export function routeUrl(os: 'android' | 'ios', at: GeoPoint, address: string | null): string {
   if (os === 'ios') return `http://maps.apple.com/?daddr=${at.lat},${at.lng}`;
-  const label = address ? `(${encodeURIComponent(address)})` : '';
+  // encodeURIComponent não codifica parênteses: um ")" no endereço fecharia o rótulo antes.
+  const encoded = address
+    ? encodeURIComponent(address).replace(/\(/g, '%28').replace(/\)/g, '%29')
+    : '';
+  const label = address ? `(${encoded})` : '';
   return `geo:0,0?q=${at.lat},${at.lng}${label}`;
 }

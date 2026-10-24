@@ -250,6 +250,10 @@ describe('agent detail', () => {
       'geo:0,0?q=-23.5505,-46.6333(Rua%20das%20Flores%2C%20120)',
     );
     expect(routeUrl('android', at, null)).toBe('geo:0,0?q=-23.5505,-46.6333');
+    // Parênteses no endereço não fecham o rótulo do geo: antes da hora.
+    expect(routeUrl('android', at, 'Rua A (fundos), 10')).toBe(
+      'geo:0,0?q=-23.5505,-46.6333(Rua%20A%20%28fundos%29%2C%2010)',
+    );
     expect(routeUrl('ios', at, 'Rua das Flores, 120')).toBe(
       'http://maps.apple.com/?daddr=-23.5505,-46.6333',
     );

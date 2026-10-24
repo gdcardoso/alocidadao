@@ -20,6 +20,7 @@ import {
 import type { StatusNoticeTone } from '../ui/StatusNotice';
 import type { TimelineStep } from '../ui/Timeline';
 import { formatAgo, formatDateTime, formatDayTime, formatElapsed } from '../ui/format';
+import { NetworkError } from '../offline/outbox';
 import { formatCoordinates } from './new-request';
 
 // Modelo das telas 6a–6d e da galeria (7), sem nada nativo (testável em Node).
@@ -294,15 +295,30 @@ export const NO_NETWORK_MESSAGE = 'Sem internet. Tente de novo quando conectar.'
 const STATUS_CHANGED_MESSAGE = 'A situação desta solicitação mudou. Confira de novo.';
 const FALLBACK_MESSAGE = 'Algo deu errado. Tente de novo.';
 
-/** Mensagem de uma ação que falhou: sem rede, status que mudou no caminho ou erro geral. */
-export function actionErrorMessage(error: unknown): string {
+/** Erros do envio que vêm do aparelho sem resposta do servidor (o resto é resposta dele). */
+const SESSION_CODES = ['unauthorized', 'signed_out'];
+const SERVER_ANSWERED = /^(put|uploads|http)_\d+$|^invalid_/;
+
+/** O que fazer quando uma ação falha: voltar ao login ou mostrar a mensagem. */
+export type ActionFailure = { kind: 'session' } | { kind: 'message'; message: string };
+
+/** Sem rede, sessão recusada, status que mudou no caminho ou erro geral. */
+export function actionFailure(error: unknown): ActionFailure {
+  const message = (text: string): ActionFailure => ({ kind: 'message', message: text });
   if (error instanceof ApiError) {
+    if (error.status === 401) return { kind: 'session' };
     const code = (error.body as { code?: unknown } | null)?.code;
-    return error.status === 409 && code === 'invalid_status'
-      ? STATUS_CHANGED_MESSAGE
-      : FALLBACK_MESSAGE;
+    return message(
+      error.status === 409 && code === 'invalid_status' ? STATUS_CHANGED_MESSAGE : FALLBACK_MESSAGE,
+    );
+  }
+  if (error instanceof NetworkError) {
+    if (SESSION_CODES.includes(error.message)) return { kind: 'session' };
+    return message(SERVER_ANSWERED.test(error.message) ? FALLBACK_MESSAGE : NO_NETWORK_MESSAGE);
   }
   // O fetch sem rede rejeita com TypeError; o tempo esgotado tem erro próprio.
-  if (error instanceof ApiTimeoutError || error instanceof TypeError) return NO_NETWORK_MESSAGE;
-  return FALLBACK_MESSAGE;
+  if (error instanceof ApiTimeoutError || error instanceof TypeError) {
+    return message(NO_NETWORK_MESSAGE);
+  }
+  return message(FALLBACK_MESSAGE);
 }

@@ -5,10 +5,11 @@ import { Camera, Send, X } from 'lucide-react-native';
 import { useRef, useState } from 'react';
 import { Image, Pressable, StyleSheet, View } from 'react-native';
 import { createSessionTransport, sessionApi } from '../../../../auth/native-session';
-import { NO_NETWORK_MESSAGE, actionErrorMessage } from '../../../../citizen/detail-view';
+import { useSession } from '../../../../auth/use-session';
+import { NO_NETWORK_MESSAGE, actionFailure } from '../../../../citizen/detail-view';
 import { PhotoCapture } from '../../../../components/photo-capture';
+import { createActionLock } from '../../../../lib/action-lock';
 import { isOnline } from '../../../../lib/net-info';
-import { NetworkError } from '../../../../offline/outbox';
 import { PrimaryButton, SecondaryButton } from '../../../../ui/Button';
 import { FieldLabel } from '../../../../ui/FieldLabel';
 import { FormError, FormLayout, FormTitle } from '../../../../ui/FormLayout';
@@ -25,6 +26,7 @@ const MAX_COMMENT = 1000;
  */
 export default function Contestar() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { refreshMe } = useSession();
   const [comment, setComment] = useState('');
   const [photos, setPhotos] = useState<string[]>([]);
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -34,38 +36,44 @@ export default function Contestar() {
   const [clientActionId] = useState(() => randomUUID());
   // Foto já enviada numa tentativa anterior não sobe de novo.
   const uploaded = useRef(new Map<string, string>());
+  // Toque duplo em "Enviar" não sobe as fotos nem contesta duas vezes.
+  const [lock] = useState(createActionLock);
 
   const trimmed = comment.trim();
   const canSend = trimmed.length >= MIN_COMMENT;
 
-  const send = async () => {
-    if (!canSend || sending) return;
-    setError(null);
-    if (!(await isOnline())) {
-      setError(NO_NETWORK_MESSAGE);
-      return;
-    }
-    setSending(true);
-    try {
-      const transport = await createSessionTransport();
-      const photoKeys: string[] = [];
-      for (const uri of photos) {
-        let key = uploaded.current.get(uri);
-        if (!key) {
-          key = (await transport.uploadPhoto(uri, 'create_request')).key;
-          uploaded.current.set(uri, key);
+  const send = () =>
+    lock.run(async () => {
+      if (!canSend) return;
+      setError(null);
+      setSending(true);
+      try {
+        if (!(await isOnline())) {
+          setError(NO_NETWORK_MESSAGE);
+          return;
         }
-        photoKeys.push(key);
+        const transport = await createSessionTransport();
+        const photoKeys: string[] = [];
+        for (const uri of photos) {
+          let key = uploaded.current.get(uri);
+          if (!key) {
+            key = (await transport.uploadPhoto(uri, 'create_request')).key;
+            uploaded.current.set(uri, key);
+          }
+          photoKeys.push(key);
+        }
+        await sessionApi.contestRequest(id, { clientActionId, comment: trimmed, photoKeys });
+        // O detalhe se atualiza ao voltar ao foco.
+        router.back();
+      } catch (e) {
+        const failure = actionFailure(e);
+        // Sessão recusada: refreshMe leva para o login.
+        if (failure.kind === 'session') void refreshMe().catch(() => undefined);
+        else setError(failure.message);
+      } finally {
+        setSending(false);
       }
-      await sessionApi.contestRequest(id, { clientActionId, comment: trimmed, photoKeys });
-      // O detalhe se atualiza ao voltar ao foco.
-      router.back();
-    } catch (e) {
-      setError(e instanceof NetworkError ? NO_NETWORK_MESSAGE : actionErrorMessage(e));
-    } finally {
-      setSending(false);
-    }
-  };
+    });
 
   return (
     <>

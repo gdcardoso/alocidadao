@@ -18,8 +18,9 @@ vi.mock('lucide-react-native', () => {
 });
 
 const { ApiError, ApiTimeoutError } = await import('@alocidadao/api-client');
-const { actionErrorMessage, parseGalleryPhotos, toDetailModel, toGalleryPhotos } =
+const { actionFailure, parseGalleryPhotos, toDetailModel, toGalleryPhotos } =
   await import('./detail-view');
+const { NetworkError, UploadRejectedError } = await import('../offline/outbox');
 
 // 2026-10-23 11:00 em São Paulo (UTC−3).
 const NOW = new Date('2026-10-23T14:00:00.000Z');
@@ -298,15 +299,27 @@ describe('gallery and actions', () => {
   });
 
   it('action errors explain the missing network and a status that changed', () => {
-    expect(actionErrorMessage(new TypeError('Network request failed'))).toBe(
-      'Sem internet. Tente de novo quando conectar.',
-    );
-    expect(actionErrorMessage(new ApiTimeoutError())).toBe(
-      'Sem internet. Tente de novo quando conectar.',
-    );
-    expect(actionErrorMessage(new ApiError(409, { code: 'invalid_status' }))).toBe(
-      'A situação desta solicitação mudou. Confira de novo.',
-    );
-    expect(actionErrorMessage(new ApiError(500, null))).toBe('Algo deu errado. Tente de novo.');
+    const offline = { kind: 'message', message: 'Sem internet. Tente de novo quando conectar.' };
+    const fallback = { kind: 'message', message: 'Algo deu errado. Tente de novo.' };
+    expect(actionFailure(new TypeError('Network request failed'))).toEqual(offline);
+    expect(actionFailure(new ApiTimeoutError())).toEqual(offline);
+    // Falha de transporte no upload (fetch sem resposta).
+    expect(actionFailure(new NetworkError('Network request failed'))).toEqual(offline);
+    expect(actionFailure(new ApiError(409, { code: 'invalid_status' }))).toEqual({
+      kind: 'message',
+      message: 'A situação desta solicitação mudou. Confira de novo.',
+    });
+    expect(actionFailure(new ApiError(500, null))).toEqual(fallback);
+    // O servidor respondeu: não é falta de internet.
+    expect(actionFailure(new NetworkError('put_403'))).toEqual(fallback);
+    expect(actionFailure(new NetworkError('uploads_503'))).toEqual(fallback);
+    expect(actionFailure(new NetworkError('invalid_presign_response'))).toEqual(fallback);
+    expect(actionFailure(new UploadRejectedError('storage_not_configured'))).toEqual(fallback);
+  });
+
+  it('a refused session goes back to the login', () => {
+    expect(actionFailure(new ApiError(401, { code: 'unauthorized' }))).toEqual({ kind: 'session' });
+    expect(actionFailure(new NetworkError('unauthorized'))).toEqual({ kind: 'session' });
+    expect(actionFailure(new NetworkError('signed_out'))).toEqual({ kind: 'session' });
   });
 });

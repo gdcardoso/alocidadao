@@ -9,11 +9,12 @@ import { sessionApi } from '../../../auth/native-session';
 import { useSession } from '../../../auth/use-session';
 import {
   NO_NETWORK_MESSAGE,
-  actionErrorMessage,
+  actionFailure,
   toDetailModel,
   toGalleryPhotos,
   type DetailModel,
 } from '../../../citizen/detail-view';
+import { createActionLock } from '../../../lib/action-lock';
 import { isOnline } from '../../../lib/net-info';
 import { PrimaryButton, SecondaryButton } from '../../../ui/Button';
 import { ConfirmDialog } from '../../../ui/ConfirmDialog';
@@ -30,7 +31,10 @@ const HOME_ROUTE = '/(app)/(tabs)/solicitacoes';
 const GALLERY_ROUTE = '/(app)/galeria';
 
 type LoadState =
-  { phase: 'loading' } | { phase: 'error' } | { phase: 'ready'; detail: RequestDetail };
+  | { phase: 'loading' }
+  | { phase: 'error' }
+  | { phase: 'not_found' }
+  | { phase: 'ready'; detail: RequestDetail };
 
 const photosLabel = (n: number) => (n === 1 ? '1 foto' : `${n} fotos`);
 
@@ -43,6 +47,8 @@ export default function DetalheSolicitacao() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const latest = useRef(0);
+  // Toque duplo em cancelar, confirmar ou contestar não dispara a ação duas vezes.
+  const [lock] = useState(createActionLock);
 
   const load = useCallback(async () => {
     const call = ++latest.current;
@@ -53,9 +59,12 @@ export default function DetalheSolicitacao() {
       // Sessão recusada: refreshMe leva para o login.
       if (error instanceof ApiError && error.status === 401)
         void refreshMe().catch(() => undefined);
+      const missing = error instanceof ApiError && error.status === 404;
       // Com o detalhe já na tela, a falha de atualizar não o apaga.
       if (call === latest.current)
-        setState((prev) => (prev.phase === 'ready' ? prev : { phase: 'error' }));
+        setState((prev) =>
+          missing ? { phase: 'not_found' } : prev.phase === 'ready' ? prev : { phase: 'error' },
+        );
     }
   }, [id, refreshMe]);
 
@@ -68,36 +77,45 @@ export default function DetalheSolicitacao() {
 
   const back = () => (router.canGoBack() ? router.back() : router.replace(HOME_ROUTE as Href));
 
-  /** Cancelar e confirmar: só com rede, e o detalhe se atualiza depois. */
-  const act = async (kind: 'cancel' | 'confirm') => {
-    setActionError(null);
-    if (!(await isOnline())) {
-      setConfirmCancel(false);
-      setActionError(NO_NETWORK_MESSAGE);
-      return;
-    }
-    setBusy(kind);
-    try {
-      const body = { clientActionId: randomUUID() };
-      if (kind === 'cancel') await sessionApi.cancelRequest(id, body);
-      else await sessionApi.confirmRequest(id, body);
-    } catch (error) {
-      setActionError(actionErrorMessage(error));
-    } finally {
-      setBusy(null);
-      setConfirmCancel(false);
-      await load();
-    }
+  /** Mostra o erro da ação; sessão recusada volta ao login. */
+  const fail = (error: unknown) => {
+    const failure = actionFailure(error);
+    if (failure.kind === 'session') void refreshMe().catch(() => undefined);
+    else setActionError(failure.message);
   };
 
-  const contest = async () => {
-    setActionError(null);
-    if (!(await isOnline())) {
-      setActionError(NO_NETWORK_MESSAGE);
-      return;
-    }
-    router.push(`/(app)/solicitacao/${id}/contestar` as Href);
-  };
+  /** Cancelar e confirmar: só com rede, e o detalhe se atualiza depois. */
+  const act = (kind: 'cancel' | 'confirm') =>
+    lock.run(async () => {
+      setActionError(null);
+      setBusy(kind);
+      try {
+        if (!(await isOnline())) {
+          setActionError(NO_NETWORK_MESSAGE);
+          return;
+        }
+        const body = { clientActionId: randomUUID() };
+        if (kind === 'cancel') await sessionApi.cancelRequest(id, body);
+        else await sessionApi.confirmRequest(id, body);
+        await load();
+      } catch (error) {
+        fail(error);
+        await load();
+      } finally {
+        setBusy(null);
+        setConfirmCancel(false);
+      }
+    });
+
+  const contest = () =>
+    lock.run(async () => {
+      setActionError(null);
+      if (!(await isOnline())) {
+        setActionError(NO_NETWORK_MESSAGE);
+        return;
+      }
+      router.push(`/(app)/solicitacao/${id}/contestar` as Href);
+    });
 
   if (state.phase !== 'ready') {
     return (
@@ -110,6 +128,18 @@ export default function DetalheSolicitacao() {
               color={colors.primary}
               accessibilityLabel="Carregando"
             />
+          ) : state.phase === 'not_found' ? (
+            <>
+              <Text style={styles.stateTitle}>Solicitação não encontrada</Text>
+              <Text style={styles.stateText}>
+                Ela não está entre as suas solicitações. Confira a lista.
+              </Text>
+              <SecondaryButton
+                label="Voltar para minhas solicitações"
+                size="medium"
+                onPress={() => router.replace(HOME_ROUTE as Href)}
+              />
+            </>
           ) : (
             <>
               <Text style={styles.stateTitle}>Não foi possível carregar a solicitação</Text>

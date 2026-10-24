@@ -67,15 +67,10 @@ function RootStack() {
           name="laboratorio/index"
           options={{ headerShown: true, title: 'Laboratório' }}
         />
-        <Stack.Screen name="laboratorio/entrar" options={{ headerShown: true, title: 'Entrar' }} />
         <Stack.Screen name="laboratorio/rede" options={{ headerShown: true, title: 'Rede' }} />
         <Stack.Screen
           name="laboratorio/camera"
           options={{ headerShown: true, title: 'Câmera e local' }}
-        />
-        <Stack.Screen
-          name="laboratorio/offline"
-          options={{ headerShown: true, title: 'Atividades offline' }}
         />
         <Stack.Screen
           name="laboratorio/notificacoes"

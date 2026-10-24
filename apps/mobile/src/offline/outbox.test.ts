@@ -10,10 +10,11 @@ import {
   processOutbox,
   processOutboxItem,
 } from './outbox';
-import { mapCreateRequestResponse } from './http-mapping';
+import { mapActionResponse, mapCreateRequestResponse } from './http-mapping';
 import {
   FakeTransport,
   MemoryOutboxStore,
+  TENANT_ID,
   actionOf,
   fakeConnection,
   makeItem,
@@ -84,14 +85,93 @@ describe('processOutbox', () => {
     await store.add(item);
     await processOutbox(deps());
     expect(transport.sent[0]).toMatchObject({
+      tenantId: TENANT_ID,
       workOrderId: actionOf(item).workOrderId,
       input: {
         clientActionId: item.id,
         action: 'complete',
         occurredAt: actionOf(item).occurredAt,
         note: 'Serviço feito',
+        location: null,
         photoKeys: ['k1'],
       },
+    });
+    expect(transport.uploadTenants).toEqual([TENANT_ID]);
+  });
+
+  it('sends the impediment reason and the device location', async () => {
+    const location = { lat: -23.55, lng: -46.63, accuracyM: 8 };
+    await store.add(
+      makeItem({
+        action: 'report_impediment',
+        note: 'Falta o asfalto',
+        impedimentReason: 'missing_material',
+        location,
+      }),
+    );
+    await processOutbox(deps());
+    expect(transport.sent[0]?.input).toMatchObject({
+      action: 'report_impediment',
+      note: 'Falta o asfalto',
+      impedimentReason: 'missing_material',
+      location,
+    });
+  });
+
+  it('403 not_a_member rejects the item instead of retrying', async () => {
+    await store.add(makeItem({ id: 'a', createdAt: 1, photoPaths: [], photoKeys: [] }));
+    await store.add(makeItem({ id: 'b', createdAt: 2, photoPaths: [], photoKeys: [] }));
+    transport.resultNext(mapActionResponse(403, JSON.stringify({ code: 'not_a_member' })));
+    const result = await processOutbox(deps());
+    expect(result).toMatchObject({ failed: 1, sent: 1, stoppedByNetwork: false });
+    expect(await store.get('a')).toMatchObject({
+      status: 'rejected',
+      rejection: { code: 'not_a_member' },
+      attempts: 0,
+    });
+  });
+
+  it('404 work_order_not_found rejects the item', async () => {
+    await store.add(makeItem({ photoPaths: [], photoKeys: [] }));
+    transport.resultNext(mapActionResponse(404, JSON.stringify({ code: 'work_order_not_found' })));
+    await processOutbox(deps());
+    expect(await store.get(makeItem().id)).toMatchObject({
+      status: 'rejected',
+      rejection: { code: 'work_order_not_found' },
+    });
+  });
+
+  it('a photo already used rejects the item', async () => {
+    await store.add(makeItem({ photoPaths: [], photoKeys: [] }));
+    transport.resultNext(mapActionResponse(409, JSON.stringify({ code: 'photo_already_used' })));
+    await processOutbox(deps());
+    expect(await store.get(makeItem().id)).toMatchObject({
+      status: 'rejected',
+      rejection: { code: 'photo_already_used' },
+    });
+  });
+
+  it('an upload refused for membership rejects the item', async () => {
+    const item = makeItem();
+    await store.add(item);
+    transport.failUploadWith(item.photoPaths[0]!, new UploadRejectedError('not_a_member'));
+    await processOutbox(deps());
+    expect(await store.get(item.id)).toMatchObject({
+      status: 'rejected',
+      rejection: { code: 'not_a_member' },
+    });
+  });
+
+  it('an action without a tenant is rejected without calling the API', async () => {
+    const item = makeItem();
+    const { tenantId: _tenantId, ...legacy } = actionOf(item);
+    await store.add({ ...item, payload: legacy });
+    await processOutbox(deps());
+    expect(transport.uploads).toEqual([]);
+    expect(transport.sent).toEqual([]);
+    expect(await store.get(item.id)).toMatchObject({
+      status: 'rejected',
+      rejection: { code: 'missing_tenant' },
     });
   });
 
@@ -221,6 +301,7 @@ describe('enqueueWorkOrderAction', () => {
     const item = await enqueueWorkOrderAction(
       store,
       {
+        tenantId: TENANT_ID,
         workOrderId: 'wo',
         action: 'complete',
         note: 'ok ok',
@@ -236,13 +317,73 @@ describe('enqueueWorkOrderAction', () => {
       userId: 'user-1',
       status: 'pending',
       createdOffline: true,
-      payload: { workOrderId: 'wo', action: 'complete', note: 'ok ok' },
+      payload: {
+        tenantId: TENANT_ID,
+        workOrderId: 'wo',
+        action: 'complete',
+        note: 'ok ok',
+        impedimentReason: null,
+        location: null,
+      },
       photoPaths: ['/outbox/uuid-1/0.jpg'],
       photoKeys: [null],
       attempts: 0,
       createdAt: 42,
     });
     expect(await store.get('uuid-1')).toEqual(item);
+  });
+
+  it('enqueue rejects a second impediment photo', async () => {
+    const stashed: string[] = [];
+    const input = {
+      tenantId: TENANT_ID,
+      workOrderId: 'wo',
+      action: 'report_impediment' as const,
+      note: 'Falta o asfalto',
+      impedimentReason: 'missing_material' as const,
+      photoUris: ['file:///a.jpg', 'file:///b.jpg'],
+      online: true,
+      userId: 'user-1',
+    };
+    await expect(
+      enqueueWorkOrderAction(store, input, {
+        ...enqueueDeps,
+        stashPhoto: async (id, uri) => {
+          stashed.push(uri);
+          return `/outbox/${id}/x.jpg`;
+        },
+      }),
+    ).rejects.toThrow('too_many_photos');
+    expect(stashed).toEqual([]);
+    expect(await store.list()).toEqual([]);
+    // Uma foto passa; iniciar não leva nenhuma.
+    await enqueueWorkOrderAction(store, { ...input, photoUris: ['file:///a.jpg'] }, enqueueDeps);
+    await expect(
+      enqueueWorkOrderAction(
+        store,
+        { ...input, action: 'start', photoUris: ['file:///a.jpg'] },
+        enqueueDeps,
+      ),
+    ).rejects.toThrow('too_many_photos');
+  });
+
+  it('enqueue uses one clock for occurredAt and createdAt', async () => {
+    let tick = 1_000;
+    const item = await enqueueWorkOrderAction(
+      store,
+      {
+        tenantId: TENANT_ID,
+        workOrderId: 'wo',
+        action: 'start',
+        online: true,
+        userId: 'user-1',
+        location: { lat: -23.5, lng: -46.6, accuracyM: null },
+      },
+      { ...enqueueDeps, now: () => (tick += 1_000) },
+    );
+    expect(item.createdAt).toBe(2_000);
+    expect(actionOf(item).occurredAt).toBe(new Date(2_000).toISOString());
+    expect(actionOf(item).location).toEqual({ lat: -23.5, lng: -46.6, accuracyM: null });
   });
 });
 

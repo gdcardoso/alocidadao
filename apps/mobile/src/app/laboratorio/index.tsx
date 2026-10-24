@@ -6,7 +6,6 @@ import { session, sessionApi, signOutAndClear } from '../../auth/native-session'
 const sections: { href: Href; label: string }[] = [
   { href: '/laboratorio/rede', label: 'Rede' },
   { href: '/laboratorio/camera', label: 'Câmera e local' },
-  { href: '/laboratorio/offline', label: 'Atividades offline' },
   { href: '/laboratorio/notificacoes', label: 'Notificações' },
 ];
 
@@ -25,7 +24,7 @@ export default function Laboratorio() {
   const [who, setWho] = useState<string | null | undefined>(undefined);
   const [busy, setBusy] = useState(false);
 
-  // Atualiza ao voltar da tela "Entrar".
+  // Atualiza ao voltar ao Laboratório.
   useFocusEffect(
     useCallback(() => {
       let active = true;
@@ -68,12 +67,7 @@ export default function Laboratorio() {
           </Pressable>
         </>
       ) : (
-        <>
-          <Text style={styles.row}>Ninguém logado.</Text>
-          <Link href="/laboratorio/entrar" style={styles.link}>
-            Entrar
-          </Link>
-        </>
+        <Text style={styles.row}>Ninguém logado.</Text>
       )}
       {sections.map((section) => (
         <Link key={String(section.href)} href={section.href} style={styles.link}>

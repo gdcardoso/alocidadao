@@ -1,9 +1,13 @@
-import type {
-  ConnectionContext,
-  CreateRequestInput,
-  CreateRequestResponse,
-  IconGroup,
-  WorkOrderActionInput,
+import {
+  MAX_PHOTOS_PER_COMPLETION,
+  MAX_PHOTOS_PER_IMPEDIMENT,
+  type ConnectionContext,
+  type CreateRequestInput,
+  type CreateRequestResponse,
+  type DeviceLocation,
+  type IconGroup,
+  type ImpedimentReason,
+  type WorkOrderActionInput,
 } from '@alocidadao/shared';
 
 export type OutboxStatus = 'pending' | 'sending' | 'done' | 'conflict' | 'failed' | 'rejected';
@@ -41,12 +45,27 @@ export interface OutboxItem {
   createdAt: number;
 }
 
+export type WorkOrderAction = WorkOrderActionInput['action'];
+
 export interface WorkOrderActionPayload {
+  /** Prefeitura da atividade (`x-tenant-id` do envio). */
+  tenantId: string;
   workOrderId: string;
-  action: 'start' | 'complete';
+  action: WorkOrderAction;
   occurredAt: string;
+  /** Observação da conclusão ou detalhes do impedimento. */
   note: string | null;
+  impedimentReason: ImpedimentReason | null;
+  /** Posição do aparelho no momento da ação; `null` quando não foi possível ler. */
+  location: DeviceLocation | null;
 }
+
+/** Máximo de fotos de cada ação do agente. */
+export const MAX_PHOTOS_BY_ACTION: Record<WorkOrderAction, number> = {
+  start: 0,
+  complete: MAX_PHOTOS_PER_COMPLETION,
+  report_impediment: MAX_PHOTOS_PER_IMPEDIMENT,
+};
 
 /** O que a tela 4 mostra do item enquanto ele não vira solicitação. Não vai para a API. */
 export interface QueuedRequestDisplay {
@@ -80,9 +99,20 @@ export type SendCreateRequestResult =
   | { kind: 'occurrence_unavailable' };
 
 export interface Transport {
-  /** Envia a foto pela rota do tipo do item (agente ou cidadão). */
-  uploadPhoto(path: string, kind: OutboxKind): Promise<{ key: string; durationMs: number }>;
-  sendAction(workOrderId: string, input: WorkOrderActionInput): Promise<SendActionResult>;
+  /**
+   * Envia a foto pela rota do tipo do item (agente ou cidadão). A do agente vai na
+   * prefeitura `tenantId`.
+   */
+  uploadPhoto(
+    path: string,
+    kind: OutboxKind,
+    tenantId?: string | null,
+  ): Promise<{ key: string; durationMs: number }>;
+  sendAction(
+    tenantId: string,
+    workOrderId: string,
+    input: WorkOrderActionInput,
+  ): Promise<SendActionResult>;
   sendCreateRequest(input: CreateRequestInput): Promise<SendCreateRequestResult>;
 }
 
@@ -114,6 +144,18 @@ export class UploadRejectedError extends Error {
 export const REJECTION_CODES: readonly string[] = [
   'municipality_not_served',
   'category_unavailable',
+];
+
+/**
+ * Recusas da ação do agente que ficam na fila como "recusada", sem nova tentativa: a atividade
+ * saiu da equipe (ou foi concluída/cancelada), o vínculo acabou, a foto já foi usada ou o item
+ * não tem prefeitura. A tela mostra o aviso com "Remover envio".
+ */
+export const ACTION_REJECTION_CODES: readonly string[] = [
+  'work_order_not_found',
+  'not_a_member',
+  'photo_already_used',
+  'missing_tenant',
 ];
 
 /** Erros inesperados (não de rede) esgotam a paciência depois de tantas tentativas. */
@@ -165,13 +207,14 @@ export type ItemOutcome =
 async function uploadMissingPhotos(
   deps: ProcessOutboxDeps,
   item: OutboxItem,
+  tenantId: string | null = null,
 ): Promise<{ photoKeys: string[]; uploadDurationMs: number | null }> {
   const photoKeys = [...item.photoKeys];
   let uploadedMs = 0;
   let uploads = 0;
   for (let i = 0; i < item.photoPaths.length; i++) {
     if (photoKeys[i]) continue;
-    const uploaded = await deps.transport.uploadPhoto(item.photoPaths[i]!, item.kind);
+    const uploaded = await deps.transport.uploadPhoto(item.photoPaths[i]!, item.kind, tenantId);
     photoKeys[i] = uploaded.key;
     uploadedMs += uploaded.durationMs;
     uploads++;
@@ -183,22 +226,35 @@ async function uploadMissingPhotos(
   };
 }
 
+/** Recusa definitiva: o item fica na fila como "recusada", com o motivo. */
+async function rejectItem(store: OutboxStore, id: string, code: string): Promise<ItemOutcome> {
+  const rejection: OutboxRejection = { code };
+  await store.update(id, { status: 'rejected', rejection, lastError: code });
+  return { kind: 'rejected', rejection };
+}
+
 async function sendWorkOrderAction(
   deps: ProcessOutboxDeps,
   item: OutboxItem,
 ): Promise<ItemOutcome> {
-  const payload = item.payload as WorkOrderActionPayload;
-  const { photoKeys, uploadDurationMs } = await uploadMissingPhotos(deps, item);
+  const payload = item.payload as Partial<WorkOrderActionPayload> &
+    Pick<WorkOrderActionPayload, 'workOrderId' | 'action' | 'occurredAt'>;
+  const { tenantId } = payload;
+  // Item sem prefeitura (fila antiga): não há para onde enviar.
+  if (!tenantId) return rejectItem(deps.store, item.id, 'missing_tenant');
+  const { photoKeys, uploadDurationMs } = await uploadMissingPhotos(deps, item, tenantId);
   const context = await deps.connection({ uploadDurationMs, sentOffline: item.createdOffline });
   const input: WorkOrderActionInput = {
     clientActionId: item.id,
     action: payload.action,
     occurredAt: payload.occurredAt,
     ...(payload.note ? { note: payload.note } : {}),
+    ...(payload.impedimentReason ? { impedimentReason: payload.impedimentReason } : {}),
+    location: payload.location ?? null,
     photoKeys,
     connection: context,
   };
-  const outcome = await deps.transport.sendAction(payload.workOrderId, input);
+  const outcome = await deps.transport.sendAction(tenantId, payload.workOrderId, input);
   if (outcome.kind === 'ok') {
     await deps.store.update(item.id, { status: 'done', lastError: null });
     return { kind: 'sent' };
@@ -206,6 +262,9 @@ async function sendWorkOrderAction(
   if (outcome.kind === 'conflict') {
     await deps.store.update(item.id, { status: 'conflict', lastError: outcome.status });
     return { kind: 'conflict' };
+  }
+  if (ACTION_REJECTION_CODES.includes(outcome.code)) {
+    return rejectItem(deps.store, item.id, outcome.code);
   }
   await deps.store.update(item.id, { status: 'failed', lastError: outcome.code });
   return { kind: 'failed', code: outcome.code };
@@ -276,6 +335,9 @@ export async function processOutboxItem(
       return { kind: 'retry', error: error.message };
     }
     if (error instanceof UploadRejectedError) {
+      if (item.kind === 'work_order_action' && ACTION_REJECTION_CODES.includes(error.code)) {
+        return await rejectItem(store, item.id, error.code);
+      }
       await store.update(item.id, { status: 'failed', lastError: error.code });
       return { kind: 'failed', code: error.code };
     }
@@ -344,11 +406,17 @@ export interface EnqueueDeps {
 
 async function enqueue(
   store: OutboxStore,
-  base: { id: string; kind: OutboxKind; userId: string; payload: unknown; online: boolean },
+  base: {
+    id: string;
+    kind: OutboxKind;
+    userId: string;
+    payload: unknown;
+    online: boolean;
+    createdAt: number;
+  },
   photoUris: readonly string[],
   deps: EnqueueDeps,
 ): Promise<OutboxItem> {
-  const now = deps.now ?? Date.now;
   const photoPaths: string[] = [];
   for (let i = 0; i < photoUris.length; i++) {
     photoPaths.push(await deps.stashPhoto(base.id, photoUris[i]!, i));
@@ -366,34 +434,46 @@ async function enqueue(
     attempts: 0,
     nextAttemptAt: 0,
     lastError: null,
-    createdAt: now(),
+    createdAt: base.createdAt,
   };
   await store.add(item);
   return item;
 }
 
+export interface EnqueueWorkOrderActionInput {
+  tenantId: string;
+  workOrderId: string;
+  action: WorkOrderAction;
+  note?: string;
+  impedimentReason?: ImpedimentReason;
+  location?: DeviceLocation | null;
+  photoUris?: string[];
+  online: boolean;
+  userId: string;
+}
+
 /**
- * Enfileira uma ação do agente. Diferença da assinatura do plano: o 3º parâmetro
- * injeta `randomUuid` e `stashPhoto` (nativos); veja `enqueueNative`.
+ * Enfileira uma ação do agente na prefeitura da atividade. Recusa (`too_many_photos`) mais
+ * fotos que o limite da ação, antes de copiar qualquer uma. O 3º parâmetro injeta
+ * `randomUuid` e `stashPhoto` (nativos); veja `enqueueNative`.
  */
 export async function enqueueWorkOrderAction(
   store: OutboxStore,
-  input: {
-    workOrderId: string;
-    action: 'start' | 'complete';
-    note?: string;
-    photoUris?: string[];
-    online: boolean;
-    userId: string;
-  },
+  input: EnqueueWorkOrderActionInput,
   deps: EnqueueDeps,
 ): Promise<OutboxItem> {
-  const now = deps.now ?? Date.now;
+  const photoUris = input.photoUris ?? [];
+  if (photoUris.length > MAX_PHOTOS_BY_ACTION[input.action]) throw new Error('too_many_photos');
+  // Um só relógio: a hora da ação é a hora em que ela entrou na fila.
+  const createdAt = (deps.now ?? Date.now)();
   const payload: WorkOrderActionPayload = {
+    tenantId: input.tenantId,
     workOrderId: input.workOrderId,
     action: input.action,
-    occurredAt: new Date(now()).toISOString(),
+    occurredAt: new Date(createdAt).toISOString(),
     note: input.note ?? null,
+    impedimentReason: input.impedimentReason ?? null,
+    location: input.location ?? null,
   };
   return enqueue(
     store,
@@ -403,8 +483,9 @@ export async function enqueueWorkOrderAction(
       userId: input.userId,
       payload,
       online: input.online,
+      createdAt,
     },
-    input.photoUris ?? [],
+    photoUris,
     deps,
   );
 }
@@ -426,6 +507,7 @@ export async function enqueueCreateRequest(
       userId: input.userId,
       payload: input.payload,
       online: input.online,
+      createdAt: (deps.now ?? Date.now)(),
     },
     input.photoUris,
     deps,

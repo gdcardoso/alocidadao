@@ -48,6 +48,18 @@ describe('mapActionResponse', () => {
   it('keeps the item queued on 401', () => {
     expect(() => mapActionResponse(401, '{"code":"unauthorized"}')).toThrow(NetworkError);
   });
+  it('refuses for good when the work order or the membership is gone', () => {
+    for (const [status, code] of [
+      [404, 'work_order_not_found'],
+      [403, 'not_a_member'],
+      [409, 'photo_already_used'],
+    ] as const) {
+      expect(mapActionResponse(status, JSON.stringify({ code }))).toEqual({
+        kind: 'rejected',
+        code,
+      });
+    }
+  });
 });
 
 describe('parsePresignResponse', () => {

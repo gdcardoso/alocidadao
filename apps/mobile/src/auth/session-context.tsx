@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { registerDevice } from '../lib/register-device';
 import { secureStore } from '../lib/secure-store';
 import { clearOfflineData } from '../offline/sqlite-outbox-store';
-import { LAB_TENANT_KEY, session, sessionApi } from './native-session';
+import { session, sessionApi } from './native-session';
 import { restoreSession, signInWithOwnerCheck, signOutSafely } from './session-flow';
 import { SessionContext, type SessionStatus, type SignOutOptions } from './use-session';
 
@@ -73,10 +73,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     try {
       await signOutSafely({
         store: secureStore,
-        dropTokens: async () => {
-          await session.signOut();
-          await secureStore.deleteItem(LAB_TENANT_KEY);
-        },
+        dropTokens: () => session.signOut(),
         clearOfflineData: (opts.clearOfflineData ?? true) ? clearOfflineData : null,
         // Sem tela para mostrar: fica no log; o próximo login apaga o que sobrou.
         onError: (error) => console.warn('Falha ao limpar os dados do aparelho na saída', error),

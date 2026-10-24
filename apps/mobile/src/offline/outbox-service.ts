@@ -51,7 +51,7 @@ export interface OutboxSyncedEvent {
 
 const syncedListeners = new Set<(event: OutboxSyncedEvent) => void>();
 
-/** Avisa depois de cada passada da fila (o Laboratório e a tela 4 atualizam as listas). */
+/** Avisa depois de cada passada da fila (as telas atualizam as listas). */
 export function onOutboxSynced(listener: (event: OutboxSyncedEvent) => void): () => void {
   syncedListeners.add(listener);
   return () => syncedListeners.delete(listener);
@@ -100,7 +100,7 @@ async function syncPass(): Promise<void> {
   let sent = 0;
   try {
     const store = await openOutboxStore();
-    // Montado a cada passada: pega a sessão (e a prefeitura do Laboratório) do login atual.
+    // Montado a cada passada: pega a sessão do login atual (a prefeitura vem de cada item).
     const transport = await createSessionTransport();
     const ownerId = await secureStore.getItem(OUTBOX_OWNER_KEY);
     const result = await processOutbox({ store, transport, connection, ownerId });

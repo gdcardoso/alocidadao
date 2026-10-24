@@ -57,7 +57,8 @@ type SendResult = Awaited<ReturnType<Transport['sendAction']>>;
 export class FakeTransport implements Transport {
   uploads: string[] = [];
   uploadKinds: OutboxKind[] = [];
-  sent: { workOrderId: string; input: WorkOrderActionInput }[] = [];
+  uploadTenants: (string | null)[] = [];
+  sent: { tenantId: string; workOrderId: string; input: WorkOrderActionInput }[] = [];
   created: CreateRequestInput[] = [];
   uploadDurationMs = 100;
   private sendQueue: (SendResult | Error)[] = [];
@@ -78,17 +79,26 @@ export class FakeTransport implements Transport {
     this.createQueue.push(result);
   }
 
-  async uploadPhoto(path: string, kind: OutboxKind): Promise<{ key: string; durationMs: number }> {
+  async uploadPhoto(
+    path: string,
+    kind: OutboxKind,
+    tenantId: string | null = null,
+  ): Promise<{ key: string; durationMs: number }> {
     const error = this.uploadErrors.get(path);
     if (error) throw error;
     this.uploads.push(path);
     this.uploadKinds.push(kind);
+    this.uploadTenants.push(tenantId);
     return { key: `k${this.uploads.length}`, durationMs: this.uploadDurationMs };
   }
-  async sendAction(workOrderId: string, input: WorkOrderActionInput): Promise<SendResult> {
+  async sendAction(
+    tenantId: string,
+    workOrderId: string,
+    input: WorkOrderActionInput,
+  ): Promise<SendResult> {
     const next = this.sendQueue.shift();
     if (next instanceof Error) throw next;
-    this.sent.push({ workOrderId, input });
+    this.sent.push({ tenantId, workOrderId, input });
     return next ?? { kind: 'ok' };
   }
   async sendCreateRequest(input: CreateRequestInput): Promise<SendCreateRequestResult> {
@@ -109,16 +119,22 @@ export class FakeTransport implements Transport {
   }
 }
 
+export const TENANT_ID = '66666666-6666-4666-8666-666666666666';
+
 type WorkOrderOverrides = Partial<OutboxItem> & Partial<WorkOrderActionPayload>;
 
 /** Item `work_order_action`; os campos da ação podem vir soltos e vão para o `payload`. */
 export function makeItem(overrides: WorkOrderOverrides = {}): OutboxItem {
-  const { workOrderId, action, occurredAt, note, ...rest } = overrides;
+  const { tenantId, workOrderId, action, occurredAt, note, impedimentReason, location, ...rest } =
+    overrides;
   const payload: WorkOrderActionPayload = {
+    tenantId: tenantId ?? TENANT_ID,
     workOrderId: workOrderId ?? '22222222-2222-4222-8222-222222222222',
     action: action ?? 'complete',
     occurredAt: occurredAt ?? '2026-10-22T10:00:00.000Z',
     note: note === undefined ? 'Serviço feito' : note,
+    impedimentReason: impedimentReason ?? null,
+    location: location ?? null,
   };
   return {
     id: '11111111-1111-4111-8111-111111111111',

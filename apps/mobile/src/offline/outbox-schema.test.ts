@@ -1,14 +1,17 @@
 import { DatabaseSync } from 'node:sqlite';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { processOutbox, type OutboxItem } from './outbox';
 import {
   OUTBOX_SCHEMA_VERSION,
+  SqliteOutboxStore,
+  createDatabaseOpener,
   fromOutboxRow,
   migrateOutbox,
   toOutboxRow,
   type AppDb,
   type OutboxRow,
 } from './outbox-schema';
-import { makeRequestItem } from './test-helpers';
+import { FakeTransport, actionOf, fakeConnection, makeItem, makeRequestItem } from './test-helpers';
 
 type Bind = string | number | null;
 
@@ -126,11 +129,12 @@ describe('outbox migrations', () => {
         photoPaths: ['/outbox/item-1/0.jpg'],
         photoKeys: ['k1'],
         createdOffline: true,
-        status: 'pending',
-        rejection: null,
+        // Sem prefeitura no item: a versão 2 recusa (a ação do Laboratório não tem para onde ir).
+        status: 'rejected',
+        rejection: { code: 'missing_tenant' },
         attempts: 2,
         nextAttemptAt: 500,
-        lastError: 'timeout',
+        lastError: 'missing_tenant',
         createdAt: 10,
       },
       expect.objectContaining({
@@ -189,5 +193,170 @@ describe('outbox migrations', () => {
     );
     await migrateOutbox(db, owner);
     expect(await listItems(db)).toEqual([item]);
+  });
+});
+
+/** Tabela da fila na versão 1 (igual à atual), antes da prefeitura por item. */
+const V1_TABLE = `
+  CREATE TABLE outbox (
+    id TEXT PRIMARY KEY NOT NULL,
+    kind TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    payload TEXT NOT NULL,
+    photo_paths TEXT NOT NULL,
+    photo_keys TEXT NOT NULL,
+    created_offline INTEGER NOT NULL,
+    status TEXT NOT NULL,
+    rejection TEXT,
+    attempts INTEGER NOT NULL,
+    next_attempt_at INTEGER NOT NULL,
+    last_error TEXT,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX outbox_due ON outbox (status, next_attempt_at, created_at);
+  CREATE TABLE work_orders_cache (id TEXT PRIMARY KEY NOT NULL, status TEXT NOT NULL);
+  PRAGMA user_version = 1;
+`;
+
+async function insertRow(db: AppDb, item: OutboxItem): Promise<void> {
+  const row = toOutboxRow(item);
+  const columns = Object.keys(row);
+  await db.runAsync(
+    `INSERT INTO outbox (${columns.join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`,
+    Object.values(row),
+  );
+}
+
+/** Item de ação como a versão 1 gravava: sem prefeitura, local nem motivo. */
+function v1Action(overrides: Partial<OutboxItem>): OutboxItem {
+  const item = makeItem(overrides);
+  const { workOrderId, action, occurredAt, note } = actionOf(item);
+  return { ...item, payload: { workOrderId, action, occurredAt, note } };
+}
+
+describe('outbox schema version 2', () => {
+  it('v1 work order items without tenant become rejected on migration', async () => {
+    const db = nodeDb();
+    db.raw.exec(V1_TABLE);
+    const pending = v1Action({ id: 'a', createdAt: 1, status: 'pending' });
+    const conflict = v1Action({
+      id: 'b',
+      createdAt: 2,
+      status: 'conflict',
+      lastError: 'cancelled',
+    });
+    const done = v1Action({ id: 'c', createdAt: 3, status: 'done' });
+    const request = makeRequestItem({ createdAt: 4 });
+    for (const item of [pending, conflict, done, request]) await insertRow(db, item);
+
+    await migrateOutbox(db, async () => 'owner-1');
+
+    expect(userVersion(db)).toBe(2);
+    expect(await listItems(db)).toEqual([
+      {
+        ...pending,
+        status: 'rejected',
+        rejection: { code: 'missing_tenant' },
+        lastError: 'missing_tenant',
+      },
+      {
+        ...conflict,
+        status: 'rejected',
+        rejection: { code: 'missing_tenant' },
+        lastError: 'missing_tenant',
+      },
+      done,
+      request,
+    ]);
+    // O cache de atividades do Laboratório sai junto.
+    expect(
+      db.raw.prepare("SELECT name FROM sqlite_master WHERE name = 'work_orders_cache'").get(),
+    ).toBeUndefined();
+  });
+
+  it('keeps work order items that already have a tenant', async () => {
+    const db = nodeDb();
+    db.raw.exec(V1_TABLE);
+    const item = makeItem();
+    await insertRow(db, item);
+    await migrateOutbox(db, async () => null);
+    expect(await listItems(db)).toEqual([item]);
+  });
+});
+
+describe('SqliteOutboxStore', () => {
+  async function newStore(deletePhotos: (id: string) => void) {
+    const db = nodeDb();
+    await migrateOutbox(db, async () => null);
+    return { db, store: new SqliteOutboxStore(db, deletePhotos) };
+  }
+
+  it('failing photo folder delete does not stop the pass', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const { store } = await newStore(() => {
+      throw new Error('EBUSY');
+    });
+    await store.add(makeItem({ id: 'a', createdAt: 1 }));
+    await store.add(makeItem({ id: 'b', createdAt: 2 }));
+    const transport = new FakeTransport();
+    const result = await processOutbox({ store, transport, connection: fakeConnection() });
+    expect(result).toMatchObject({ sent: 2, failed: 0, stoppedByNetwork: false });
+    expect((await store.list()).map((i) => [i.id, i.status])).toEqual([
+      ['a', 'done'],
+      ['b', 'done'],
+    ]);
+    expect(transport.sent).toHaveLength(2);
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it('removing a rejected item deletes its stashed photos', async () => {
+    const deleted: string[] = [];
+    const { store } = await newStore((id) => deleted.push(id));
+    await store.add(
+      makeItem({ id: 'a', status: 'rejected', rejection: { code: 'work_order_not_found' } }),
+    );
+    await store.add(makeItem({ id: 'b', createdAt: 2, status: 'conflict' }));
+    await store.add(makeItem({ id: 'c', createdAt: 3, status: 'failed' }));
+    await store.remove('a');
+    await store.remove('b');
+    await store.remove('c');
+    expect(deleted).toEqual(['a', 'b', 'c']);
+    expect(await store.list()).toEqual([]);
+  });
+
+  it('deletes the photos of a sent item', async () => {
+    const deleted: string[] = [];
+    const { store } = await newStore((id) => deleted.push(id));
+    await store.add(makeItem({ id: 'a' }));
+    await store.update('a', { status: 'failed' });
+    expect(deleted).toEqual([]);
+    await store.update('a', { status: 'done' });
+    expect(deleted).toEqual(['a']);
+  });
+});
+
+describe('createDatabaseOpener', () => {
+  it('openAppDatabase retries after a failed open', async () => {
+    let calls = 0;
+    const open = createDatabaseOpener(async () => {
+      calls++;
+      if (calls === 1) throw new Error('disk I/O error');
+      return { n: calls };
+    });
+    await expect(open()).rejects.toThrow('disk I/O error');
+    const db = await open();
+    expect(db).toEqual({ n: 2 });
+    // Aberto com sucesso: as próximas chamadas usam o mesmo banco.
+    expect(await open()).toBe(db);
+    expect(calls).toBe(2);
+  });
+
+  it('concurrent callers share the same open', async () => {
+    let calls = 0;
+    const open = createDatabaseOpener(async () => ({ n: ++calls }));
+    const [a, b] = await Promise.all([open(), open()]);
+    expect(a).toBe(b);
+    expect(calls).toBe(1);
   });
 });

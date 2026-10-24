@@ -18,7 +18,7 @@ function parseJson(bodyText: string): unknown {
   }
 }
 
-/** Traduz a resposta de POST /dev/work-orders/:id/actions. Puro e testável. */
+/** Traduz a resposta de POST /agent/work-orders/:id/actions. Puro e testável. */
 export function mapActionResponse(status: number, bodyText: string): SendActionResult {
   const json = parseJson(bodyText);
   const body = (typeof json === 'object' && json !== null ? json : {}) as {
@@ -38,7 +38,10 @@ export function mapActionResponse(status: number, bodyText: string): SendActionR
   // Token recusado (vencido ou sessão encerrada): o item espera um novo login na fila.
   if (status === 401) throw new NetworkError('unauthorized');
   if (RETRY_STATUSES.includes(status)) throw new NetworkError(`http_${status}`);
-  // Qualquer outro 4xx não melhora com nova tentativa: recusa e segue a fila.
+  // Qualquer outro 4xx não melhora com nova tentativa: recusa e segue a fila. Inclui 404
+  // `work_order_not_found` (a atividade pode ter sido concluída ou cancelada no meio do caminho),
+  // 403 `not_a_member` (vínculo encerrado) e 409 `photo_already_used`, que a fila marca como
+  // recusados (`ACTION_REJECTION_CODES`).
   if (status >= 400 && status < 500) {
     const fallback =
       status === 404 ? 'not_found' : status === 409 ? 'client_action_conflict' : `http_${status}`;

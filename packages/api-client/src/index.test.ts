@@ -127,6 +127,53 @@ describe('api client', () => {
     expect(sent).toEqual({ url: `http://api/me/devices/${REQUEST_ID}`, method: 'PUT' });
   });
 
+  it('agent requests send the tenant header', async () => {
+    const sent: { url: string; method?: string; tenant: string | null }[] = [];
+    const fakeFetch: typeof fetch = async (input, init) => {
+      const url = String(input);
+      sent.push({
+        url,
+        method: init?.method,
+        tenant: new Headers(init?.headers).get('x-tenant-id'),
+      });
+      if (url.endsWith('/agent/uploads')) {
+        return Response.json({ key: 'k', url: 'http://s3/put', headers: {} });
+      }
+      if (url.endsWith('/agent/work-orders')) return Response.json([agentCard]);
+      return Response.json(agentDetail);
+    };
+    const api = createApiClient({ baseUrl: 'http://api', fetch: fakeFetch });
+    const cards = await api.agentWorkOrders(TENANT_ID);
+    const detail = await api.agentWorkOrder(TENANT_ID, WORK_ORDER_ID);
+    const upload = await api.agentUpload(TENANT_ID);
+    expect(cards[0]?.protocol).toBe('2026-000123');
+    expect(detail.citizenCount).toBe(2);
+    expect(upload.key).toBe('k');
+    expect(sent).toEqual([
+      { url: 'http://api/agent/work-orders', method: 'GET', tenant: TENANT_ID },
+      { url: `http://api/agent/work-orders/${WORK_ORDER_ID}`, method: 'GET', tenant: TENANT_ID },
+      { url: 'http://api/agent/uploads', method: 'POST', tenant: TENANT_ID },
+    ]);
+  });
+
+  it('agent work order list rejects an invalid response', async () => {
+    const fakeFetch: typeof fetch = async () =>
+      Response.json([{ ...agentCard, tenantId: undefined }]);
+    const api = createApiClient({ baseUrl: 'http://api', fetch: fakeFetch });
+    await expect(api.agentWorkOrders(TENANT_ID)).rejects.toThrow();
+  });
+
+  it('requests without a tenant do not send the header', async () => {
+    let tenant: string | null = 'unset';
+    const fakeFetch: typeof fetch = async (_input, init) => {
+      tenant = new Headers(init?.headers).get('x-tenant-id');
+      return Response.json([]);
+    };
+    const api = createApiClient({ baseUrl: 'http://api', fetch: fakeFetch });
+    await api.listRequests('all');
+    expect(tenant).toBeNull();
+  });
+
   it('action errors keep the API code', async () => {
     const fakeFetch: typeof fetch = async () =>
       Response.json({ code: 'invalid_status' }, { status: 409 });
@@ -155,4 +202,35 @@ const createBody = {
     uploadDurationMs: null,
     sentOffline: false,
   },
+};
+
+const TENANT_ID = '7c1d2e3f-4a5b-4c6d-8e7f-901234567890';
+const WORK_ORDER_ID = '1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d';
+
+const agentCard = {
+  id: WORK_ORDER_ID,
+  tenantId: TENANT_ID,
+  status: 'assigned',
+  protocol: '2026-000123',
+  categoryName: 'Buraco na via',
+  categoryIcon: 'construction',
+  categoryGroup: 'infrastructure',
+  address: 'Rua das Flores, 120',
+  location: { lat: -23.5, lng: -46.6 },
+  teamName: 'Equipe Centro',
+  reportCount: 2,
+  dueAt: null,
+  assignedAt: '2026-10-20T11:12:00.000Z',
+  statusChangedAt: '2026-10-20T11:12:00.000Z',
+};
+
+const agentDetail = {
+  ...agentCard,
+  managerInstructions: null,
+  assignedBy: null,
+  reports: [],
+  photos: [],
+  citizenCount: 2,
+  rework: null,
+  previousNote: null,
 };

@@ -1,4 +1,6 @@
 import {
+  agentWorkOrderCardSchema,
+  agentWorkOrderDetailSchema,
   challengeResponseSchema,
   createRequestResponseSchema,
   healthResponseSchema,
@@ -11,6 +13,8 @@ import {
   sessionResponseSchema,
   similarOccurrenceSchema,
   uploadResponseSchema,
+  type AgentWorkOrderCard,
+  type AgentWorkOrderDetail,
   type ChallengeResponse,
   type CityInterestBody,
   type ContestBody,
@@ -73,12 +77,17 @@ const DEFAULT_TIMEOUT_MS = 30_000;
  */
 type Auth = 'session' | 'none' | { token: string };
 
-/** Opções de quem chama: o `signal` cancela a requisição (tela fechada, busca trocada). */
+/**
+ * Opções de quem chama: o `signal` cancela a requisição (tela fechada, busca trocada) e o
+ * `tenantId` vai no cabeçalho `x-tenant-id` (rotas da prefeitura, como as do agente).
+ */
 export interface RequestOptions {
   signal?: AbortSignal | null;
+  tenantId?: string;
 }
 
 const requestCardsSchema = requestCardSchema.array();
+const agentWorkOrderCardsSchema = agentWorkOrderCardSchema.array();
 const similarOccurrencesSchema = similarOccurrenceSchema.array();
 
 /** Monta a query string à mão: o URLSearchParams do React Native é incompleto. */
@@ -160,6 +169,7 @@ export function createApiClient({
     request(path, {
       method,
       ...(body !== undefined && { body: JSON.stringify(body) }),
+      ...(options.tenantId && { headers: { 'x-tenant-id': options.tenantId } }),
       signal: options.signal ?? null,
     });
 
@@ -257,6 +267,35 @@ export function createApiClient({
     cityInterest: async (body: CityInterestBody, options?: RequestOptions): Promise<void> => {
       await send('POST', '/citizen/city-interest', body, options);
     },
+
+    // Agente (sempre na prefeitura informada)
+
+    /** Atividades do agente nas equipes dele nesta prefeitura. */
+    agentWorkOrders: async (
+      tenantId: string,
+      options?: RequestOptions,
+    ): Promise<AgentWorkOrderCard[]> =>
+      agentWorkOrderCardsSchema.parse(
+        await send('GET', '/agent/work-orders', undefined, { ...options, tenantId }),
+      ),
+
+    agentWorkOrder: async (
+      tenantId: string,
+      id: string,
+      options?: RequestOptions,
+    ): Promise<AgentWorkOrderDetail> =>
+      agentWorkOrderDetailSchema.parse(
+        await send('GET', `/agent/work-orders/${encodeURIComponent(id)}`, undefined, {
+          ...options,
+          tenantId,
+        }),
+      ),
+
+    /** Endereço assinado para enviar uma foto do agente; o envio do arquivo fica com quem chama. */
+    agentUpload: async (tenantId: string, options?: RequestOptions): Promise<UploadResponse> =>
+      uploadResponseSchema.parse(
+        await send('POST', '/agent/uploads', undefined, { ...options, tenantId }),
+      ),
 
     // Perfil
 

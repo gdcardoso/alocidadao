@@ -4,6 +4,7 @@ import { mapActionResponse, mapCreateRequestResponse, parsePresignResponse } fro
 import {
   NetworkError,
   PhotoMissingError,
+  UploadRejectedError,
   type OutboxKind,
   type SendActionResult,
   type SendCreateRequestResult,
@@ -16,8 +17,6 @@ export interface HttpTransportOptions {
   baseUrl: string;
   /** Token de acesso da sessão; `null` sem sessão. Falha de rede rejeita com `NetworkError`. */
   getAccessToken: () => Promise<string | null>;
-  /** Prefeitura em que o agente atua (`x-tenant-id` das rotas /dev); `null` para o cidadão. */
-  tenantId: string | null;
   timeoutMs?: number;
 }
 
@@ -46,26 +45,30 @@ export class HttpTransport implements Transport {
   }
 
   /**
-   * Cabeçalhos da sessão. As rotas /dev do agente levam a prefeitura; as do cidadão, não.
-   * Sem sessão o item continua na fila (`NetworkError`) até um novo login.
+   * Cabeçalhos da sessão. As rotas /agent levam a prefeitura do item (`tenantId`); as do
+   * cidadão, não. Sem sessão o item continua na fila (`NetworkError`) até um novo login.
    */
-  private async authHeaders(withTenant: boolean): Promise<Record<string, string>> {
+  private async authHeaders(tenantId: string | null): Promise<Record<string, string>> {
     const token = await this.options.getAccessToken();
     if (!token) throw new NetworkError('signed_out');
-    if (!withTenant) return { authorization: `Bearer ${token}` };
-    const { tenantId } = this.options;
-    if (!tenantId) throw new NetworkError('signed_out');
+    if (!tenantId) return { authorization: `Bearer ${token}` };
     return { authorization: `Bearer ${token}`, 'x-tenant-id': tenantId };
   }
 
-  async uploadPhoto(path: string, kind: OutboxKind): Promise<{ key: string; durationMs: number }> {
+  async uploadPhoto(
+    path: string,
+    kind: OutboxKind,
+    tenantId: string | null = null,
+  ): Promise<{ key: string; durationMs: number }> {
+    const agent = kind === 'work_order_action';
+    // A foto do agente sobe na prefeitura da atividade; sem ela não há para onde enviar.
+    if (agent && !tenantId) throw new UploadRejectedError('missing_tenant');
     const file = new File(path);
     if (!file.exists) throw new PhotoMissingError(path);
 
-    const agent = kind === 'work_order_action';
     const presign = await this.request(
-      `${this.options.baseUrl}${agent ? '/dev/uploads' : '/citizen/uploads'}`,
-      { method: 'POST', headers: await this.authHeaders(agent) },
+      `${this.options.baseUrl}${agent ? '/agent/uploads' : '/citizen/uploads'}`,
+      { method: 'POST', headers: await this.authHeaders(agent ? tenantId : null) },
     );
     const { key, url, headers } = parsePresignResponse(presign.status, presign.text);
 
@@ -75,25 +78,16 @@ export class HttpTransport implements Transport {
     return { key, durationMs: Date.now() - start };
   }
 
-  /** Lista as atividades do agente (GET /dev/work-orders). */
-  async listWorkOrders(): Promise<unknown> {
-    const response = await this.request(`${this.options.baseUrl}/dev/work-orders`, {
-      headers: await this.authHeaders(true),
-    });
-    if (response.status !== 200) throw new NetworkError(`work_orders_${response.status}`);
-    try {
-      return JSON.parse(response.text);
-    } catch {
-      throw new NetworkError('invalid_work_orders_response');
-    }
-  }
-
-  async sendAction(workOrderId: string, input: WorkOrderActionInput): Promise<SendActionResult> {
+  async sendAction(
+    tenantId: string,
+    workOrderId: string,
+    input: WorkOrderActionInput,
+  ): Promise<SendActionResult> {
     const response = await this.request(
-      `${this.options.baseUrl}/dev/work-orders/${workOrderId}/actions`,
+      `${this.options.baseUrl}/agent/work-orders/${encodeURIComponent(workOrderId)}/actions`,
       {
         method: 'POST',
-        headers: { ...(await this.authHeaders(true)), 'content-type': 'application/json' },
+        headers: { ...(await this.authHeaders(tenantId)), 'content-type': 'application/json' },
         body: JSON.stringify(input),
       },
     );
@@ -103,7 +97,7 @@ export class HttpTransport implements Transport {
   async sendCreateRequest(input: CreateRequestInput): Promise<SendCreateRequestResult> {
     const response = await this.request(`${this.options.baseUrl}/citizen/requests`, {
       method: 'POST',
-      headers: { ...(await this.authHeaders(false)), 'content-type': 'application/json' },
+      headers: { ...(await this.authHeaders(null)), 'content-type': 'application/json' },
       body: JSON.stringify(input),
     });
     return mapCreateRequestResponse(response.status, response.text);

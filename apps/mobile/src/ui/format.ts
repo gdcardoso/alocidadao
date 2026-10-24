@@ -46,6 +46,20 @@ export function parsePhoneInput(text: string): string | null {
   return digits.length === 11 ? `+55${digits}` : null;
 }
 
+/**
+ * Número sugerido pelo chip (Phone Number Hint) → 11 dígitos (DDD + número), só se for do
+ * Brasil. Com E.164, exige o +55; sem ele, o número com "+" também precisa ser +55.
+ */
+export function phoneHintDigits(hint: { number: string; e164: string | null }): string | null {
+  const international = hint.e164 ?? (hint.number.trim().startsWith('+') ? hint.number : null);
+  if (international !== null) {
+    const digits = international.replace(/\D/g, '');
+    return digits.length === 13 && digits.startsWith('55') ? digits.slice(2) : null;
+  }
+  const digits = hint.number.replace(/\D/g, '');
+  return digits.length === 11 ? digits : null;
+}
+
 /** Máscara `(XX) XXXXX-XXXX` aplicada enquanto o cidadão digita. */
 export function maskPhoneInput(text: string): string {
   const digits = text.replace(/\D/g, '').slice(0, 11);

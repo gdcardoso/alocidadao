@@ -1,5 +1,6 @@
 import { requireOptionalNativeModule } from 'expo';
 import { Platform } from 'react-native';
+import { phoneHintDigits } from '../ui/format';
 
 // Número do chip pelo Phone Number Hint do Google (expo-phone-number-hint, só Android).
 // O módulo nativo é opcional: num build anterior à dependência ele não existe e o app segue
@@ -35,10 +36,7 @@ export async function pickPhoneHint(): Promise<string | null> {
   try {
     const result = await native.showPhoneNumberHintAsync();
     if (result.canceled) return null;
-    const digits = (result.hint.e164 ?? result.hint.number).replace(/\D/g, '');
-    if (digits.length === 13 && digits.startsWith('55')) return digits.slice(2);
-    if (digits.length === 11) return digits;
-    return null;
+    return phoneHintDigits(result.hint);
   } catch (error) {
     console.warn('Falha ao sugerir o número do chip', error);
     return null;

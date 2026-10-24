@@ -9,9 +9,23 @@ import {
   initials,
   maskPhoneInput,
   parsePhoneInput,
+  phoneHintDigits,
 } from './format';
 
 describe('phone', () => {
+  it('takes the national digits of a Brazilian SIM number', () => {
+    expect(phoneHintDigits({ number: '+55 11 98765-4321', e164: '+5511987654321' })).toBe(
+      '11987654321',
+    );
+    expect(phoneHintDigits({ number: '(11) 98765-4321', e164: null })).toBe('11987654321');
+  });
+
+  it('ignores a SIM number from another country', () => {
+    // O que o emulador devolve: 11 dígitos sem o "+", mas não é do Brasil.
+    expect(phoneHintDigits({ number: '+15551234567', e164: null })).toBeNull();
+    expect(phoneHintDigits({ number: '(555) 123-4567', e164: '+15551234567' })).toBeNull();
+    expect(phoneHintDigits({ number: '(555) 123-4567', e164: null })).toBeNull();
+  });
   it('formats an E.164 mobile number', () => {
     expect(formatPhoneBR('+5511987654321')).toBe('(11) 98765-4321');
   });

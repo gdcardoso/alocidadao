@@ -42,6 +42,8 @@ export const colors = {
   // Fundos da pilha de fotos.
   photoStackBack: '#94A3B8',
   photoStackMiddle: '#64748B',
+  // Agente (A1/A5): texto âmbar escuro sobre `warning-soft`.
+  warningStrong: '#78350F',
 } as const;
 
 export type ColorToken = keyof typeof colors;

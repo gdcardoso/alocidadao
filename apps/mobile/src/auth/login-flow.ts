@@ -6,14 +6,11 @@ import { parsePhoneInput } from '../ui/format';
 // Regras das telas de entrada, sem nada nativo (testável em Node).
 
 /**
- * Tela inicial de quem está logado. Fica fora de "/": o `index` da raiz redireciona pela
- * sessão, e a tela inicial lá criaria um laço de redirecionamento.
+ * Para onde o app segue depois que o código do SMS confere. `home`: a tela inicial do modo
+ * (`homeFor` em app-mode.ts), aberta pelo `index` da raiz quando a sessão entra.
  */
-export const HOME_ROUTE = '/(app)/(tabs)/solicitacoes';
-
-/** Para onde o app segue depois que o código do SMS confere. */
 export type LoginStep =
-  | { route: typeof HOME_ROUTE }
+  | { route: 'home' }
   | { route: '/(auth)/quase-la'; signupToken: string }
   | {
       route: '/(auth)/confirmar-email';
@@ -25,7 +22,7 @@ export type LoginStep =
 export function nextStepAfterVerify(response: PhoneVerifyResponse): LoginStep {
   switch (response.status) {
     case 'signed_in':
-      return { route: HOME_ROUTE };
+      return { route: 'home' };
     case 'needs_profile':
       return { route: '/(auth)/quase-la', signupToken: response.signupToken };
     case 'email_check':

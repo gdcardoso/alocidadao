@@ -1,11 +1,11 @@
 import { Redirect } from 'expo-router';
-import { HOME_ROUTE } from '../auth/login-flow';
+import { homeFor } from '../auth/app-mode';
 import { useSession } from '../auth/use-session';
 
-/** Porta de entrada: manda para a abertura, para o login ou para o app, conforme a sessão. */
+/** Porta de entrada: manda para a abertura, para o login ou para a tela inicial do modo (agente ou cidadão). */
 export default function Index() {
-  const { status } = useSession();
+  const { status, mode } = useSession();
   if (status === 'loading') return <Redirect href="/abertura" />;
   if (status === 'signedOut') return <Redirect href="/(auth)/entrar" />;
-  return <Redirect href={HOME_ROUTE} />;
+  return <Redirect href={homeFor(mode)} />;
 }

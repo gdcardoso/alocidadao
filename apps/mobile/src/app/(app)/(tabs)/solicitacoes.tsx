@@ -2,8 +2,10 @@ import { ApiError } from '@alocidadao/api-client';
 import type { RequestCard as RequestCardData, RequestListFilter } from '@alocidadao/shared';
 import { router, useFocusEffect, type Href } from 'expo-router';
 import { useBottomTabBarHeight } from 'expo-router/js-tabs';
+import { CircleAlert } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { AGENT_ACCESS_ENDED_NOTICE } from '../../../auth/app-mode';
 import { sessionApi } from '../../../auth/native-session';
 import { useSession } from '../../../auth/use-session';
 import {
@@ -19,9 +21,10 @@ import { onOutboxSynced } from '../../../offline/outbox-service';
 import { SecondaryButton, TextButton } from '../../../ui/Button';
 import { CityChip, FilterChip } from '../../../ui/Chip';
 import { firstName } from '../../../ui/format';
+import { ModePill } from '../../../ui/ModePill';
 import { RequestCard } from '../../../ui/RequestCard';
 import { Screen } from '../../../ui/Screen';
-import { colors, fonts, space } from '../../../ui/theme';
+import { colors, fonts, radius, space } from '../../../ui/theme';
 
 const FILTERS: { key: RequestListFilter; label: string }[] = [
   { key: 'all', label: 'Todas' },
@@ -36,7 +39,15 @@ type ListState =
 
 /** Tela 4 · Minhas solicitações: a tela inicial de quem está logado. */
 export default function MinhasSolicitacoes() {
-  const { me, refreshMe } = useSession();
+  const { me, refreshMe, isAgent, setMode, agentAccessEnded, dismissAgentAccessEnded } =
+    useSession();
+  // Vínculo de agente encerrado: o aviso fica nesta tela enquanto ela existir e não volta (a
+  // sessão o esquece assim que ele aparece).
+  const [showAccessEnded, setShowAccessEnded] = useState(agentAccessEnded);
+  if (agentAccessEnded && !showAccessEnded) setShowAccessEnded(true);
+  useEffect(() => {
+    if (agentAccessEnded) dismissAgentAccessEnded();
+  }, [agentAccessEnded, dismissAgentAccessEnded]);
   const { city } = useCurrentPlace();
   const queue = useQueuedRequests();
   const reloadQueue = queue.reload;
@@ -129,11 +140,22 @@ export default function MinhasSolicitacoes() {
 
   const header = (
     <View style={styles.headerBlock}>
+      {showAccessEnded ? (
+        <View style={styles.accessEnded} accessible accessibilityRole="alert">
+          <CircleAlert size={20} color={colors.warning} />
+          <Text style={styles.accessEndedText}>{AGENT_ACCESS_ENDED_NOTICE}</Text>
+        </View>
+      ) : null}
       <View style={styles.header}>
-        {me ? <Text style={styles.hello}>Olá, {firstName(me.name)}</Text> : null}
-        <Text style={styles.title} accessibilityRole="header">
-          Minhas solicitações
-        </Text>
+        <View style={styles.titleRow}>
+          <View style={styles.titleTexts}>
+            {me ? <Text style={styles.hello}>Olá, {firstName(me.name)}</Text> : null}
+            <Text style={styles.title} accessibilityRole="header">
+              Minhas solicitações
+            </Text>
+          </View>
+          {isAgent ? <ModePill mode="citizen" onPress={() => void setMode('agent')} /> : null}
+        </View>
         {city ? <CityChip label={`Você está em ${city}`} /> : null}
       </View>
       <View style={styles.filters} accessibilityRole="tablist">
@@ -238,6 +260,26 @@ const styles = StyleSheet.create({
   content: { flexGrow: 1 },
   headerBlock: { gap: 8, paddingBottom: 16 },
   header: { paddingTop: 4, paddingHorizontal: space.gutter, paddingBottom: 8, gap: 8 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  titleTexts: { flex: 1, gap: 8 },
+  accessEnded: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginHorizontal: space.gutter,
+    marginTop: 4,
+    padding: 14,
+    borderRadius: radius.card,
+    borderWidth: 1,
+    borderColor: colors.warning,
+    backgroundColor: colors.warningSoft,
+  },
+  accessEndedText: {
+    flex: 1,
+    fontFamily: fonts.bodySemibold,
+    fontSize: 15,
+    color: colors.warningStrong,
+  },
   hello: { fontFamily: fonts.body, fontSize: 16, color: colors.textSecondary },
   title: { fontFamily: fonts.heading, fontSize: 24, color: colors.textPrimary },
   filters: {

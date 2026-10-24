@@ -1,19 +1,64 @@
 import { ApiError } from '@alocidadao/api-client';
 import type { MeResponse, SessionTokens } from '@alocidadao/shared';
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { router } from 'expo-router';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { registerDevice } from '../lib/register-device';
 import { secureStore } from '../lib/secure-store';
 import { clearOfflineData } from '../offline/sqlite-outbox-store';
+import {
+  APP_MODE_KEY,
+  CITIZEN_HOME_ROUTE,
+  hasAgentRole,
+  homeFor,
+  modeAfterMeUpdate,
+  parseStoredMode,
+  resolveMode,
+  storedModeValue,
+  type AppMode,
+} from './app-mode';
+import { OUTBOX_OWNER_KEY } from './login-flow';
 import { session, sessionApi } from './native-session';
 import { restoreSession, signInWithOwnerCheck, signOutSafely } from './session-flow';
 import { SessionContext, type SessionStatus, type SignOutOptions } from './use-session';
 
 const isUnauthorized = (error: unknown) => error instanceof ApiError && error.status === 401;
 
+/** Grava o modo com o dono (sem `me`, o dono da fila, que é a pessoa logada). */
+async function saveMode(mode: AppMode, userId: string | null): Promise<void> {
+  try {
+    const owner = userId ?? (await secureStore.getItem(OUTBOX_OWNER_KEY));
+    if (owner) await secureStore.setItem(APP_MODE_KEY, storedModeValue(mode, owner));
+  } catch (error) {
+    // Sem gravar, a próxima abertura volta ao modo padrão; nada a mostrar.
+    console.warn('Falha ao gravar o modo do app', error);
+  }
+}
+
+/**
+ * Modo ao abrir ou entrar, com o aviso de vínculo encerrado quando o último modo era o de
+ * agente e o vínculo acabou com o app fechado.
+ */
+async function initialMode(me: MeResponse | null) {
+  const raw = await secureStore.getItem(APP_MODE_KEY).catch(() => null);
+  const stored = parseStoredMode(raw, me?.id ?? null);
+  const after = modeAfterMeUpdate(stored ?? 'citizen', me);
+  if (after.agentAccessEnded) void saveMode('citizen', me?.id ?? null);
+  return {
+    mode: resolveMode(me, after.agentAccessEnded ? 'citizen' : stored),
+    agentAccessEnded: after.agentAccessEnded,
+  };
+}
+
 /** Sessão do app para as telas: lê o token guardado na abertura e acompanha login e saída. */
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<SessionStatus>('loading');
   const [me, setMe] = useState<MeResponse | null>(null);
+  const [mode, setModeState] = useState<AppMode>('citizen');
+  const [agentAccessEnded, setAgentAccessEnded] = useState(false);
+  const modeRef = useRef(mode);
+  useEffect(() => {
+    modeRef.current = mode;
+  }, [mode]);
 
   const dropSession = useCallback(async () => {
     // A API recusou a sessão: limpa só o token (a fila fica para o mesmo dono, se voltar).
@@ -38,6 +83,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         setStatus('signedOut');
         return;
       }
+      // O modo vem antes de `signedIn`: o `index` redireciona para a tela inicial dele.
+      const start = await initialMode(restored.me);
+      if (!active) return;
+      setModeState(start.mode);
+      setAgentAccessEnded(start.agentAccessEnded);
       setMe(restored.me);
       setStatus('signedIn');
       if (restored.me) void registerDevice();
@@ -64,6 +114,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       clearOfflineData,
       undoTokens: () => session.signOut(),
     });
+    const start = await initialMode(current);
+    setModeState(start.mode);
+    setAgentAccessEnded(start.agentAccessEnded);
     setMe(current);
     setStatus('signedIn');
     void registerDevice({ askPermission: true });
@@ -84,9 +137,59 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // `me` atualizado sem vínculo de agente, no modo agente: volta ao modo cidadão com o aviso.
+  useEffect(() => {
+    if (status !== 'signedIn') return;
+    const after = modeAfterMeUpdate(modeRef.current, me);
+    if (!after.agentAccessEnded) return;
+    modeRef.current = after.mode;
+    setModeState(after.mode);
+    setAgentAccessEnded(true);
+    void saveMode(after.mode, me?.id ?? null);
+    router.replace(CITIZEN_HOME_ROUTE);
+  }, [status, me]);
+
+  const setMode = useCallback(
+    async (next: AppMode) => {
+      // Sem vínculo de agente não há modo agente.
+      if (next === 'agent' && me && !hasAgentRole(me)) return;
+      modeRef.current = next;
+      setModeState(next);
+      await saveMode(next, me?.id ?? null);
+      router.replace(homeFor(next));
+    },
+    [me],
+  );
+
+  const dismissAgentAccessEnded = useCallback(() => setAgentAccessEnded(false), []);
+
+  const isAgent = me ? hasAgentRole(me) : mode === 'agent';
+
   const value = useMemo(
-    () => ({ status, me, refreshMe, signIn, signOut }),
-    [status, me, refreshMe, signIn, signOut],
+    () => ({
+      status,
+      me,
+      refreshMe,
+      signIn,
+      signOut,
+      mode,
+      setMode,
+      isAgent,
+      agentAccessEnded,
+      dismissAgentAccessEnded,
+    }),
+    [
+      status,
+      me,
+      refreshMe,
+      signIn,
+      signOut,
+      mode,
+      setMode,
+      isAgent,
+      agentAccessEnded,
+      dismissAgentAccessEnded,
+    ],
   );
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }

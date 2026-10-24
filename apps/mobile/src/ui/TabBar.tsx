@@ -1,12 +1,14 @@
-import { Camera, List, User, type LucideIcon } from 'lucide-react-native';
+import { Camera, ClipboardList, List, User, type LucideIcon } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fonts } from './theme';
 
-export type TabKey = 'requests' | 'new' | 'profile';
+export type TabKey = 'requests' | 'new' | 'activities' | 'profile';
 
 export interface TabBarProps {
-  active: 'requests' | 'profile';
+  /** `citizen`: Solicitações, Nova e Perfil. `agent`: Atividades e Perfil, sem o botão Nova. */
+  variant?: 'citizen' | 'agent';
+  active: 'requests' | 'activities' | 'profile';
   onNavigate: (tab: TabKey) => void;
 }
 
@@ -14,11 +16,14 @@ function Tab({
   label,
   icon: Icon,
   active,
+  grow = false,
   onPress,
 }: {
   label: string;
   icon: LucideIcon;
   active: boolean;
+  /** Divide a barra por igual com a outra aba (barra do agente). */
+  grow?: boolean;
   onPress: () => void;
 }) {
   const color = active ? colors.primary : colors.textSecondary;
@@ -28,7 +33,7 @@ function Tab({
       accessibilityRole="tab"
       accessibilityState={{ selected: active }}
       accessibilityLabel={label}
-      style={[styles.tab, active && styles.tabActive]}
+      style={[styles.tab, grow && styles.tabGrow, active && styles.tabActive]}
     >
       <Icon size={22} color={color} />
       <Text style={[styles.tabLabel, { color }, active && styles.tabLabelActive]}>{label}</Text>
@@ -38,10 +43,35 @@ function Tab({
 
 /**
  * Barra de abas flutuante (telas 4 e 8): pílula de 68, raio 34, fundo `#FFFFFFF2`. "Nova" fica
- * sempre destacada em `primary`.
+ * sempre destacada em `primary`. No agente (A1), as duas abas dividem a barra por igual.
  */
-export function TabBar({ active, onNavigate }: TabBarProps) {
+export function TabBar({ variant = 'citizen', active, onNavigate }: TabBarProps) {
   const insets = useSafeAreaInsets();
+  if (variant === 'agent') {
+    return (
+      <View
+        style={[styles.outer, { paddingBottom: 16 + insets.bottom }]}
+        accessibilityRole="tablist"
+      >
+        <View style={styles.bar}>
+          <Tab
+            label="Atividades"
+            icon={ClipboardList}
+            active={active === 'activities'}
+            grow
+            onPress={() => onNavigate('activities')}
+          />
+          <Tab
+            label="Perfil"
+            icon={User}
+            active={active === 'profile'}
+            grow
+            onPress={() => onNavigate('profile')}
+          />
+        </View>
+      </View>
+    );
+  }
   return (
     <View style={[styles.outer, { paddingBottom: 16 + insets.bottom }]} accessibilityRole="tablist">
       <View style={styles.bar}>
@@ -95,6 +125,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 2,
   },
+  tabGrow: { flex: 1 },
   tabActive: { backgroundColor: colors.primarySoft },
   tabLabel: { fontFamily: fonts.bodyMedium, fontSize: 12, textAlign: 'center' },
   tabLabelActive: { fontFamily: fonts.bodySemibold },

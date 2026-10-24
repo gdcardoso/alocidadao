@@ -4,7 +4,6 @@ import type { KeyValueStore } from '../lib/installation-id';
 import {
   apiErrorMessage,
   apiRetryAfterSeconds,
-  HOME_ROUTE,
   errorMessage,
   formatCountdown,
   nextStepAfterVerify,
@@ -36,9 +35,8 @@ const CHALLENGE_ID = '7d0c6a3e-8f43-4c1e-9a55-2b4f0f6d1a10';
 describe('login flow', () => {
   it('nextStepAfterVerify routes each status', () => {
     expect(nextStepAfterVerify({ status: 'signed_in', session: SESSION })).toEqual({
-      route: HOME_ROUTE,
+      route: 'home',
     });
-    expect(HOME_ROUTE).toBe('/(app)/(tabs)/solicitacoes');
     expect(nextStepAfterVerify({ status: 'needs_profile', signupToken: 'st-1' })).toEqual({
       route: '/(auth)/quase-la',
       signupToken: 'st-1',

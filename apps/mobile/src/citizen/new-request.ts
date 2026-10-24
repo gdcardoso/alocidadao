@@ -125,6 +125,19 @@ export function decideFlow(
   return similar.length > 0 ? 'pick_similar' : 'submit';
 }
 
+/**
+ * Como o relato vai para a fila. `online` é o aparelho com rede: só sem ela o item conta como
+ * criado offline. `sendNow` envia na hora; com rede mas sem a resposta do `locate`, o item vai
+ * só para a fila e `syncAfter` dispara a fila logo em seguida.
+ */
+export function sendMode(
+  flow: 'submit' | 'queue',
+  online: boolean,
+): { online: boolean; sendNow: boolean; syncAfter: boolean } {
+  const sendNow = online && flow === 'submit';
+  return { online, sendNow, syncAfter: online && !sendNow };
+}
+
 /** A ocorrência parecida mais perto (a que a 5b mostra). */
 export function closestSimilar(list: readonly SimilarOccurrence[]): SimilarOccurrence | null {
   return list.reduce<SimilarOccurrence | null>(

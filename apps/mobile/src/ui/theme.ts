@@ -34,6 +34,11 @@ export const colors = {
   glass: '#FFFFFFF2',
   galleryText: '#CBD5E1',
   sheetHandle: '#CBD5E1',
+  // Galeria (7): fundo, bordas das fotos vizinhas, botão Fechar e indicadores.
+  galleryBg: '#000000',
+  galleryEdge: '#334155',
+  galleryButton: '#FFFFFF26',
+  galleryDot: '#FFFFFF66',
   // Fundos da pilha de fotos.
   photoStackBack: '#94A3B8',
   photoStackMiddle: '#64748B',

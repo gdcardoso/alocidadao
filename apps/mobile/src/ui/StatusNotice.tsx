@@ -1,9 +1,16 @@
-import { CircleAlert, CircleX, HardHat, Hourglass, type LucideIcon } from 'lucide-react-native';
+import {
+  CircleAlert,
+  CircleCheck,
+  CircleX,
+  HardHat,
+  Hourglass,
+  type LucideIcon,
+} from 'lucide-react-native';
 import { StyleSheet, Text, View } from 'react-native';
 import { colors, fonts, radius } from './theme';
 
 /** Tom do aviso conforme o status da solicitação. */
-export type StatusNoticeTone = 'open' | 'progress' | 'confirm' | 'rejected';
+export type StatusNoticeTone = 'open' | 'progress' | 'awaiting' | 'rejected' | 'done';
 
 const TONES: Record<
   StatusNoticeTone,
@@ -16,24 +23,29 @@ const TONES: Record<
     fg: colors.textSecondary,
   },
   progress: { icon: HardHat, bg: colors.primarySoft, border: colors.primary, fg: colors.primary },
-  confirm: {
+  awaiting: {
     icon: CircleAlert,
     bg: colors.warningSoft,
     border: colors.warning,
     fg: colors.warning,
   },
   rejected: { icon: CircleX, bg: colors.dangerSoft, border: colors.danger, fg: colors.danger },
+  // O Pencil não desenhou a concluída: segue o selo "Concluída" da lista.
+  done: { icon: CircleCheck, bg: colors.successSoft, border: colors.success, fg: colors.success },
 };
 
 export interface StatusNoticeProps {
   tone: StatusNoticeTone;
   title: string;
   text: string;
+  /** Troca o ícone do tom (ex.: cancelada usa o tom da aberta com outro ícone). */
+  icon?: LucideIcon;
 }
 
 /** Aviso de status no topo do detalhe: raio 20, padding 16, ícone 22, título 16/600, texto 15. */
-export function StatusNotice({ tone, title, text }: StatusNoticeProps) {
-  const { icon: Icon, bg, border, fg } = TONES[tone];
+export function StatusNotice({ tone, title, text, icon }: StatusNoticeProps) {
+  const { bg, border, fg } = TONES[tone];
+  const Icon = icon ?? TONES[tone].icon;
   return (
     <View style={[styles.notice, { backgroundColor: bg, borderColor: border }]} accessible>
       <Icon size={22} color={fg} />

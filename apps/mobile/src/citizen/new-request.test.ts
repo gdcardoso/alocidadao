@@ -16,6 +16,7 @@ import {
   limitAdjust,
   notServedTexts,
   reportCountLabel,
+  sendMode,
   type NewRequestDraft,
 } from './new-request';
 
@@ -90,6 +91,13 @@ describe('decideFlow', () => {
     expect(decideFlow(true, { status: 'not_served', municipality: null }, [])).toBe('not_served');
     expect(decideFlow(true, served, [similar(12)])).toBe('pick_similar');
     expect(decideFlow(true, served, [])).toBe('submit');
+  });
+
+  it('queue-only items sent while online are not marked offline and sync right away', () => {
+    expect(sendMode('submit', true)).toEqual({ online: true, sendNow: true, syncAfter: false });
+    // Sem resposta do locate, mas com rede: vai para a fila e a fila sai logo em seguida.
+    expect(sendMode('queue', true)).toEqual({ online: true, sendNow: false, syncAfter: true });
+    expect(sendMode('queue', false)).toEqual({ online: false, sendNow: false, syncAfter: false });
   });
 
   it('closestSimilar picks the nearest occurrence', () => {

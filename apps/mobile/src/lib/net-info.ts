@@ -14,3 +14,9 @@ export function toNetSnapshot(state: NetInfoState): NetSnapshot {
 export async function readNetSnapshot(): Promise<NetSnapshot> {
   return toNetSnapshot(await NetInfo.fetch());
 }
+
+/** Aparelho com rede e internet (ou ainda sem resposta do teste de internet). */
+export async function isOnline(): Promise<boolean> {
+  const state = await NetInfo.fetch();
+  return state.isConnected === true && state.isInternetReachable !== false;
+}

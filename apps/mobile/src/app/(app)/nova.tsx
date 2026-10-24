@@ -5,7 +5,6 @@ import {
   type LocateResponse,
   type SimilarOccurrence,
 } from '@alocidadao/shared';
-import NetInfo from '@react-native-community/netinfo';
 import { randomUUID } from 'expo-crypto';
 import * as Location from 'expo-location';
 import { router, useFocusEffect, useNavigation, usePreventRemove, type Href } from 'expo-router';
@@ -48,15 +47,17 @@ import {
   formatCoordinates,
   hasDraftData,
   reportCountLabel,
+  sendMode,
   type NewRequestDraft,
 } from '../../citizen/new-request';
 import { PlaceCache, placeFromLocate } from '../../citizen/place-cache';
 import { requestHref } from '../../citizen/requests-view';
 import { PhotoCapture } from '../../components/photo-capture';
 import { getCurrentPoint } from '../../lib/location';
+import { isOnline } from '../../lib/net-info';
 import { secureStore } from '../../lib/secure-store';
 import type { OutboxMunicipality } from '../../offline/outbox';
-import { submitCreateRequest } from '../../offline/outbox-service';
+import { submitCreateRequest, syncOutbox } from '../../offline/outbox-service';
 import {
   clearDraftPhotos,
   keepDraftPhoto,
@@ -86,11 +87,6 @@ const CATEGORY_UNAVAILABLE = 'Este tipo de solicitação não está disponível 
 type LocationPhase = 'locating' | 'ready' | 'unavailable';
 type CategoriesState =
   { phase: 'loading' } | { phase: 'ready'; list: Category[] } | { phase: 'missing' };
-
-const isOnline = async () => {
-  const state = await NetInfo.fetch();
-  return state.isConnected === true && state.isInternetReachable !== false;
-};
 
 async function addressFor(point: GeoPoint): Promise<string | null> {
   try {
@@ -288,19 +284,23 @@ export default function NovaSolicitacao() {
     leave(() => (action ? navigation.dispatch(action) : router.back()));
   };
 
-  /** Guarda na fila e, com rede, envia na hora. */
-  const send = async (online: boolean, occurrenceId?: string) => {
+  /** Guarda na fila e, com rede e o local conferido, envia na hora. */
+  const send = async (flow: 'submit' | 'queue', online: boolean, occurrenceId?: string) => {
     const payload = buildCreateInput(draft, new Date(), {
       clientActionId: randomUUID(),
       ...(occurrenceId ? { occurrenceId } : {}),
     });
     const userId = me?.id ?? (await secureStore.getItem(OUTBOX_OWNER_KEY)) ?? '';
+    const mode = sendMode(flow, online);
     const { outcome } = await submitCreateRequest({
       userId,
       payload,
       photoUris: draft.photos,
-      online,
+      online: mode.online,
+      sendNow: mode.sendNow,
     });
+    // Com rede, mas sem a resposta do `locate`: a fila tenta já, sem esperar o app voltar.
+    if (mode.syncAfter) void syncOutbox();
     if (!outcome || outcome.kind === 'retry') {
       // Na fila: a tela 4 mostra o item no topo, "Aguardando internet".
       leave(() => router.dismissTo(HOME_ROUTE as Href));
@@ -350,7 +350,7 @@ export default function NovaSolicitacao() {
         // Com o painel aberto, nada é enviado até a escolha.
         setSimilar(closestSimilar(found));
       } else {
-        await send(flow === 'submit');
+        await send(flow === 'submit' ? 'submit' : 'queue', online);
       }
     } catch (e) {
       console.warn('Falha ao registrar a solicitação', e);
@@ -367,7 +367,7 @@ export default function NovaSolicitacao() {
     setSending(true);
     setError(null);
     try {
-      await send(true, support ? chosen.occurrenceId : undefined);
+      await send('submit', true, support ? chosen.occurrenceId : undefined);
     } catch (e) {
       console.warn('Falha ao registrar a solicitação', e);
       setError(SEND_ERROR);
@@ -490,6 +490,7 @@ export default function NovaSolicitacao() {
                 <Pressable
                   onPress={() => void locate()}
                   accessibilityRole="button"
+                  hitSlop={4}
                   style={styles.adjust}
                 >
                   <Text style={styles.adjustText}>Tentar de novo</Text>
@@ -499,6 +500,7 @@ export default function NovaSolicitacao() {
                   onPress={openAdjust}
                   accessibilityRole="button"
                   accessibilityLabel="Ajustar local"
+                  hitSlop={4}
                   style={styles.adjust}
                 >
                   <Text style={styles.adjustText}>Ajustar</Text>

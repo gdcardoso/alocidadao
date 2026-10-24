@@ -121,18 +121,20 @@ export const syncOutbox: () => Promise<void> = createSingleFlight(() => exclusiv
 type EnqueueInput = Parameters<typeof enqueueCreateRequestNative>[1];
 
 /**
- * Guarda a solicitação na fila e, com rede, envia na hora. Se a rede cair no meio, o item
+ * Guarda a solicitação na fila e, com `sendNow`, envia na hora. Se a rede cair no meio, o item
  * fica na fila (`retry`) e sai sozinho depois: o relato nunca se perde. Recusa na hora não
- * fica na fila: quem chama mostra o motivo com a tela ainda aberta.
+ * fica na fila: quem chama mostra o motivo com a tela ainda aberta. `online` diz só se o
+ * aparelho tinha rede (o item criado sem ela vai marcado como offline).
  */
 export function submitCreateRequest(
-  input: EnqueueInput,
+  input: EnqueueInput & { sendNow: boolean },
 ): Promise<{ item: OutboxItem; outcome: ItemOutcome | null }> {
   return exclusive(async () => {
     const store = await openOutboxStore();
-    const item = await enqueueCreateRequestNative(store, input);
+    const { sendNow, ...enqueueInput } = input;
+    const item = await enqueueCreateRequestNative(store, enqueueInput);
     let outcome: ItemOutcome | null = null;
-    if (input.online) {
+    if (sendNow) {
       try {
         const transport = await createSessionTransport();
         outcome = await processOutboxItem({ store, transport, connection }, item);

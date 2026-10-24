@@ -57,16 +57,20 @@ export function maskPhoneInput(text: string): string {
   return end ? `(${ddd}) ${start}-${end}` : `(${ddd}) ${start}`;
 }
 
+/** `'há 3 dias'`, `'há 1 dia'` ou `'hoje'`, em dias de calendário. */
+export function formatAgo(since: string, now: Date = new Date()): string {
+  const days = Math.max(0, localParts(now).dayNumber - localParts(since).dayNumber);
+  if (days === 0) return 'hoje';
+  return `há ${days} ${days === 1 ? 'dia' : 'dias'}`;
+}
+
 /** `'Aberta há 3 dias'`, `'Em atendimento há 1 dia'` ou `'Aberta hoje'`, em dias de calendário. */
 export function formatElapsed(
   status: RequestStatus,
   since: string,
   now: Date = new Date(),
 ): string {
-  const days = Math.max(0, localParts(now).dayNumber - localParts(since).dayNumber);
-  const label = REQUEST_STATUS_LABELS[status];
-  if (days === 0) return `${label} hoje`;
-  return `${label} há ${days} ${days === 1 ? 'dia' : 'dias'}`;
+  return `${REQUEST_STATUS_LABELS[status]} ${formatAgo(since, now)}`;
 }
 
 /** `'20 out 2026, 08:12'`. */

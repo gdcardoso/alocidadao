@@ -202,7 +202,7 @@ export default function Kit() {
 
         <Section title="Detalhe">
           <StatusNotice
-            tone="confirm"
+            tone="awaiting"
             title="A prefeitura concluiu o atendimento"
             text="Confira as fotos e diga se o problema foi resolvido. Sem resposta, confirmamos automaticamente em 7 dias."
           />

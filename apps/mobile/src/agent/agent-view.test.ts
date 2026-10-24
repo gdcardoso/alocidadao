@@ -155,6 +155,13 @@ describe('agent list', () => {
     );
   });
 
+  it('failed agent action on a cached work order uses the send-again notice', () => {
+    const failed = makeItem({ id: 'f1', workOrderId: wo(1), status: 'failed' });
+    expect(list({ cards: [makeCard({ id: wo(1) })], queue: [failed] }).notices[0]?.text).toBe(
+      'Buraco na via · Rua das Flores, 120: não foi possível enviar. Remova o envio e faça de novo.',
+    );
+  });
+
   it('conflicting agent action shows the notice and removal deletes its photos', async () => {
     const deletePhotos = vi.fn();
     const db = nodeDb();
@@ -192,7 +199,7 @@ describe('agent list', () => {
       {
         itemId: 'q2',
         workOrderId: wo(9),
-        text: 'Iluminação: o gestor mudou esta atividade e seu envio não foi aplicado.',
+        text: 'Iluminação: não foi possível enviar. Remova o envio e faça de novo.',
         actionLabel: 'Remover envio',
       },
       {

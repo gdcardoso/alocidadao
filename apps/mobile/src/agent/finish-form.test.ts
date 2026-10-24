@@ -1,12 +1,18 @@
 import type { DeviceLocation, GeoPoint } from '@alocidadao/shared';
 import { describe, expect, it } from 'vitest';
+import type { OutboxItem } from '../offline/outbox';
+import { makeItem } from '../offline/test-helpers';
+import { toAgentDetail } from './detail-view';
 import {
   canSendCompletion,
   canSendImpediment,
+  closeDecision,
+  finishIsReadOnly,
   hasDraft,
   infoText,
   locationBand,
 } from './finish-form';
+import { makeDetail, wo } from './test-helpers';
 
 const SITE: GeoPoint = { lat: -23.5505, lng: -46.6333 };
 /** Ponto a `m` metros ao norte do local. */
@@ -110,5 +116,42 @@ describe('hasDraft', () => {
     expect(hasDraft({ photos: [], note: 'Buraco tapado', initialNote })).toBe(false);
     expect(hasDraft({ photos: [], note: 'Buraco tapado de novo', initialNote })).toBe(true);
     expect(hasDraft({ photos: [], note: '', initialNote })).toBe(true);
+  });
+});
+
+describe('closeDecision', () => {
+  it('waits while sending or keeping a photo, even with a draft', () => {
+    expect(closeDecision({ busy: true, dirty: true })).toBe('wait');
+    expect(closeDecision({ busy: true, dirty: false })).toBe('wait');
+  });
+
+  it('asks before discarding a draft and leaves an empty form', () => {
+    expect(closeDecision({ busy: false, dirty: true })).toBe('confirm');
+    expect(closeDecision({ busy: false, dirty: false })).toBe('leave');
+  });
+});
+
+describe('finishIsReadOnly', () => {
+  const view = (status: 'in_execution' | 'awaiting_review' | 'impeded', queue: OutboxItem[] = []) =>
+    toAgentDetail(makeDetail({ id: wo(1), status }), {
+      here: null,
+      queue,
+      now: new Date('2026-10-24T12:00:00.000Z'),
+    });
+
+  it('a work order already sent to the manager is read-only', () => {
+    expect(finishIsReadOnly(view('awaiting_review'), { busy: false })).toBe(true);
+    expect(finishIsReadOnly(view('impeded'), { busy: false })).toBe(true);
+  });
+
+  it('a work order in execution shows the form', () => {
+    expect(finishIsReadOnly(view('in_execution'), { busy: false })).toBe(false);
+  });
+
+  it('the action this screen just queued does not flash the read-only note', () => {
+    const queued = makeItem({ workOrderId: wo(1), action: 'complete', status: 'pending' });
+    const sent = view('in_execution', [queued]);
+    expect(sent.footer).toBeNull();
+    expect(finishIsReadOnly(sent, { busy: true })).toBe(false);
   });
 });

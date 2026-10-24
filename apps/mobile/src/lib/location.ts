@@ -1,5 +1,6 @@
 import type { GeoPoint } from '@alocidadao/shared';
 import * as Location from 'expo-location';
+import { toAccuracyM } from './location-accuracy';
 
 export const LOCATION_TIMEOUT_MS = 15_000;
 
@@ -21,7 +22,7 @@ export async function getCurrentPoint(): Promise<CurrentPoint> {
     if (position === null) return { error: 'unavailable' };
     return {
       point: { lat: position.coords.latitude, lng: position.coords.longitude },
-      accuracyM: position.coords.accuracy,
+      accuracyM: toAccuracyM(position.coords.accuracy),
     };
   } catch {
     return { error: 'unavailable' };

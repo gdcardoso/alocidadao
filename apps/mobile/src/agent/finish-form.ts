@@ -8,6 +8,7 @@ import {
   type ImpedimentReason,
 } from '@alocidadao/shared';
 import { formatDistance } from '../ui/format';
+import type { AgentDetailView } from './detail-view';
 
 // Regras puras da A3 (Concluir atendimento) e da A4 (Não consigo resolver).
 
@@ -103,4 +104,24 @@ export interface DraftForm {
 /** Há algo preenchido pela pessoa: fechar pede confirmação. */
 export function hasDraft({ photos, note, reason = null, initialNote = '' }: DraftForm): boolean {
   return photos.length > 0 || reason !== null || note.trim() !== initialNote.trim();
+}
+
+/** Fechar a A3/A4: com envio ou foto sendo guardada, espera; com algo preenchido, pergunta. */
+export type CloseDecision = 'wait' | 'confirm' | 'leave';
+
+export function closeDecision({ busy, dirty }: { busy: boolean; dirty: boolean }): CloseDecision {
+  if (busy) return 'wait';
+  return dirty ? 'confirm' : 'leave';
+}
+
+/**
+ * A atividade não aceita mais a ação (aguardando revisão, impedida): a tela mostra a nota de
+ * só leitura no lugar do formulário. Durante o envio desta tela (`busy`), o status otimista
+ * da fila não conta: a tela já vai voltar à A1.
+ */
+export function finishIsReadOnly(
+  view: Pick<AgentDetailView, 'footer'>,
+  { busy }: { busy: boolean },
+): boolean {
+  return view.footer === null && !busy;
 }

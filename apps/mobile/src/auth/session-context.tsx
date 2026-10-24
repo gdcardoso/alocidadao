@@ -4,10 +4,12 @@ import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { registerDevice } from '../lib/register-device';
 import { secureStore } from '../lib/secure-store';
+import { removeOutboxItemsWhere } from '../offline/outbox-service';
 import { clearOfflineData } from '../offline/sqlite-outbox-store';
 import {
   APP_MODE_KEY,
   CITIZEN_HOME_ROUTE,
+  endedAgentItemIds,
   hasAgentRole,
   homeFor,
   modeAfterMeUpdate,
@@ -136,6 +138,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   // `me` atualizado sem vínculo de agente, no modo agente: volta ao modo cidadão com o aviso.
   useEffect(() => {
     if (status !== 'signedIn') return;
+    // Sem vínculo, as ações recusadas por isso não aparecem em lugar nenhum: saem da fila.
+    if (me && !hasAgentRole(me)) {
+      void removeOutboxItemsWhere((items) => endedAgentItemIds(me, items)).catch((error: unknown) =>
+        console.warn('Falha ao tirar da fila as ações do agente encerrado', error),
+      );
+    }
     const after = modeAfterMeUpdate(modeRef.current, me);
     if (!after.agentAccessEnded) return;
     modeRef.current = after.mode;

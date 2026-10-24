@@ -14,6 +14,7 @@ import {
   type ProcessOutboxDeps,
 } from './outbox';
 import {
+  besideSyncPass,
   emitOutbox,
   exclusive,
   rememberSentRequests,
@@ -186,14 +187,27 @@ export function removeOutboxItem(id: string): Promise<void> {
   });
 }
 
+/** Tira da fila os itens que `pick` escolhe na lista atual (e as fotos guardadas deles). */
+export function removeOutboxItemsWhere(
+  pick: (items: OutboxItem[]) => readonly string[],
+): Promise<void> {
+  return exclusive(async () => {
+    const store = await openOutboxStore();
+    const ids = pick(await store.list());
+    for (const id of ids) await store.remove(id);
+    if (ids.length > 0) await refreshOutbox();
+  });
+}
+
 /**
  * Ação do agente (iniciar, concluir, impedimento): sempre pela fila, com ou sem rede, e a fila
- * sai em seguida. A tela mostra o status otimista que vem da fila.
+ * sai em seguida. A tela mostra o status otimista que vem da fila. Não espera a passada em
+ * andamento (só a limpeza do logout): com sinal fraco ela demora minutos, e o toque travaria.
  */
 export async function submitWorkOrderAction(
   input: Parameters<typeof enqueueNative>[1],
 ): Promise<OutboxItem> {
-  const item = await exclusive(async () => {
+  const item = await besideSyncPass(async () => {
     const store = await openOutboxStore();
     const queued = await enqueueNative(store, input);
     await refreshOutbox();

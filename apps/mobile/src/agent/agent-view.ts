@@ -176,11 +176,17 @@ function byDistance(a: Row, b: Row): number {
   return diff !== 0 ? diff : Date.parse(a.card.assignedAt) - Date.parse(b.card.assignedAt);
 }
 
-/** Texto do aviso: `{Categoria} · {endereço}`, do cache ou do que o item guardou. */
-function noticeText(card: AgentWorkOrderCard | undefined, payload: WorkOrderActionPayload) {
+/**
+ * Texto do aviso: `{Categoria} · {endereço}`, do cache ou do que o item guardou. Conflito e
+ * recusa: o gestor mudou a atividade; falha (foto inválida, erro inesperado…): enviar de novo.
+ */
+function noticeText(card: AgentWorkOrderCard | undefined, item: ActionItem) {
+  const { payload } = item;
   const categoryName = card?.categoryName ?? payload.display?.categoryName ?? 'Atividade';
   const address = card ? card.address : (payload.display?.address ?? null);
   const place = address ? `${categoryName} · ${address}` : categoryName;
+  if (item.status === 'failed')
+    return `${place}: não foi possível enviar. Remova o envio e faça de novo.`;
   return `${place}: o gestor mudou esta atividade e seu envio não foi aplicado.`;
 }
 
@@ -241,7 +247,7 @@ export function toAgentList({ cards, queue, seen, here, now }: AgentListInput): 
     .map((item): AgentQueueNotice => ({
       itemId: item.id,
       workOrderId: item.payload.workOrderId,
-      text: noticeText(cardById.get(item.payload.workOrderId), item.payload),
+      text: noticeText(cardById.get(item.payload.workOrderId), item),
       actionLabel: 'Remover envio',
     }));
 

@@ -31,14 +31,16 @@ export default function NaoConsigoResolver() {
   const keyboardHeight = useKeyboardHeight();
   const { detail, view } = form;
 
-  if (!detail || !view) {
+  // Sem a atividade, ou ela já não aceita a ação (enviada ao gestor): nada de formulário.
+  if (!detail || !view || form.readOnly) {
     return (
       <Screen>
         <Header nav="close" onNavPress={form.close} title={TITLE} />
         <WorkOrderUnavailable
-          phase={form.state.phase}
+          phase={form.readOnly ? 'gone' : form.state.phase}
           onBack={form.close}
           onRetry={() => void form.reload()}
+          readOnlyNote={form.readOnly ? view?.readOnlyNote : null}
         />
       </Screen>
     );
@@ -101,20 +103,20 @@ export default function NaoConsigoResolver() {
                 photos={form.photos}
                 max={MAX_PHOTOS_PER_IMPEDIMENT}
                 onRemove={form.removePhoto}
-                disabled={form.sending}
+                disabled={form.sending || form.addingPhoto}
               />
             ) : null}
             {form.photos.length < MAX_PHOTOS_PER_IMPEDIMENT ? (
               <Pressable
                 onPress={() => form.setCameraOpen(true)}
-                disabled={form.sending}
+                disabled={form.sending || form.addingPhoto}
                 accessibilityRole="button"
                 accessibilityLabel="Tirar foto"
-                accessibilityState={{ disabled: form.sending }}
+                accessibilityState={{ disabled: form.sending || form.addingPhoto }}
                 style={({ pressed }) => [
                   styles.photoButton,
                   pressed && styles.photoButtonPressed,
-                  form.sending && styles.disabled,
+                  (form.sending || form.addingPhoto) && styles.disabled,
                 ]}
               >
                 <Camera size={20} color={colors.primary} />
@@ -131,7 +133,7 @@ export default function NaoConsigoResolver() {
             icon={Send}
             variant="warning"
             onPress={send}
-            disabled={!canSend}
+            disabled={!canSend || form.addingPhoto}
             loading={form.sending}
           />
           <OfflineHint />

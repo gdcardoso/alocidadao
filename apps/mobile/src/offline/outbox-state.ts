@@ -59,16 +59,43 @@ export function exclusive<T>(task: () => Promise<T>): Promise<T> {
   return run;
 }
 
+// Limpeza pedida por último (logout): as ações do agente que chegam depois esperam por ela.
+let wipeGate: Promise<unknown> = Promise.resolve();
+// Ações do agente sendo enfileiradas agora: a limpeza espera por elas.
+const besidePass = new Set<Promise<unknown>>();
+
 /**
- * Apaga os dados da fila (`wipe`) na vez dela, depois da passada em andamento, e esvazia o
- * que as telas mostram: a fila de quem saiu não aparece para a próxima conta.
+ * Roda fora da vez das passadas (a ação do agente não espera uma passada lenta, com sinal
+ * fraco): só espera a limpeza pedida antes. Incluir uma linha durante a passada é seguro: a
+ * passada usa a lista que já leu e a próxima pega o item novo.
+ */
+export function besideSyncPass<T>(task: () => Promise<T>): Promise<T> {
+  const run = wipeGate.then(task, task);
+  const settled = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  besidePass.add(settled);
+  void settled.then(() => besidePass.delete(settled));
+  return run;
+}
+
+/**
+ * Apaga os dados da fila (`wipe`) na vez dela, depois da passada em andamento e das ações do
+ * agente já sendo enfileiradas, e esvazia o que as telas mostram: a fila de quem saiu não
+ * aparece para a próxima conta.
  */
 export function clearOutbox(wipe: () => Promise<void>): Promise<void> {
-  return exclusive(async () => {
+  // Só as que já estavam em andamento: as que chegarem depois esperam a limpeza.
+  const enqueuing = [...besidePass];
+  const run = exclusive(async () => {
+    await Promise.all(enqueuing);
     try {
       await wipe();
     } finally {
       emitOutbox({ items: [], sent: [], lastSyncError: null });
     }
   });
+  wipeGate = run.catch(() => undefined);
+  return run;
 }

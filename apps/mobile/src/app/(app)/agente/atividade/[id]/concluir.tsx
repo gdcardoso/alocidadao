@@ -38,14 +38,16 @@ export default function ConcluirAtendimento() {
   const keyboardHeight = useKeyboardHeight();
   const { detail, view } = form;
 
-  if (!detail || !view) {
+  // Sem a atividade, ou ela já não aceita a ação (enviada ao gestor): nada de formulário.
+  if (!detail || !view || form.readOnly) {
     return (
       <Screen>
         <Header nav="close" onNavPress={form.close} title={TITLE} />
         <WorkOrderUnavailable
-          phase={form.state.phase}
+          phase={form.readOnly ? 'gone' : form.state.phase}
           onBack={form.close}
           onRetry={() => void form.reload()}
+          readOnlyNote={form.readOnly ? view?.readOnlyNote : null}
         />
       </Screen>
     );
@@ -77,7 +79,7 @@ export default function ConcluirAtendimento() {
               max={MAX_PHOTOS_PER_COMPLETION}
               onRemove={form.removePhoto}
               onAdd={() => form.setCameraOpen(true)}
-              disabled={form.sending}
+              disabled={form.sending || form.addingPhoto}
             />
           </View>
           <LocationBand view={locationBand(form.location, detail.location)} />
@@ -100,7 +102,7 @@ export default function ConcluirAtendimento() {
             label={TITLE}
             icon={CircleCheck}
             onPress={() => void form.send('complete', { note: form.note })}
-            disabled={!canSend}
+            disabled={!canSend || form.addingPhoto}
             loading={form.sending}
           />
           <OfflineHint />

@@ -1,9 +1,11 @@
 import type { MeResponse } from '@alocidadao/shared';
 import { describe, expect, it } from 'vitest';
+import { makeItem, makeRequestItem } from '../offline/test-helpers';
 import {
   AGENT_ACCESS_ENDED_NOTICE,
   AGENT_HOME_ROUTE,
   CITIZEN_HOME_ROUTE,
+  endedAgentItemIds,
   hasAgentRole,
   homeFor,
   modeAfterMeUpdate,
@@ -124,5 +126,26 @@ describe('app mode', () => {
     expect(CITIZEN_HOME_ROUTE).toBe(homeFor('citizen'));
     expect(profileRouteFor('agent')).toBe('/(app)/agente/(tabs)/perfil');
     expect(profileRouteFor('citizen')).toBe('/(app)/(tabs)/perfil');
+  });
+});
+
+describe('endedAgentItemIds', () => {
+  const rejected = (id: string, code: string) =>
+    makeItem({ id, status: 'rejected', rejection: { code } });
+
+  it('without the agent role, lists the agent items refused for the ended membership', () => {
+    const items = [
+      rejected('ended', 'not_a_member'),
+      rejected('gone', 'work_order_not_found'),
+      makeItem({ id: 'pending', status: 'pending' }),
+      makeRequestItem({ id: 'citizen', status: 'rejected', rejection: { code: 'not_a_member' } }),
+    ];
+    expect(endedAgentItemIds(makeMe({ agentTenants: [] }), items)).toEqual(['ended']);
+  });
+
+  it('keeps everything while the person is still an agent or me is unknown', () => {
+    const items = [rejected('ended', 'not_a_member')];
+    expect(endedAgentItemIds(agent, items)).toEqual([]);
+    expect(endedAgentItemIds(null, items)).toEqual([]);
   });
 });

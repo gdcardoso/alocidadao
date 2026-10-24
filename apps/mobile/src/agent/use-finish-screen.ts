@@ -14,7 +14,7 @@ import { submitWorkOrderAction } from '../offline/outbox-service';
 import { clearDraftPhotos, keepDraftPhoto } from '../offline/sqlite-outbox-store';
 import { useOutbox } from '../offline/use-outbox-sync';
 import { toAgentDetail, type AgentDetailView } from './detail-view';
-import { hasDraft, type LocationReading } from './finish-form';
+import { closeDecision, finishIsReadOnly, hasDraft, type LocationReading } from './finish-form';
 import { useAgentWorkOrder, type AgentWorkOrderState } from './use-agent-work-order';
 
 // Estado comum da A3 (Concluir atendimento) e da A4 (Não consigo resolver).
@@ -53,6 +53,10 @@ export interface FinishScreen {
   cameraOpen: boolean;
   setCameraOpen(open: boolean): void;
   sending: boolean;
+  /** Foto sendo guardada: enviar e fechar esperam a cópia terminar. */
+  addingPhoto: boolean;
+  /** A atividade não aceita mais a ação: a tela mostra `view.readOnlyNote` no lugar do formulário. */
+  readOnly: boolean;
   error: string | null;
   /** Fechar: com algo preenchido, pergunta antes. */
   close(): void;
@@ -82,6 +86,7 @@ export function useFinishScreen(id: string, { prefillNote }: { prefillNote: bool
   const [reason, setReasonState] = useState<ImpedimentReason | null>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [sending, setSending] = useState(false);
+  const [addingPhoto, setAddingPhoto] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   // Toque duplo em enviar não enfileira duas vezes.
@@ -114,9 +119,16 @@ export function useFinishScreen(id: string, { prefillNote }: { prefillNote: bool
     return clearDraftPhotos;
   }, []);
 
-  const dirty = hasDraft({ photos, note, reason, initialNote });
+  // A atividade já não aceita a ação: a tela troca o formulário pela nota. Durante o envio
+  // desta tela, o status otimista da fila não conta (a tela já vai voltar à A1).
+  const readOnly = view !== null && finishIsReadOnly(view, { busy: sending || exit !== null });
+  // Sem formulário, o rascunho não vale mais: fechar não pergunta.
+  const dirty = !readOnly && hasDraft({ photos, note, reason, initialNote });
+  // Enviando ou guardando a foto: voltar e descartar esperam (o rascunho ainda está em uso).
+  const busy = sending || addingPhoto;
 
-  usePreventRemove(dirty && exit === null, ({ data }) => {
+  usePreventRemove((dirty || busy) && exit === null, ({ data }) => {
+    if (closeDecision({ busy, dirty }) !== 'confirm') return;
     pendingRemoval.current = data.action;
     setConfirmDiscard(true);
   });
@@ -130,6 +142,7 @@ export function useFinishScreen(id: string, { prefillNote }: { prefillNote: bool
   const addPhoto = async (photo: CapturedPhoto) => {
     setCameraOpen(false);
     setError(null);
+    setAddingPhoto(true);
     try {
       // Fora do cache: com pouco espaço o Android apaga o cache a qualquer momento.
       const kept = await keepDraftPhoto(photo.uri);
@@ -139,6 +152,7 @@ export function useFinishScreen(id: string, { prefillNote }: { prefillNote: bool
       setError(PHOTO_ERROR);
     } finally {
       deleteFile(photo.uri);
+      setAddingPhoto(false);
     }
   };
 
@@ -149,11 +163,13 @@ export function useFinishScreen(id: string, { prefillNote }: { prefillNote: bool
   };
 
   const close = () => {
-    if (dirty) setConfirmDiscard(true);
-    else router.back();
+    const decision = closeDecision({ busy, dirty });
+    if (decision === 'confirm') setConfirmDiscard(true);
+    else if (decision === 'leave') router.back();
   };
 
   const discard = () => {
+    if (busy) return;
     setConfirmDiscard(false);
     const action = pendingRemoval.current;
     pendingRemoval.current = null;
@@ -180,7 +196,7 @@ export function useFinishScreen(id: string, { prefillNote }: { prefillNote: bool
   };
 
   const send = async (action: 'complete' | 'report_impediment', input: SendInput) => {
-    if (!detail) return;
+    if (!detail || addingPhoto) return;
     await lock.run(async () => {
       setError(null);
       setSending(true);
@@ -236,6 +252,8 @@ export function useFinishScreen(id: string, { prefillNote }: { prefillNote: bool
     cameraOpen,
     setCameraOpen,
     sending,
+    addingPhoto,
+    readOnly,
     error,
     close,
     confirmDiscard,

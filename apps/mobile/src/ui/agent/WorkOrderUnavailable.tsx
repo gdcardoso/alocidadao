@@ -1,3 +1,4 @@
+import { Info } from 'lucide-react-native';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import type { AgentWorkOrderState } from '../../agent/use-agent-work-order';
 import { SecondaryButton } from '../Button';
@@ -8,13 +9,34 @@ export interface WorkOrderUnavailableProps {
   phase: AgentWorkOrderState['phase'];
   onBack: () => void;
   onRetry: () => void;
+  /**
+   * A3/A4 de atividade que já não aceita a ação (aguardando revisão, impedida): mostra a nota
+   * de só leitura da A2 no lugar do formulário.
+   */
+  readOnlyNote?: string | null;
 }
 
-/** Atividade ainda carregando, que saiu do agente, ou sem cache e sem rede (A2, A3, A4). */
-export function WorkOrderUnavailable({ phase, onBack, onRetry }: WorkOrderUnavailableProps) {
+/**
+ * Atividade ainda carregando, que saiu do agente, sem cache e sem rede (A2, A3, A4), ou só de
+ * leitura (A3, A4).
+ */
+export function WorkOrderUnavailable({
+  phase,
+  onBack,
+  onRetry,
+  readOnlyNote,
+}: WorkOrderUnavailableProps) {
   return (
     <View style={styles.state}>
-      {phase === 'loading' || phase === 'ready' ? (
+      {readOnlyNote ? (
+        <>
+          <View style={styles.note} accessible accessibilityRole="text">
+            <Info size={18} color={colors.textSecondary} />
+            <Text style={styles.noteText}>{readOnlyNote}</Text>
+          </View>
+          <SecondaryButton label="Voltar para minhas atividades" size="medium" onPress={onBack} />
+        </>
+      ) : phase === 'loading' || phase === 'ready' ? (
         <ActivityIndicator size="large" color={colors.primary} accessibilityLabel="Carregando" />
       ) : phase === 'gone' ? (
         <>
@@ -49,5 +71,13 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
     marginBottom: 8,
+  },
+  note: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 8 },
+  noteText: {
+    flexShrink: 1,
+    fontFamily: fonts.body,
+    fontSize: 15,
+    lineHeight: 21,
+    color: colors.textSecondary,
   },
 });

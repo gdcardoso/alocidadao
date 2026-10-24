@@ -1,4 +1,5 @@
 import type { MeResponse } from '@alocidadao/shared';
+import type { OutboxItem } from '../offline/outbox';
 
 // Modo do app (agente ou cidadão), sem nada nativo (testável em Node).
 
@@ -94,4 +95,21 @@ export function startMode({
   const after = modeAfterMeUpdate(stored ?? 'citizen', me);
   if (after.agentAccessEnded) return after;
   return { mode: resolveMode(me, stored), agentAccessEnded: false };
+}
+
+/**
+ * Sem vínculo de agente (encerrado pela prefeitura), as ações do agente recusadas por isso
+ * (`not_a_member`) não têm mais onde aparecer (o aviso fica só na A1): saem da fila, com as
+ * fotos. Sem `me` não se sabe do vínculo e nada sai.
+ */
+export function endedAgentItemIds(me: MeResponse | null, items: readonly OutboxItem[]): string[] {
+  if (!me || hasAgentRole(me)) return [];
+  return items
+    .filter(
+      (item) =>
+        item.kind === 'work_order_action' &&
+        item.status === 'rejected' &&
+        item.rejection?.code === 'not_a_member',
+    )
+    .map((item) => item.id);
 }

@@ -202,8 +202,10 @@ describe('equipe interna', () => {
       await tx.insert(tenantContracts).values(newContract());
     });
 
+    // O seed da demo (outro arquivo, mesmo banco) também tem contrato: olha só as daqui.
     const contracts = await withContext(app.db, support, (tx) => tx.select().from(tenantContracts));
-    expect(contracts.map((c) => c.tenantId)).toEqual([tenantA]);
+    const here = contracts.filter((c) => c.tenantId === tenantA || c.tenantId === tenantB);
+    expect(here.map((c) => c.tenantId)).toEqual([tenantA]);
 
     // Cidadão não vê contrato.
     const hidden = await withContext(app.db, { userId: citizenId, tenantId: tenantA }, (tx) =>

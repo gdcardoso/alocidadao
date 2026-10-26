@@ -5,6 +5,7 @@ import {
   type GeoPoint,
   type IconGroup,
   type ImpedimentReason,
+  type PlatformRole,
   type ReworkDetails,
 } from '@alocidadao/shared';
 import { and, asc, count, desc, eq, inArray, notInArray, sql } from 'drizzle-orm';
@@ -20,6 +21,7 @@ import {
   statusEvents,
   teamMembers,
   teams,
+  tenantContracts,
   tenants,
   users,
   workOrders,
@@ -35,6 +37,8 @@ export const MANAGER_EMAIL = 'gestor.demo@alocidadao.dev';
 const MANAGER_NAME = 'Carlos Demo';
 export const ADMIN_CPF = '11144477735';
 export const ADMIN_EMAIL = 'admin.demo@alocidadao.dev';
+export const SUPPORT_CPF = '86288366757';
+export const SUPPORT_EMAIL = 'suporte.demo@alocidadao.dev';
 export const TENANT_ADMIN_CPF = '39053344705';
 export const TENANT_ADMIN_EMAIL = 'admin.prefeitura@alocidadao.dev';
 const TENANT_ADMIN_NAME = 'Rita Demo';
@@ -1130,7 +1134,7 @@ async function seedMunicipalities(tx: Transaction): Promise<void> {
 /** Cria a conta pelo CPF se faltar (a existente fica com o nome da demo); devolve o id. */
 async function ensureUser(
   tx: Transaction,
-  values: { cpf: string; email: string; name: string; platformRole?: 'admin' },
+  values: { cpf: string; email: string; name: string; platformRole?: PlatformRole },
 ): Promise<string> {
   const [found] = await tx.select({ id: users.id }).from(users).where(eq(users.cpf, values.cpf));
   if (found) {
@@ -1145,9 +1149,10 @@ async function ensureUser(
 }
 
 /**
- * Gestor demo (vínculo `manager` na prefeitura e no setor demo) e admin interno demo
- * (platform_role 'admin'), mais o admin da prefeitura. Idempotente: só cria o que falta. Entram pelo painel
- * (e-mail e CPF preenchidos), não pelo app.
+ * Gestor demo (vínculo `manager` na prefeitura e no setor demo), admin interno demo
+ * (platform_role 'admin'), suporte demo (platform_role 'support', sem vínculo), o admin da
+ * prefeitura e o contrato da prefeitura demo. Idempotente: só cria o que falta. Entram pelo
+ * painel (e-mail e CPF preenchidos), não pelo app.
  */
 async function seedStaff(
   tx: Transaction,
@@ -1164,6 +1169,28 @@ async function seedStaff(
     name: 'Admin Demo',
     platformRole: 'admin',
   });
+  await ensureUser(tx, {
+    cpf: SUPPORT_CPF,
+    email: SUPPORT_EMAIL,
+    name: 'Suporte Demo',
+    platformRole: 'support',
+  });
+
+  // Contrato da prefeitura demo (P3), criado uma vez só.
+  const [contract] = await tx
+    .select({ id: tenantContracts.id })
+    .from(tenantContracts)
+    .where(eq(tenantContracts.tenantId, tenantId))
+    .limit(1);
+  if (!contract) {
+    await tx.insert(tenantContracts).values({
+      tenantId,
+      plan: 'complete',
+      includedPanelUsers: 50,
+      startsOn: '2026-11-01',
+      endsOn: '2027-10-31',
+    });
+  }
 
   const [link] = await tx
     .select({ id: memberships.id })

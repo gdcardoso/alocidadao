@@ -406,6 +406,67 @@ describe('cadastro de gestores pelo painel', () => {
   });
 });
 
+describe('equipe interna no painel (modo suporte)', () => {
+  it('suporte da plataforma cadastra agente e gestor sem vínculo na prefeitura', async () => {
+    for (const platformRole of ['support', 'admin'] as const) {
+      // Sem nenhum vínculo: o papel no contexto (conferido pela API) é o que vale.
+      const staffId = await createUser({ name: 'Equipe', cpf: newCpf(), platformRole });
+      const asStaff: DbContext = { tenantId: tenantA, userId: staffId, platformRole };
+
+      const agent = await findOrCreateAgent(asStaff, 'Agente do suporte', newPhone());
+      await link(tenantA, agent, 'field_agent', 'invited');
+      const phone = newPhone();
+      await changeAgentPhone(asStaff, agent, phone);
+      expect((await userRow(agent)).phone).toBe(phone);
+
+      // As regras só do admin aceitam a equipe interna como admin.
+      const email = `gestor.${platformRole}@pessoas.dev`;
+      const manager = await findOrCreateManager(asStaff, 'Gestor do suporte', newCpf(), email);
+      expect(manager.email).toBe(email);
+      await link(tenantA, manager.id, 'manager');
+      await changeManagerEmail(asStaff, manager.id, `novo.${email}`);
+      expect((await userRow(manager.id)).email).toBe(`novo.${email}`);
+
+      // As recusas do alvo continuam: agente que já entrou e admin da prefeitura.
+      await owner.db.update(users).set({ lastActiveAt: new Date() }).where(eq(users.id, agent));
+      expect(await pgError(changeAgentPhone(asStaff, agent, newPhone()))).toMatchObject({
+        code: '23514',
+        message: 'phone_change_not_allowed',
+      });
+      await link(tenantA, manager.id, 'tenant_admin');
+      expect(await pgError(changeManagerEmail(asStaff, manager.id, `x.${email}`))).toMatchObject({
+        code: '23514',
+        message: 'email_change_not_allowed',
+      });
+    }
+  });
+
+  it('quem não é do painel nem da equipe interna continua recusado', async () => {
+    const staffId = await createUser({ name: 'Suporte', cpf: newCpf(), platformRole: 'support' });
+    const callers: DbContext[] = [
+      // Conta da equipe interna sem o papel no contexto.
+      { tenantId: tenantA, userId: staffId },
+      // Papel no contexto sem usuário ou sem prefeitura.
+      { tenantId: tenantA, platformRole: 'support' },
+      { userId: staffId, platformRole: 'support' },
+      // Agente da prefeitura.
+      { tenantId: tenantA, userId: agentId },
+      // Gestor de outra prefeitura.
+      { tenantId: tenantA, userId: otherTenantManagerId },
+    ];
+    for (const context of callers) {
+      const errors = [
+        await pgError(findOrCreateAgent(context, 'Fulano', newPhone())),
+        await pgError(findOrCreateManager(context, 'Fulano', newCpf(), 'fulano@pessoas.dev')),
+        await pgError(changeAgentPhone(context, agentId, newPhone())),
+        await pgError(changeManagerEmail(context, managerId, 'outro@pessoas.dev')),
+      ];
+      for (const error of errors) expect(error.code).toBe('42501');
+    }
+    expect((await userRow(managerId)).email).toBe('gestora@pessoas.dev');
+  });
+});
+
 describe('equipes', () => {
   it('nome de equipe repetido na prefeitura é recusado sem diferenciar maiúsculas', async () => {
     const newTeam = (tenantId: string, departmentId: string, name: string) =>

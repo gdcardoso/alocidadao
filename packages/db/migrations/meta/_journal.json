@@ -169,6 +169,13 @@
       "when": 1793046199690,
       "tag": "0023_team_member_one_team",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1793048721594,
+      "tag": "0024_backoffice_functions",
+      "breakpoints": true
     }
   ]
 }

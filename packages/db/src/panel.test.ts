@@ -8,6 +8,7 @@ import {
   DEMO_IMPEDIMENT_DESCRIPTION,
   DEMO_REVIEW_DESCRIPTIONS,
   RESET_REJECTION_REASON,
+  SUPPORT_CPF,
   TENANT_ADMIN_CPF,
   TENANT_ADMIN_EMAIL,
   seedDev,
@@ -22,6 +23,7 @@ import {
   requests,
   statusEvents,
   teams,
+  tenantContracts,
   tenants,
   users,
   workOrders,
@@ -436,6 +438,34 @@ describe('dados de demonstração do painel', () => {
     expect(suggestions[0]!.distanceM).toBeLessThanOrEqual(11);
     // Sem duplicar na segunda execução.
     expect(pothole).toHaveLength(2);
+  });
+
+  it('seed cria a conta de suporte e o contrato da prefeitura demo', async () => {
+    await seedDev(owner.db);
+    const { tenantId } = await seedDev(owner.db, { reset: true });
+    await seedDev(owner.db);
+
+    const support = await owner.db.select().from(users).where(eq(users.cpf, SUPPORT_CPF));
+    expect(support).toHaveLength(1);
+    expect(support[0]).toMatchObject({
+      name: 'Suporte Demo',
+      email: 'suporte.demo@alocidadao.dev',
+      platformRole: 'support',
+      accountStatus: 'active',
+    });
+
+    // Um contrato só, mesmo com várias execuções e o reset.
+    const contracts = await owner.db
+      .select()
+      .from(tenantContracts)
+      .where(eq(tenantContracts.tenantId, tenantId));
+    expect(contracts).toHaveLength(1);
+    expect(contracts[0]).toMatchObject({
+      plan: 'complete',
+      includedPanelUsers: 50,
+      startsOn: '2026-11-01',
+      endsOn: '2027-10-31',
+    });
   });
 
   it('com reset, recria a triagem de exemplo que foi tratada', async () => {

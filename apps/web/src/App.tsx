@@ -7,6 +7,7 @@ import { ImpedimentsPage } from './impediments/ImpedimentsPage';
 import { InProgressPage } from './lists/InProgressPage';
 import { RequestsPage } from './lists/RequestsPage';
 import { ReviewPage } from './review/ReviewPage';
+import { TeamsPage } from './teams/TeamsPage';
 import { TriagePage } from './triage/TriagePage';
 import { RequireSession } from './session/RequireSession';
 
@@ -23,7 +24,9 @@ export default function App() {
           <Route path="/impedimentos" element={<ImpedimentsPage />} />
           <Route path="/em-atendimento" element={<InProgressPage />} />
           <Route path="/solicitacoes" element={<RequestsPage />} />
-          <Route path="/equipes" element={<ComingSoonPage title="Equipes e agentes" />} />
+          <Route path="/equipes" element={<TeamsPage />} />
+          {/* A página de gestores chega na Task 13; até lá a rota volta para /equipes. */}
+          <Route path="/equipes/gestores" element={<Navigate to="/equipes" replace />} />
           <Route path="/categorias" element={<ComingSoonPage title="Categorias" />} />
         </Route>
       </Route>

@@ -147,14 +147,14 @@ describe('no access', () => {
 });
 
 describe('coming soon pages', () => {
-  it.each([
-    ['/equipes', 'Equipes e agentes'],
-    ['/categorias', 'Categorias'],
-  ])('coming soon pages show the menu title and the notice (%s)', async (path, title) => {
-    await renderApp(path);
-    expect(await screen.findByRole('heading', { name: title })).toBeInTheDocument();
-    expect(screen.getByText('Esta tela chega na próxima etapa do painel.')).toBeInTheDocument();
-  });
+  it.each([['/categorias', 'Categorias']])(
+    'coming soon pages show the menu title and the notice (%s)',
+    async (path, title) => {
+      await renderApp(path);
+      expect(await screen.findByRole('heading', { name: title })).toBeInTheDocument();
+      expect(screen.getByText('Esta tela chega na próxima etapa do painel.')).toBeInTheDocument();
+    },
+  );
 });
 
 function DialogHarness() {

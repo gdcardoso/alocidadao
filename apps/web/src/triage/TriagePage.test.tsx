@@ -1,3 +1,4 @@
+import { ApiError } from '@alocidadao/api-client';
 import type { OccurrenceDetail, PanelContext, TriageRow } from '@alocidadao/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor, within } from '@testing-library/react';
@@ -12,16 +13,18 @@ import { ToastProvider } from '../ui/Toast';
 import { TriagePage } from './TriagePage';
 
 vi.mock('../api', () => ({
-  api: { panelTriage: vi.fn(), panelOccurrence: vi.fn() },
+  api: { panelTriage: vi.fn(), panelOccurrence: vi.fn(), panelMerge: vi.fn() },
 }));
 
 const panelTriage = vi.mocked(api.panelTriage);
 const panelOccurrence = vi.mocked(api.panelOccurrence);
+const panelMerge = vi.mocked(api.panelMerge);
 
 const tenantId = '3f2b8c1e-5a4d-4e6f-8a7b-9c0d1e2f3a4b';
 const lightId = '11111111-1111-4111-8111-111111111111';
 const holeId = '22222222-2222-4222-8222-222222222222';
 const holesCategory = '44444444-4444-4444-8444-444444444444';
+const busyHoleId = '77777777-7777-4777-8777-777777777777';
 
 const context: PanelContext = {
   tenant: { id: tenantId, displayName: 'Prefeitura', status: 'active', bounds: null },
@@ -235,5 +238,60 @@ describe('triage page', () => {
       'href',
       '/mapa',
     );
+  });
+
+  it('merge into a suggestion with a work order opens the survivor in the drawer', async () => {
+    const notFound = new ApiError(404, { code: 'occurrence_not_found' });
+    let merged = false;
+    panelOccurrence.mockImplementation(async (_tenant, id) => {
+      if (id === busyHoleId) {
+        return {
+          ...occurrenceDetail(),
+          id: busyHoleId,
+          status: 'in_progress',
+          address: 'Rua das Flores, 130',
+          suggestions: [],
+        };
+      }
+      if (merged) throw notFound;
+      return {
+        ...occurrenceDetail(),
+        suggestions: [
+          {
+            occurrenceId: busyHoleId,
+            protocol: '2026-000140',
+            categoryName: 'Buraco na via',
+            description: null,
+            distanceM: 8,
+            requestCount: 2,
+          },
+        ],
+      };
+    });
+    panelMerge.mockImplementation(async () => {
+      merged = true;
+      return { survivorId: busyHoleId };
+    });
+    const user = renderPage(`/triagem?ocorrencia=${holeId}`);
+    await user.click(await screen.findByRole('button', { name: 'Juntar a este ponto' }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('location')).toHaveTextContent(`?ocorrencia=${busyHoleId}`),
+    );
+    const drawer = await screen.findByRole('complementary', { name: 'Painel do ponto' });
+    expect(await within(drawer).findByText('Rua das Flores, 130')).toBeInTheDocument();
+    expect(screen.getByText('Relatos juntados a este ponto.')).toBeInTheDocument();
+    expect(screen.queryByText('Não foi possível concluir. Tente de novo.')).not.toBeInTheDocument();
+  });
+
+  it('occurrence merged elsewhere closes the drawer with the changed notice', async () => {
+    panelOccurrence.mockRejectedValue(new ApiError(404, { code: 'occurrence_not_found' }));
+    renderPage(`/triagem?ocorrencia=${holeId}`);
+
+    await waitFor(() => expect(screen.getByTestId('location')).not.toHaveTextContent('ocorrencia'));
+    expect(
+      screen.queryByRole('complementary', { name: 'Painel do ponto' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText('Esta ocorrência mudou. Atualizamos o painel.')).toBeInTheDocument();
   });
 });

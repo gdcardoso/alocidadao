@@ -245,6 +245,12 @@ export function TriagePage() {
               occurrenceId={occurrenceId}
               onClose={() => update({ occurrenceId: null })}
               onAssign={setAssignTarget}
+              onChanged={(result) => {
+                // A junção pode manter a outra (a que tem atividade): a gaveta segue a que ficou.
+                if (result.kind === 'merge' && result.survivorId !== occurrenceId) {
+                  update({ occurrenceId: result.survivorId });
+                }
+              }}
             />
           </div>
         ) : null}

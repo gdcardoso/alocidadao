@@ -339,4 +339,35 @@ describe('point panel', () => {
     );
     expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
+
+  it('404 occurrence_not_found closes the panel with the changed notice', async () => {
+    panelOccurrence.mockRejectedValue(new ApiError(404, { code: 'occurrence_not_found' }));
+    const { onClose } = renderPanel();
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Esta ocorrência mudou. Atualizamos o painel.',
+    );
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('Não foi possível concluir. Tente de novo.')).not.toBeInTheDocument();
+  });
+
+  it('other load errors keep the generic message', async () => {
+    panelOccurrence.mockRejectedValue(new ApiError(500, { code: 'internal' }));
+    const { onClose } = renderPanel();
+    expect(
+      await screen.findByText('Não foi possível concluir. Tente de novo.'),
+    ).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('occurrence merged by someone else closes the panel after the stale action', async () => {
+    const notFound = new ApiError(404, { code: 'occurrence_not_found' });
+    panelOccurrence.mockResolvedValueOnce(detail()).mockRejectedValue(notFound);
+    panelMerge.mockRejectedValue(notFound);
+    const { onClose, user } = renderPanel();
+    await user.click(await screen.findByRole('button', { name: 'Juntar a este ponto' }));
+    await vi.waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Esta ocorrência mudou. Atualizamos o painel.',
+    );
+  });
 });

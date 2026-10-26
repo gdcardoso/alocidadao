@@ -42,7 +42,8 @@ export const OCCURRENCE_CHANGED_MESSAGE = 'Esta ocorrência mudou. Atualizamos o
 export const BOTH_HAVE_WORK_ORDERS_MESSAGE =
   'As duas ocorrências têm atividade em andamento. Cancele uma antes de juntar.';
 
-function errorCode(error: unknown): string | undefined {
+/** Código do corpo de um `ApiError`, ou undefined. */
+export function errorCode(error: unknown): string | undefined {
   if (!(error instanceof ApiError)) return undefined;
   const body = error.body as { code?: unknown } | null;
   return typeof body?.code === 'string' ? body.code : undefined;
@@ -103,11 +104,19 @@ export function useOccurrenceActions(tenantId: string) {
     },
   });
 
-  async function refresh(action: OccurrenceAction) {
+  async function refresh(action: OccurrenceAction, result?: OccurrenceActionResult) {
     const ids = [action.occurrenceId];
     if (action.kind === 'merge' || action.kind === 'dismiss') ids.push(action.otherOccurrenceId);
+    // A juntada some (404): marca o detalhe dela como velho sem buscar de novo, enquanto o painel
+    // passa para a que ficou (sem isso, a busca dela fecharia o painel com o aviso).
+    const absorbed = result?.kind === 'merge' ? ids.filter((id) => id !== result.survivorId) : [];
     await Promise.all([
-      ...ids.map((id) => queryClient.invalidateQueries({ queryKey: occurrenceKey(id) })),
+      ...ids.map((id) =>
+        queryClient.invalidateQueries({
+          queryKey: occurrenceKey(id),
+          refetchType: absorbed.includes(id) ? 'none' : 'active',
+        }),
+      ),
       queryClient.invalidateQueries({ queryKey: ['occurrences'] }),
       queryClient.invalidateQueries({ queryKey: ['triage'] }),
       queryClient.invalidateQueries({ queryKey: panelCountsKey(tenantId) }),
@@ -155,7 +164,7 @@ export function useOccurrenceActions(tenantId: string) {
     if (result.kind === 'assign' && action.kind === 'assign') {
       toast.show(`Atribuída a ${action.teamName}.`);
     }
-    void refresh(action);
+    void refresh(action, result);
     return { status: 'done', result };
   }
 

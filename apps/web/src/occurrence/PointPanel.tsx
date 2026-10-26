@@ -19,7 +19,7 @@ import {
   Users,
   X,
 } from 'lucide-react';
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { api } from '../api';
 import { NETWORK_ERROR_MESSAGE, UNEXPECTED_ERROR_MESSAGE } from '../auth/login-errors';
 import { formatDayMonth } from '../format/date';
@@ -31,10 +31,13 @@ import { usePanel } from '../shell/use-panel';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { CategorySquare } from '../ui/CategorySquare';
+import { useToast } from '../ui/Toast';
 import styles from './PointPanel.module.css';
 import { RejectDialog } from './RejectDialog';
 import { SplitDialog } from './SplitDialog';
 import {
+  errorCode,
+  OCCURRENCE_CHANGED_MESSAGE,
   occurrenceKey,
   useOccurrenceActions,
   type OccurrenceAction,
@@ -95,6 +98,17 @@ export function PointPanel({ occurrenceId, onClose, onAssign, onChanged }: Point
     queryFn: () => session.withAuth(() => api.panelOccurrence(tenantId, occurrenceId)),
   });
   const detail = query.data;
+  // A ocorrência sumiu do alcance (outro gestor juntou ou ela mudou de setor): fecha com o
+  // aviso, mesmo com o detalhe antigo ainda no cache.
+  const gone = errorCode(query.error) === 'occurrence_not_found';
+  const toast = useToast();
+  const closedRef = useRef(false);
+  useEffect(() => {
+    if (!gone || closedRef.current) return;
+    closedRef.current = true;
+    toast.show(OCCURRENCE_CHANGED_MESSAGE);
+    onClose();
+  }, [gone, toast, onClose]);
 
   async function run(action: OccurrenceAction) {
     const outcome = await actions.run(action);
@@ -121,9 +135,11 @@ export function PointPanel({ occurrenceId, onClose, onAssign, onChanged }: Point
 
   if (!detail) {
     const message = query.error
-      ? query.error instanceof ApiError
-        ? UNEXPECTED_ERROR_MESSAGE
-        : NETWORK_ERROR_MESSAGE
+      ? gone
+        ? OCCURRENCE_CHANGED_MESSAGE
+        : query.error instanceof ApiError
+          ? UNEXPECTED_ERROR_MESSAGE
+          : NETWORK_ERROR_MESSAGE
       : null;
     return (
       <aside className={styles.panel} aria-label="Painel do ponto" aria-busy={!message}>

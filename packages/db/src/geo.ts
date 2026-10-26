@@ -100,3 +100,90 @@ export async function findSimilarOccurrences(
     .limit(input.limit ?? DEFAULT_SIMILAR_LIMIT);
   return rows;
 }
+
+const DEFAULT_MERGE_SUGGESTION_LIMIT = 3;
+
+export interface MergeSuggestion {
+  occurrenceId: string;
+  /** Protocolo da solicitação não cancelada mais antiga da ocorrência sugerida. */
+  protocol: string;
+  categoryName: string;
+  /** Observação da mesma solicitação; nula quando o cidadão não escreveu. */
+  description: string | null;
+  distanceM: number;
+  requestCount: number;
+}
+
+/** Par de ids em ordem (menor, maior), a forma gravada em `occurrence_separations`. */
+export function sortedPair(a: string, b: string): [string, string] {
+  return a < b ? [a, b] : [b, a];
+}
+
+/**
+ * Ocorrências que o gestor pode juntar à `occurrenceId`: da mesma categoria, dentro do raio de
+ * agrupamento da categoria, ainda agrupáveis, da mais perto para a mais longe. Fora a própria
+ * ocorrência e os pares marcados como "é outro problema". Deve rodar no contexto da prefeitura
+ * (RLS). Não devolve nada que identifique cidadão.
+ */
+export async function findMergeSuggestions(
+  tx: Transaction,
+  input: { occurrenceId: string; limit?: number },
+): Promise<MergeSuggestion[]> {
+  const statuses = sql.join(
+    CLUSTERABLE_OCCURRENCE_STATUSES.map((status) => sql`${status}`),
+    sql`, `,
+  );
+  // O cast para geography casa com o índice occurrences_location_geog_idx.
+  const result = await tx.execute<{
+    occurrence_id: string;
+    protocol: string;
+    category_name: string;
+    description: string | null;
+    distance_m: number;
+    request_count: number;
+  }>(sql`
+    SELECT
+      o.id AS occurrence_id,
+      oldest.protocol,
+      c.name AS category_name,
+      oldest.description,
+      round(ST_Distance(o.location::geography, origin.location::geography))::int AS distance_m,
+      oldest.request_count
+    FROM occurrences origin
+    JOIN categories c ON c.tenant_id = origin.tenant_id AND c.id = origin.category_id
+    JOIN occurrences o
+      ON o.tenant_id = origin.tenant_id
+      AND o.category_id = origin.category_id
+      AND o.id <> origin.id
+      AND o.status IN (${statuses})
+      AND ST_DWithin(o.location::geography, origin.location::geography, c.cluster_radius_m)
+    -- Solicitação cancelada pelo cidadão não conta como relato.
+    CROSS JOIN LATERAL (
+      SELECT
+        r.protocol,
+        r.description,
+        count(*) OVER ()::int AS request_count
+      FROM requests r
+      WHERE r.tenant_id = o.tenant_id AND r.occurrence_id = o.id AND r.status <> 'cancelled'
+      ORDER BY r.created_at, r.id
+      LIMIT 1
+    ) oldest
+    WHERE origin.id = ${input.occurrenceId}
+      AND NOT EXISTS (
+        SELECT 1 FROM occurrence_separations s
+        WHERE s.tenant_id = origin.tenant_id
+          AND s.occurrence_a_id = least(origin.id, o.id)
+          AND s.occurrence_b_id = greatest(origin.id, o.id)
+      )
+    ORDER BY distance_m, o.id
+    LIMIT ${input.limit ?? DEFAULT_MERGE_SUGGESTION_LIMIT}
+  `);
+  return result.rows.map((row) => ({
+    occurrenceId: row.occurrence_id,
+    protocol: row.protocol,
+    categoryName: row.category_name,
+    description: row.description,
+    distanceM: row.distance_m,
+    requestCount: row.request_count,
+  }));
+}

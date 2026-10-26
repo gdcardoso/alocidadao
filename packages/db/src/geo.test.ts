@@ -3,7 +3,12 @@ import type { GeoPoint, OccurrenceStatus } from '@alocidadao/shared';
 import { sql } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { createDatabase, geoPoint, withContext } from './client.js';
-import { findActiveTenantAt, findSimilarOccurrences } from './geo.js';
+import {
+  findActiveTenantAt,
+  findMergeSuggestions,
+  findSimilarOccurrences,
+  sortedPair,
+} from './geo.js';
 import {
   categories,
   departments,
@@ -105,10 +110,21 @@ async function newOccurrence(
   status: OccurrenceStatus = 'triage',
   requestCount = 1,
 ): Promise<string> {
+  // A juntada aponta para outra ocorrência (CHECK): a ocorrência de destino fica longe, fora do raio.
+  const mergedInto =
+    status === 'merged'
+      ? await newOccurrence(seed, categoryId, north(point, 1000), 'triage', 1)
+      : null;
   return withContext(owner.db, { tenantId: seed.tenantId }, async (tx) => {
     const [occurrence] = await tx
       .insert(occurrences)
-      .values({ tenantId: seed.tenantId, categoryId, location: geoPoint(point), status })
+      .values({
+        tenantId: seed.tenantId,
+        categoryId,
+        location: geoPoint(point),
+        status,
+        mergedIntoId: mergedInto,
+      })
       .returning();
     for (let i = 0; i < requestCount; i++) {
       await tx.insert(requests).values({
@@ -210,5 +226,35 @@ describe('findSimilarOccurrences', () => {
       findSimilarOccurrences(tx, { categoryId: categoryInB, point: POINT_A }),
     );
     expect(crossTenant).toEqual([]);
+  });
+});
+
+describe('findMergeSuggestions', () => {
+  it('acha a ocorrência parecida com protocolo, categoria e a observação do relato mais antigo', async () => {
+    const categoryId = await newCategory(a);
+    const origin = await newOccurrence(a, categoryId, POINT_A);
+    const near = await newOccurrence(a, categoryId, north(POINT_A, 10), 'in_progress', 2);
+
+    const found = await withContext(app.db, { tenantId: a.tenantId }, (tx) =>
+      findMergeSuggestions(tx, { occurrenceId: origin }),
+    );
+
+    expect(found).toEqual([
+      {
+        occurrenceId: near,
+        protocol: expect.stringMatching(/^\d{4}-\d+$/),
+        categoryName: expect.stringMatching(/^Buraco /),
+        description: 'Buraco perto do ponto de ônibus',
+        distanceM: 10,
+        requestCount: 2,
+      },
+    ]);
+  });
+});
+
+describe('sortedPair', () => {
+  it('põe o menor id primeiro, em qualquer ordem', () => {
+    expect(sortedPair('b', 'a')).toEqual(['a', 'b']);
+    expect(sortedPair('a', 'b')).toEqual(['a', 'b']);
   });
 });

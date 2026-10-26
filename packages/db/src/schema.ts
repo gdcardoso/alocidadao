@@ -344,6 +344,9 @@ export const teams = pgTable(
     tenantId: tenantId(),
     departmentId: uuid('department_id').notNull(),
     name: text('name').notNull(),
+    /** Base da equipe: a W2 mostra a distância até o ponto e sugere a mais próxima. */
+    baseAddress: text('base_address'),
+    baseLocation: geometry('base_location', { type: 'point', mode: 'xy', srid: 4326 }),
     createdAt: createdAt(),
   },
   (t) => [
@@ -432,6 +435,37 @@ export const occurrences = pgTable(
     index('occurrences_location_idx').using('gist', t.location),
     // Busca por raio em metros (ST_DWithin sobre geography), usada para achar ocorrências parecidas.
     index('occurrences_location_geog_idx').using('gist', sql`(${t.location}::geography)`),
+    check(
+      'occurrences_merged_into_check',
+      sql`(${t.status} = 'merged') = (${t.mergedIntoId} is not null) and ${t.mergedIntoId} <> ${t.id}`,
+    ),
+  ],
+);
+
+/**
+ * Par de ocorrências que o gestor marcou como "é outro problema": a sugestão de junção não volta
+ * para nenhum dos dois lados. O par fica ordenado (menor id, maior id) para valer uma vez só.
+ */
+export const occurrenceSeparations = pgTable(
+  'occurrence_separations',
+  {
+    tenantId: tenantId(),
+    occurrenceAId: uuid('occurrence_a_id').notNull(),
+    occurrenceBId: uuid('occurrence_b_id').notNull(),
+    createdBy: uuid('created_by').references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.occurrenceAId, t.occurrenceBId] }),
+    foreignKey({
+      columns: [t.tenantId, t.occurrenceAId],
+      foreignColumns: [occurrences.tenantId, occurrences.id],
+    }),
+    foreignKey({
+      columns: [t.tenantId, t.occurrenceBId],
+      foreignColumns: [occurrences.tenantId, occurrences.id],
+    }),
+    check('occurrence_separations_order_check', sql`${t.occurrenceAId} < ${t.occurrenceBId}`),
   ],
 );
 

@@ -5,7 +5,7 @@ import {
   type IconGroup,
   type ReworkDetails,
 } from '@alocidadao/shared';
-import { and, asc, desc, eq, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, sql } from 'drizzle-orm';
 import { geoPoint, type Database, type Transaction } from './client.js';
 import {
   categories,
@@ -33,8 +33,15 @@ export const MANAGER_EMAIL = 'gestor.demo@alocidadao.dev';
 const MANAGER_NAME = 'Carlos Demo';
 export const ADMIN_CPF = '11144477735';
 export const ADMIN_EMAIL = 'admin.demo@alocidadao.dev';
+export const TENANT_ADMIN_CPF = '39053344705';
+export const TENANT_ADMIN_EMAIL = 'admin.prefeitura@alocidadao.dev';
+const TENANT_ADMIN_NAME = 'Rita Demo';
 const DEPARTMENT_NAME = 'Obras';
+const CLEANING_DEPARTMENT_NAME = 'Limpeza Urbana';
 const TEAM_NAME = 'Equipe Obras – Centro';
+const NORTH_TEAM_NAME = 'Equipe Obras – Norte';
+const CLEANING_TEAM_NAME = 'Equipe Limpeza – Centro';
+const CLEANING_CATEGORY_NAMES = ['Lixo e entulho', 'Poda de árvore'];
 const CATEGORY_NAME = 'Buraco na via';
 
 /** Ponto de referência (centro de São Paulo) em torno do qual ficam as solicitações. */
@@ -464,6 +471,243 @@ async function ensureCitizen(
   return userId;
 }
 
+/** Latitude de 1 grau ≈ 111,2 km; as bases das equipes ficam a esta distância ao sul e ao norte. */
+const DEG_PER_KM = 1 / 111.195;
+
+interface DemoTeam {
+  name: string;
+  department: string;
+  base?: { address: string; location: GeoPoint };
+}
+
+/** Equipes da demo. A Norte não tem agentes; a de Limpeza não tem base. */
+const DEMO_TEAMS: DemoTeam[] = [
+  {
+    name: TEAM_NAME,
+    department: DEPARTMENT_NAME,
+    // A cerca de 1 km ao sul do centro.
+    base: {
+      address: 'Rua do Paço, 50',
+      location: { lat: CENTER.lat - 1 * DEG_PER_KM, lng: CENTER.lng },
+    },
+  },
+  {
+    name: NORTH_TEAM_NAME,
+    department: DEPARTMENT_NAME,
+    // A cerca de 5 km ao norte do centro.
+    base: {
+      address: 'Av. Santos Dumont, 800',
+      location: { lat: CENTER.lat + 5 * DEG_PER_KM, lng: CENTER.lng },
+    },
+  },
+  { name: CLEANING_TEAM_NAME, department: CLEANING_DEPARTMENT_NAME },
+];
+
+/**
+ * Setor Limpeza Urbana (com Lixo e entulho e Poda de árvore, que saem de Obras) e as equipes da
+ * demo, com a base das que têm. Idempotente: a base já gravada (editada no painel) é mantida.
+ */
+async function seedTeams(tx: Transaction, tenantId: string): Promise<void> {
+  await tx
+    .insert(departments)
+    .values({ tenantId, name: CLEANING_DEPARTMENT_NAME })
+    .onConflictDoNothing();
+  const departmentRows = await tx
+    .select({ id: departments.id, name: departments.name })
+    .from(departments)
+    .where(eq(departments.tenantId, tenantId));
+  const departmentId = new Map(departmentRows.map((row) => [row.name, row.id]));
+  const cleaningId = departmentId.get(CLEANING_DEPARTMENT_NAME)!;
+  await tx
+    .update(categories)
+    .set({ departmentId: cleaningId })
+    .where(
+      and(eq(categories.tenantId, tenantId), inArray(categories.name, CLEANING_CATEGORY_NAMES)),
+    );
+
+  for (const team of DEMO_TEAMS) {
+    const [found] = await tx
+      .select({ id: teams.id })
+      .from(teams)
+      .where(and(eq(teams.tenantId, tenantId), eq(teams.name, team.name)));
+    const base = team.base && {
+      baseAddress: team.base.address,
+      baseLocation: geoPoint(team.base.location),
+    };
+    if (!found) {
+      await tx.insert(teams).values({
+        tenantId,
+        departmentId: departmentId.get(team.department)!,
+        name: team.name,
+        ...base,
+      });
+    } else if (base) {
+      await tx
+        .update(teams)
+        .set({
+          baseAddress: sql`coalesce(${teams.baseAddress}, ${base.baseAddress})`,
+          baseLocation: sql`coalesce(${teams.baseLocation}, ${base.baseLocation})`,
+        })
+        .where(eq(teams.id, found.id));
+    }
+  }
+}
+
+interface DemoTriage {
+  /** Descrição do primeiro relato; é por ela que a segunda execução reencontra a ocorrência. */
+  description: string;
+  address: string;
+  categoryName: string;
+  dLat: number;
+  dLng: number;
+  /** Há quantas horas chegou o primeiro relato e a ocorrência entrou em triagem. */
+  hoursAgo: number;
+  /** Observações dos relatos seguintes, de outros cidadãos (o 1º é o cidadão demo). */
+  extraReports?: string[];
+  /** Cidadãos do primeiro relato e dos seguintes: índices em [cidadão demo, ...EXTRA_CITIZENS]. */
+  citizens: number[];
+}
+
+// Longe das atividades da demo (todas a menos de 300 m do centro), para as sugestões não se misturarem.
+const DEMO_TRIAGE: DemoTriage[] = [
+  {
+    description: 'Buraco fundo no meio da rua, os carros desviam para a contramão',
+    address: 'Rua Augusta, 900',
+    categoryName: CATEGORY_NAME,
+    dLat: -0.004,
+    dLng: -0.003,
+    hoursAgo: 48,
+    extraReports: ['O buraco aumentou depois da chuva de ontem', ''],
+    citizens: [0, 1, 2],
+  },
+  {
+    // A 10 m da anterior, dentro do raio de 15 m do tipo: vira sugestão de junção.
+    description: 'Buraco pequeno perto do bueiro',
+    address: 'Rua Augusta, 910',
+    categoryName: CATEGORY_NAME,
+    dLat: -0.004 + 0.01 * DEG_PER_KM,
+    dLng: -0.003,
+    hoursAgo: 6,
+    citizens: [1],
+  },
+  {
+    description: 'Poste apagado há uma semana, a rua fica escura à noite',
+    address: 'Rua Vergueiro, 1200',
+    categoryName: 'Iluminação',
+    dLat: 0.003,
+    dLng: -0.002,
+    hoursAgo: 96,
+    citizens: [2],
+  },
+  {
+    description: 'Calçada quebrada, cadeirante não consegue passar',
+    address: 'Av. Paulista, 1500',
+    categoryName: 'Calçada',
+    dLat: -0.003,
+    dLng: 0.003,
+    hoursAgo: 5,
+    citizens: [1],
+  },
+  {
+    description: 'Entulho jogado na esquina há dias',
+    address: 'Rua Oscar Freire, 300',
+    categoryName: 'Lixo e entulho',
+    dLat: 0.004,
+    dLng: 0.002,
+    hoursAgo: 24,
+    extraReports: ['Lixo acumulado na calçada, com mau cheiro'],
+    citizens: [0, 2],
+  },
+];
+
+/**
+ * Ocorrências em triagem da demo (a fila do painel), com relatos de cidadãos diferentes e datas
+ * retroativas no relato e no evento da ocorrência (o "aberta há" do painel). Idempotente: só cria
+ * a que falta. Com `reset`, recria a que foi tratada (já não está em triagem ou perdeu relatos).
+ */
+async function seedDemoTriage(
+  tx: Transaction,
+  ids: { tenantId: string; citizenId: string },
+  { reset = false }: SeedDevOptions,
+): Promise<void> {
+  const citizenIds = [ids.citizenId];
+  for (const citizen of EXTRA_CITIZENS) {
+    citizenIds.push(await ensureCitizen(tx, ids.tenantId, citizen));
+  }
+  const categoryRows = await tx
+    .select({ id: categories.id, name: categories.name })
+    .from(categories)
+    .where(eq(categories.tenantId, ids.tenantId));
+  const categoryId = new Map(categoryRows.map((row) => [row.name, row.id]));
+  const now = Date.now();
+
+  for (const item of DEMO_TRIAGE) {
+    const expected = 1 + (item.extraReports?.length ?? 0);
+    const [first] = await tx
+      .select({ occurrenceId: requests.occurrenceId })
+      .from(requests)
+      .where(and(eq(requests.tenantId, ids.tenantId), eq(requests.description, item.description)))
+      .orderBy(desc(requests.createdAt))
+      .limit(1);
+    if (first) {
+      if (!reset) continue;
+      const [occurrence] = await tx
+        .select({ status: occurrences.status })
+        .from(occurrences)
+        .where(eq(occurrences.id, first.occurrenceId));
+      const [reports] = await tx
+        .select({ total: count() })
+        .from(requests)
+        .where(eq(requests.occurrenceId, first.occurrenceId));
+      if (occurrence?.status === 'triage' && reports?.total === expected) continue;
+    }
+
+    const location: GeoPoint = { lat: CENTER.lat + item.dLat, lng: CENTER.lng + item.dLng };
+    const point = geoPoint(location);
+    const reportedAt = new Date(now - item.hoursAgo * HOUR_MS);
+    const category = categoryId.get(item.categoryName);
+    if (!category) throw new Error(`Tipo da demo ausente: ${item.categoryName}`);
+    const [occurrence] = await tx
+      .insert(occurrences)
+      .values({
+        tenantId: ids.tenantId,
+        categoryId: category,
+        location: point,
+        status: 'triage',
+        createdAt: reportedAt,
+      })
+      .returning({ id: occurrences.id });
+    const reports = [item.description, ...(item.extraReports ?? [])];
+    for (const [index, description] of reports.entries()) {
+      // Poucos metros ao lado do primeiro relato, dentro do raio de agrupamento do tipo.
+      const reportPoint = geoPoint({
+        lat: location.lat + index * 0.00002,
+        lng: location.lng - index * 0.00002,
+      });
+      await tx.insert(requests).values({
+        tenantId: ids.tenantId,
+        citizenId: citizenIds[item.citizens[index]!]!,
+        categoryId: category,
+        occurrenceId: occurrence!.id,
+        status: 'open',
+        description,
+        address: index === 0 ? item.address : null,
+        location: reportPoint,
+        gpsLocation: reportPoint,
+        // Depois do primeiro relato, que continua dando protocolo e endereço à ocorrência.
+        createdAt: new Date(reportedAt.getTime() + index * 15 * 60 * 1000),
+      });
+    }
+    // O evento da ocorrência (sem solicitação nem atividade) é o "desde quando" do status.
+    await tx.insert(statusEvents).values({
+      tenantId: ids.tenantId,
+      occurrenceId: occurrence!.id,
+      toStatus: 'triage',
+      createdAt: reportedAt,
+    });
+  }
+}
+
 /**
  * Cria a prefeitura de demonstração (IBGE 9999901) com equipe, agente, cidadãos, gestor e as
  * atividades de DEMO_WORK_ORDERS, cada uma na sua ocorrência e atribuída à equipe pelo gestor.
@@ -476,9 +720,11 @@ export async function seedDev(db: Database, options: SeedDevOptions = {}): Promi
   return db.transaction(async (tx) => {
     const base = await seedTenantData(tx);
     await seedCatalog(tx, base.tenantId);
+    await seedTeams(tx, base.tenantId);
     await seedMunicipalities(tx);
     const staff = await seedStaff(tx, base.tenantId);
     const workOrderIds = await seedDemoWorkOrders(tx, { ...base, ...staff }, options);
+    await seedDemoTriage(tx, base, options);
     return {
       tenantId: base.tenantId,
       teamId: base.teamId,
@@ -562,7 +808,7 @@ async function ensureUser(
 
 /**
  * Gestor demo (vínculo `manager` na prefeitura e no setor demo) e admin interno demo
- * (platform_role 'admin'). Idempotente: só cria o que falta. Entram pelo painel
+ * (platform_role 'admin'), mais o admin da prefeitura. Idempotente: só cria o que falta. Entram pelo painel
  * (e-mail e CPF preenchidos), não pelo app.
  */
 async function seedStaff(
@@ -597,6 +843,17 @@ async function seedStaff(
   await tx
     .insert(departmentManagers)
     .values({ tenantId, departmentId: department.id, userId: managerId })
+    .onConflictDoNothing();
+
+  // Admin da prefeitura: entra pelo painel com vínculo tenant_admin, sem setor.
+  const tenantAdminId = await ensureUser(tx, {
+    cpf: TENANT_ADMIN_CPF,
+    email: TENANT_ADMIN_EMAIL,
+    name: TENANT_ADMIN_NAME,
+  });
+  await tx
+    .insert(memberships)
+    .values({ tenantId, userId: tenantAdminId, role: 'tenant_admin' })
     .onConflictDoNothing();
   return { managerId, platformAdminId };
 }

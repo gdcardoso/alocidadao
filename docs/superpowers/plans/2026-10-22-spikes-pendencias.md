@@ -89,7 +89,7 @@ Feito no 5b (`2026-10-26-painel-5b.md`). O que sobrou foi para os Planos 6 e 7; 
 - [x] Edição da base da equipe (`teams.base_address` e `teams.base_location`) na W6; no 5a só o seed preenche. (veio do Plano 5a)
 - [x] Setores: cadastro (só o admin) e a lista da W7. (veio do Plano 5a)
 - [x] Busca do mapa: o resultado não diz o status, e uma recusada ou concluída aparece junto das abertas no mesmo endereço (ordem por protocolo). Decidir se mostra o status ou põe as abertas primeiro. (veio do Plano 5a, passada no navegador)
-- Textos do painel criados sem Pencil no 5b, para confirmar (decisões e regras do `2026-10-26-painel-5b.md`; os do 5a estão na lista seguinte):
+- Textos do painel criados sem Pencil no 5b (confirmados pelo usuário em 26/10; decisões e regras do `2026-10-26-painel-5b.md`; os do 5a estão na lista seguinte):
   - Gerais das filas e listas: 'Esta atividade mudou. Atualizamos o painel.'; 'Nenhum atendimento aguardando revisão.'; 'Nenhum impedimento. Tudo em dia.'; 'Nenhuma ocorrência em atendimento.'; 'Nenhuma solicitação com estes filtros.'; 'Mostrando {n} de {total}'; '{início}–{fim} de {total}' com 'Anterior' e 'Próxima'; 'há N min', 'há N h', 'há 1 dia', 'há N dias'.
   - W3: apoio do título ('{n} atendimentos concluídos pelas equipes. O cidadão só recebe depois que você publicar.' e o singular); 'No local (a {d})'; 'Longe do local (a {d})'; 'Sem localização na conclusão'; '{n} cidadãos aguardando' / '1 cidadão aguardando'; 'Concluído em {data}'; 'O agente não enviou fotos.'; 'O agente não escreveu relato.'; 'Publicar' / 'Não publicar' nas fotos; 'Os {n} cidadãos recebem este texto e as fotos marcadas.' / 'O cidadão recebe este texto e as fotos marcadas.'; 'Publicar para os cidadãos'; 'Publicado para os cidadãos.'.
   - W3b: 'Devolver ao agente'; 'O que precisa ajustar?' / 'marque um ou mais'; 'Tirar novas fotos', 'Corrigir o relato', 'Voltar ao local: serviço incompleto'; 'Fotos que não servem' / 'serão descartadas'; 'Mensagem para o agente'; 'A atividade volta para a lista do agente. O cidadão continua vendo "Em atendimento".'; botão 'Devolver'; 'Devolvida ao agente.'.
@@ -102,7 +102,7 @@ Feito no 5b (`2026-10-26-painel-5b.md`). O que sobrou foi para os Planos 6 e 7; 
   - Legenda da foto de contestação no app: 'Sua foto · contestação'.
   - Cabeçalho '⋯' das tabelas de gestores e setores (a tabela de agentes da W6 não tem cabeçalho nessa coluna): conferir qual vale.
 
-- Textos do painel criados sem Pencil para confirmar (decisões do `2026-10-26-painel-5a.md`):
+- Textos do painel criados sem Pencil (confirmados pelo usuário em 26/10; decisões do `2026-10-26-painel-5a.md`):
   - Login: 'Confira o CPF.'; 'Não encontramos acesso ao painel para este CPF. Fale com o administrador do Alô Cidadão na sua prefeitura.'; 'Aguarde {m:ss} para pedir outro código.'; 'Código incorreto. Confira e tente de novo.'; 'O código expirou. Peça um novo.'; 'Muitas tentativas. Peça um novo código.'; 'Não chegou? Veja o spam ou' + 'reenvie o código'; 'Enviando…'; 'Entrando…'.
   - Gerais: 'Não foi possível conectar. Confira sua internet e tente de novo.'; 'Sua sessão expirou. Entre de novo.'; 'Seu acesso ao painel não está ativo' / 'Fale com o administrador do Alô Cidadão na sua prefeitura.' / 'Sair'; 'Esta ocorrência mudou. Atualizamos o painel.'; 'Não foi possível concluir. Tente de novo.'; 'Nenhuma ocorrência com estes filtros.'; 'Tentar de novo' (botão do erro de carga).
   - Páginas do 5b: 'Esta tela chega na próxima etapa do painel.'.

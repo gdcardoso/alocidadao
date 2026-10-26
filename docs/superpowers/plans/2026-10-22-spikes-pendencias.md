@@ -141,6 +141,7 @@ Feito no 6a (`2026-10-26-backoffice-6a.md`): entrada da equipe interna, P1 Prefe
 ## Plano 6b — Backoffice (segunda parte)
 
 - Telas que o menu já mostra como provisórias: Interesse por cidade (`city_interest` e `municipality_leads`), Equipe Alô Cidadão e Auditoria; abas da P3 além de Visão geral.
+- `panel_find_or_create_manager_user` ainda aceita conta da equipe Alô Cidadão como gestor de uma prefeitura (o `platform_find_or_create_tenant_admin` já recusa com `staff_account_not_allowed`). Decidir se o cadastro de gestor recusa também. (veio do Plano 6a)
 - `municipality_leads.updated_by` não é forçado a `app_current_user()` e `updated_at` não muda no `UPDATE`.
 - Correções de conta pelo suporte, com função própria e auditoria.
 - Excluir conta ainda não apaga `city_interest` nem tira `platform_role` da conta excluída.

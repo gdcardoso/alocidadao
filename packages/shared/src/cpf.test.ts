@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cpfSchema, isValidCpf } from './cpf.js';
+import { cpfSchema, formatCpf, isValidCpf } from './cpf.js';
 
 describe('isValidCpf', () => {
   it('accepts valid CPFs', () => {
@@ -28,5 +28,18 @@ describe('cpfSchema', () => {
 
   it('rejects invalid CPFs', () => {
     expect(cpfSchema.safeParse('52998224724').success).toBe(false);
+  });
+});
+
+describe('cpfSchema input forms', () => {
+  it('cpf accepts spaces and slash', () => {
+    expect(cpfSchema.parse(' 529 982 247/25 ')).toBe('52998224725');
+    expect(cpfSchema.parse('529.982.247-25')).toBe('52998224725');
+  });
+});
+
+describe('formatCpf', () => {
+  it('formatCpf adds the mask', () => {
+    expect(formatCpf('52998224725')).toBe('529.982.247-25');
   });
 });

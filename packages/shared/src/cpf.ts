@@ -18,8 +18,13 @@ export function isValidCpf(digits: string): boolean {
   );
 }
 
-/** Aceita `529.982.247-25` ou `52998224725` e devolve só os dígitos. */
+/** Aplica a máscara `123.456.789-09` a 11 dígitos. */
+export function formatCpf(digits: string): string {
+  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9, 11)}`;
+}
+
+/** Aceita `529.982.247-25`, `52998224725` (com espaços ou `/` soltos) e devolve só os dígitos. */
 export const cpfSchema = z
   .string()
-  .transform((value) => value.replace(/[.-]/g, ''))
+  .transform((value) => value.replace(/[\s./-]/g, ''))
   .refine(isValidCpf, { message: 'CPF inválido' });

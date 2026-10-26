@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   TERMS_VERSION,
   maskEmail,
+  panelRefreshResponseSchema,
+  panelSessionResponseSchema,
   panelStartBodySchema,
   meResponseSchema,
   phoneChangeStartBodySchema,
@@ -19,6 +21,10 @@ describe('maskEmail', () => {
   it('keeps first letter and domain', () => {
     expect(maskEmail('gabriel@exemplo.com')).toBe('g•••@exemplo.com');
     expect(maskEmail('a@x.co')).toBe('a•••@x.co');
+  });
+
+  it('maskEmail lowercases before masking', () => {
+    expect(maskEmail('Gabriel@Exemplo.COM')).toBe('g•••@exemplo.com');
   });
 });
 
@@ -63,6 +69,27 @@ describe('storedPhoneSchema', () => {
     };
     expect(meResponseSchema.safeParse(me).success).toBe(true);
     expect(meResponseSchema.safeParse({ ...me, phone: 'abc' }).success).toBe(false);
+  });
+
+  it('requires the tenant status on panel tenants', () => {
+    const tenant = { tenantId: uuid, tenantName: 'Prefeitura', role: 'manager' };
+    const me = {
+      id: uuid,
+      name: 'Ana',
+      phone: null,
+      email: null,
+      platformRole: null,
+      agentTenants: [],
+    };
+    expect(
+      meResponseSchema.safeParse({ ...me, panelTenants: [{ ...tenant, status: 'onboarding' }] })
+        .success,
+    ).toBe(true);
+    expect(meResponseSchema.safeParse({ ...me, panelTenants: [tenant] }).success).toBe(false);
+    expect(
+      meResponseSchema.safeParse({ ...me, panelTenants: [{ ...tenant, status: 'suspended' }] })
+        .success,
+    ).toBe(false);
   });
 });
 
@@ -118,5 +145,16 @@ describe('updateMeBodySchema', () => {
 describe('panelStartBodySchema', () => {
   it('normalizes the CPF', () => {
     expect(panelStartBodySchema.parse({ cpf: '529.982.247-25' }).cpf).toBe('52998224725');
+  });
+});
+
+describe('panel session responses', () => {
+  it('panel session response has no refresh token', () => {
+    const session = { accessToken: 'a', accessExpiresInSeconds: 900 };
+    expect(panelSessionResponseSchema.parse({ session })).toEqual({ session });
+    expect(panelRefreshResponseSchema.parse(session)).toEqual(session);
+    expect(
+      panelSessionResponseSchema.parse({ session: { ...session, refreshToken: 'r' } }).session,
+    ).not.toHaveProperty('refreshToken');
   });
 });

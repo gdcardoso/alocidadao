@@ -10,3 +10,4 @@ export * from './cpf.js';
 export * from './auth.js';
 export * from './citizen.js';
 export * from './agent.js';
+export * from './panel.js';

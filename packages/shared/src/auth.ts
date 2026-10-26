@@ -23,10 +23,11 @@ export const ACCESS_TOKEN_TTL_SECONDS = 900;
 /** Dias sem atividade a partir dos quais a conta é considerada parada. */
 export const STALE_ACCOUNT_DAYS = 90;
 
-/** Primeira letra + `•••` + domínio: `g•••@exemplo.com`. */
+/** Primeira letra + `•••` + domínio, tudo em minúsculas: `g•••@exemplo.com`. */
 export function maskEmail(email: string): string {
-  const at = email.lastIndexOf('@');
-  return `${email.slice(0, 1)}•••${email.slice(at)}`;
+  const lower = email.toLowerCase();
+  const at = lower.lastIndexOf('@');
+  return `${lower.slice(0, 1)}•••${lower.slice(at)}`;
 }
 
 export const deviceInfoSchema = z.object({
@@ -98,6 +99,8 @@ export type RefreshResponse = z.infer<typeof refreshResponseSchema>;
 
 export const panelStartBodySchema = z.object({ cpf: cpfSchema });
 export type PanelStartBody = z.infer<typeof panelStartBodySchema>;
+/** O que o cliente envia (CPF ainda com máscara): a API normaliza. */
+export type PanelStartInput = z.input<typeof panelStartBodySchema>;
 
 export const panelChallengeResponseSchema = challengeResponseSchema.extend({
   maskedEmail: z.string(),
@@ -109,6 +112,18 @@ export type PanelVerifyBody = z.infer<typeof panelVerifyBodySchema>;
 
 export const sessionResponseSchema = z.object({ session: sessionTokensSchema });
 export type SessionResponse = z.infer<typeof sessionResponseSchema>;
+
+/** Sessão do painel: o token de renovação vai só no cookie HttpOnly, nunca no corpo. */
+export const panelSessionResponseSchema = z.object({
+  session: z.object({ accessToken: z.string(), accessExpiresInSeconds: z.number().int() }),
+});
+export type PanelSessionResponse = z.infer<typeof panelSessionResponseSchema>;
+
+export const panelRefreshResponseSchema = z.object({
+  accessToken: z.string(),
+  accessExpiresInSeconds: z.number().int(),
+});
+export type PanelRefreshResponse = z.infer<typeof panelRefreshResponseSchema>;
 
 export const meResponseSchema = z.object({
   id: z.uuid(),
@@ -122,6 +137,7 @@ export const meResponseSchema = z.object({
       tenantId: z.uuid(),
       tenantName: z.string(),
       role: z.enum(['manager', 'tenant_admin']),
+      status: z.enum(['onboarding', 'active']),
     }),
   ),
 });

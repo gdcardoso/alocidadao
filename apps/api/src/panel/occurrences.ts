@@ -21,7 +21,7 @@ import {
 } from '@alocidadao/shared';
 import { and, asc, count, desc, eq, ilike, inArray, ne, sql, type SQL } from 'drizzle-orm';
 import type { Storage } from '../storage/s3.js';
-import { departmentScope, type PanelIdentity } from './member.js';
+import { departmentScope, panelDbContext, type PanelIdentity } from './member.js';
 
 const { categories, departments, occurrences, requests, teams, workOrders } = schema;
 
@@ -104,7 +104,7 @@ export async function loadOccurrenceMap(
   identity: PanelIdentity,
   query: OccurrenceMapQuery,
 ): Promise<OccurrenceMapResponse> {
-  const { userId, tenantId } = identity;
+  const { tenantId } = identity;
   const where = and(
     eq(occurrences.tenantId, tenantId),
     inArray(occurrences.status, MAP_STATUSES[query.status]),
@@ -114,7 +114,7 @@ export async function loadOccurrenceMap(
       : sql`${occurrences.createdAt} >= now() - make_interval(days => ${query.days})`,
     departmentScope(identity),
   );
-  return withContext(db, { tenantId, userId }, async (tx) => {
+  return withContext(db, panelDbContext(identity), async (tx) => {
     const [total] = await tx
       .select({ n: count() })
       .from(occurrences)
@@ -176,8 +176,8 @@ export async function searchOccurrences(
   const match = searchCondition(rawQuery);
   if (!match) return { items: [] };
 
-  const { userId, tenantId } = identity;
-  return withContext(db, { tenantId, userId }, async (tx) => {
+  const { tenantId } = identity;
+  return withContext(db, panelDbContext(identity), async (tx) => {
     const matches = tx
       .selectDistinctOn([occurrences.id], {
         occurrenceId: sql<string>`${occurrences.id}`.as('occurrence_id'),
@@ -279,8 +279,7 @@ export async function loadOccurrenceDetail(
   identity: PanelIdentity,
   occurrenceId: string,
 ): Promise<OccurrenceDetail | undefined> {
-  const { userId, tenantId } = identity;
-  const loaded = await withContext(db, { tenantId, userId }, async (tx) => {
+  const loaded = await withContext(db, panelDbContext(identity), async (tx) => {
     const occurrence = await findScopedOccurrence(tx, identity, occurrenceId);
     if (!occurrence) return undefined;
 
@@ -372,8 +371,8 @@ export async function loadTeamOptions(
   identity: PanelIdentity,
   occurrenceId: string,
 ): Promise<TeamOptionsResponse | undefined> {
-  const { userId, tenantId } = identity;
-  return withContext(db, { tenantId, userId }, async (tx) => {
+  const { tenantId } = identity;
+  return withContext(db, panelDbContext(identity), async (tx) => {
     const occurrence = await findScopedOccurrence(tx, identity, occurrenceId);
     if (!occurrence) return undefined;
 

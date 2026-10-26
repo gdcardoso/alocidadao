@@ -59,6 +59,7 @@ async function applyManagerAction(
     tenantId,
     role: 'manager',
     departmentIds: null,
+    platformRole: null,
   };
   // A atividade é lida antes só para distinguir "não existe" de "sem gestor na prefeitura".
   const [order] = await tx

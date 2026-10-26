@@ -10,7 +10,7 @@ import {
 } from '@alocidadao/shared';
 import { and, asc, count, desc, eq, ne, sql, type SQL } from 'drizzle-orm';
 import type { Storage } from '../storage/s3.js';
-import { departmentScope, type PanelIdentity } from './member.js';
+import { departmentScope, panelDbContext, type PanelIdentity } from './member.js';
 
 const {
   categories,
@@ -122,13 +122,13 @@ export async function loadWorkQueue(
   identity: PanelIdentity,
   status: 'awaiting_review' | 'impeded',
 ): Promise<WorkQueueResponse> {
-  const { tenantId, userId } = identity;
+  const { tenantId } = identity;
   const where = and(
     eq(workOrders.tenantId, tenantId),
     eq(workOrders.status, status),
     departmentScope(identity),
   );
-  return withContext(db, { tenantId, userId }, async (tx) => {
+  return withContext(db, panelDbContext(identity), async (tx) => {
     const [total] = await tx
       .select({ n: count() })
       .from(workOrders)
@@ -228,8 +228,7 @@ export async function loadReviewDetail(
   id: string,
   storage?: Storage,
 ): Promise<ReviewDetail | undefined> {
-  const { tenantId, userId } = identity;
-  const loaded = await withContext(db, { tenantId, userId }, async (tx) => {
+  const loaded = await withContext(db, panelDbContext(identity), async (tx) => {
     const order = await findScopedWorkOrder(tx, identity, id);
     if (!order || order.status !== 'awaiting_review') return undefined;
     const header = await loadWorkOrderHeader(tx, order);
@@ -291,8 +290,7 @@ export async function loadImpedimentDetail(
   id: string,
   storage?: Storage,
 ): Promise<ImpedimentDetail | undefined> {
-  const { tenantId, userId } = identity;
-  const loaded = await withContext(db, { tenantId, userId }, async (tx) => {
+  const loaded = await withContext(db, panelDbContext(identity), async (tx) => {
     const order = await findScopedWorkOrder(tx, identity, id);
     if (!order || order.status !== 'impeded') return undefined;
     const header = await loadWorkOrderHeader(tx, order);

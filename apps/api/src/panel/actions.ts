@@ -20,7 +20,7 @@ import {
   type WorkOrderStatus,
 } from '@alocidadao/shared';
 import { and, asc, eq, inArray } from 'drizzle-orm';
-import type { PanelIdentity } from './member.js';
+import { panelDbContext, type PanelIdentity } from './member.js';
 import { findScopedOccurrence, todayInSaoPaulo, type ScopedOccurrence } from './occurrences.js';
 
 const { occurrences, occurrenceSeparations, requests, statusEvents, teams, workOrders } = schema;
@@ -61,8 +61,7 @@ export const dueAtFor = (date: string) => new Date(`${date}T23:59:59-03:00`);
 
 /** Roda a ação no contexto da prefeitura, numa transação só. */
 export function run<T>(db: Database, identity: PanelIdentity, fn: (tx: Transaction) => Promise<T>) {
-  const { tenantId, userId } = identity;
-  return withContext(db, { tenantId, userId }, fn);
+  return withContext(db, panelDbContext(identity), fn);
 }
 
 /** Desfaz a transação com a recusa (o `withContext` só dá rollback com exceção). */

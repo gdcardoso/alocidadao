@@ -9,6 +9,22 @@ const { memberships, tenants, users } = schema;
 const tenantHeader = z.uuid();
 
 /**
+ * Prefeitura do cabeçalho `x-tenant-id`. Sem ele (ou fora do formato UUID) responde 400
+ * `tenant_required` e devolve undefined.
+ */
+export function requireTenantHeader(
+  request: FastifyRequest,
+  reply: FastifyReply,
+): string | undefined {
+  const parsed = tenantHeader.safeParse(request.headers['x-tenant-id']);
+  if (!parsed.success) {
+    void reply.code(400).send({ code: 'tenant_required' });
+    return undefined;
+  }
+  return parsed.data;
+}
+
+/**
  * Confere, no banco, que a pessoa autenticada (request.auth, de requireAuth) tem vínculo ativo
  * com um dos papéis na prefeitura do cabeçalho `x-tenant-id`, que a prefeitura está num dos
  * status aceitos (`options.tenantStatuses`, padrão só `active`; o painel aceita também
@@ -31,12 +47,8 @@ export async function requireTenantMember(
   }
   const { userId } = request.auth;
 
-  const parsed = tenantHeader.safeParse(request.headers['x-tenant-id']);
-  if (!parsed.success) {
-    void reply.code(400).send({ code: 'tenant_required' });
-    return undefined;
-  }
-  const tenantId = parsed.data;
+  const tenantId = requireTenantHeader(request, reply);
+  if (!tenantId) return undefined;
 
   // As políticas own_memberships_select e users (cada um vê a si mesmo) bastam com userId.
   const [member] = await withContext(db, { userId }, (tx) =>

@@ -13,7 +13,7 @@ import {
   type WorkOrderStatus,
 } from '@alocidadao/shared';
 import { sql } from 'drizzle-orm';
-import { departmentScope, type PanelIdentity } from './member.js';
+import { departmentScope, panelDbContext, type PanelIdentity } from './member.js';
 import { searchCondition, sqlList, statusSinceSql } from './occurrences.js';
 
 /**
@@ -27,10 +27,10 @@ export async function loadInProgress(
   identity: PanelIdentity,
   query: InProgressQuery,
 ): Promise<InProgressResponse> {
-  const { userId, tenantId } = identity;
+  const { tenantId } = identity;
   // As tabelas `occurrences` e `categories` ficam sem apelido: departmentScope e statusSinceSql
   // se referem a elas pelo nome.
-  const result = await withContext(db, { tenantId, userId }, (tx) =>
+  const result = await withContext(db, panelDbContext(identity), (tx) =>
     tx.execute<{
       occurrence_id: string;
       protocol: string;
@@ -121,7 +121,7 @@ export async function loadRequestList(
   identity: PanelIdentity,
   query: RequestListQuery,
 ): Promise<RequestListResponse> {
-  const { userId, tenantId } = identity;
+  const { tenantId } = identity;
   const text = searchCondition(query.q);
   // A tabela `requests` fica sem apelido: searchCondition se refere a ela pelo nome.
   const from = sql`
@@ -141,7 +141,7 @@ export async function loadRequestList(
       AND ${text ?? sql`true`}
       AND ${departmentScope(identity) ?? sql`true`}
   `;
-  const { rows, total } = await withContext(db, { tenantId, userId }, async (tx) => {
+  const { rows, total } = await withContext(db, panelDbContext(identity), async (tx) => {
     const counted = await tx.execute<{ total: string }>(sql`SELECT count(*) AS total ${from}`);
     const page = await tx.execute<{
       request_id: string;
@@ -199,8 +199,8 @@ export async function loadCategoryOptions(
   db: Database,
   identity: PanelIdentity,
 ): Promise<CategoryOptionsResponse> {
-  const { userId, tenantId } = identity;
-  const result = await withContext(db, { tenantId, userId }, (tx) =>
+  const { tenantId } = identity;
+  const result = await withContext(db, panelDbContext(identity), (tx) =>
     tx.execute<{ id: string; name: string }>(sql`
       SELECT categories.id, categories.name
       FROM categories

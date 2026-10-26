@@ -1,7 +1,7 @@
 import { schema, withContext, type Database } from '@alocidadao/db';
 import type { PanelContext, PanelCounts } from '@alocidadao/shared';
 import { and, asc, count, eq, inArray, sql } from 'drizzle-orm';
-import { departmentScope, type PanelIdentity } from './member.js';
+import { departmentScope, panelDbContext, type PanelIdentity } from './member.js';
 
 const { tenants, users, departments, categories, occurrences, workOrders } = schema;
 
@@ -11,7 +11,7 @@ export async function loadPanelContext(
   identity: PanelIdentity,
 ): Promise<PanelContext> {
   const { userId, tenantId, role, departmentIds } = identity;
-  return withContext(db, { tenantId, userId }, async (tx) => {
+  return withContext(db, panelDbContext(identity), async (tx) => {
     const [tenant] = await tx
       .select({
         id: tenants.id,
@@ -68,9 +68,9 @@ export async function loadPanelContext(
  * impedidas (pela categoria da ocorrência).
  */
 export async function loadPanelCounts(db: Database, identity: PanelIdentity): Promise<PanelCounts> {
-  const { userId, tenantId } = identity;
+  const { tenantId } = identity;
   const scope = departmentScope(identity);
-  return withContext(db, { tenantId, userId }, async (tx) => {
+  return withContext(db, panelDbContext(identity), async (tx) => {
     const [triage] = await tx
       .select({ n: count() })
       .from(occurrences)

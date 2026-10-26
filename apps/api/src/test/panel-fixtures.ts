@@ -1,6 +1,6 @@
 import { randomInt, randomUUID } from 'node:crypto';
 import { geoPoint, schema, withContext, type Database } from '@alocidadao/db';
-import type { GeoPoint, TENANT_ROLES, TenantStatus } from '@alocidadao/shared';
+import type { GeoPoint, PlatformRole, TENANT_ROLES, TenantStatus } from '@alocidadao/shared';
 import { eq, sql } from 'drizzle-orm';
 
 const {
@@ -95,6 +95,15 @@ export function panelFixtures(owner: Database) {
       );
     }
     return userId;
+  }
+
+  /** Conta da equipe interna (admin ou suporte), sem vínculo com prefeitura. */
+  async function newStaff(platformRole: PlatformRole, name = 'Equipe Interna') {
+    const [user] = await owner
+      .insert(users)
+      .values({ name, phone: newPhone(), platformRole })
+      .returning();
+    return user!.id;
   }
 
   async function newAdmin(tenantId: string) {
@@ -509,6 +518,7 @@ export function panelFixtures(owner: Database) {
     createTenant,
     link,
     newManager,
+    newStaff,
     newAdmin,
     seedPanelTenant,
     addOccurrence,

@@ -8,7 +8,7 @@ import {
   type TriageResponse,
 } from '@alocidadao/shared';
 import { sql } from 'drizzle-orm';
-import { departmentScope, type PanelIdentity } from './member.js';
+import { departmentScope, panelDbContext, type PanelIdentity } from './member.js';
 import { sqlList, statusSinceSql } from './occurrences.js';
 
 /**
@@ -23,10 +23,10 @@ export async function loadTriage(
   identity: PanelIdentity,
   query: TriageQuery,
 ): Promise<TriageResponse> {
-  const { userId, tenantId } = identity;
+  const { tenantId } = identity;
   // O total sai da janela, contada antes do LIMIT. As tabelas `occurrences` e `categories` ficam sem apelido: departmentScope e
   // statusSinceSql se referem a elas pelo nome.
-  const result = await withContext(db, { tenantId, userId }, (tx) =>
+  const result = await withContext(db, panelDbContext(identity), (tx) =>
     tx.execute<{
       occurrence_id: string;
       protocol: string;

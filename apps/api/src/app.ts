@@ -13,6 +13,7 @@ import { registerAgentRoutes } from './agent/routes.js';
 import { registerAppAuthRoutes } from './auth/app-routes.js';
 import { registerPanelAuthRoutes } from './auth/panel-routes.js';
 import { registerAuth } from './auth/plugin.js';
+import { registerBackofficeRoutes } from './backoffice/routes.js';
 import { registerCitizenRoutes } from './citizen/routes.js';
 import { registerDevManagerActions } from './dev/manager-actions.js';
 import { registerDevPush, type PushSenders } from './dev/push.js';
@@ -20,6 +21,7 @@ import { registerDevWorkOrders } from './dev/work-orders.js';
 import type { EmailSender } from './messaging/email.js';
 import { createLogSmsSender, type SmsSender } from './messaging/sms.js';
 import { registerMeRoutes } from './me/routes.js';
+import { registerPanelAudit } from './panel/audit.js';
 import { registerPanelRoutes } from './panel/routes.js';
 import type { Storage } from './storage/s3.js';
 
@@ -48,7 +50,7 @@ export interface AppOptions {
   /** Registra as rotas /dev/*; nunca em produção. */
   devRoutes?: boolean;
   /**
-   * Login sem senha. As rotas /auth/*, /me*, /panel/* e /citizen/* só existem com `auth` e `database`;
+   * Login sem senha. As rotas /auth/*, /me*, /panel/*, /backoffice/* e /citizen/* só existem com `auth` e `database`;
    * as /agent/*, só com `auth`.
    */
   auth?: AuthOptions;
@@ -132,9 +134,15 @@ export async function buildApp({
         },
       });
     });
-    // Painel da prefeitura: escopo próprio, sem limite por IP.
+    // Painel da prefeitura: escopo próprio, sem limite por IP. A auditoria do modo suporte
+    // vem antes das rotas, para o gancho valer em todas.
     await app.register(async (scope) => {
+      registerPanelAudit(scope, database);
       registerPanelRoutes(scope, { db: database, storage });
+    });
+    // Backoffice da equipe interna: escopo próprio, sem limite por IP.
+    await app.register(async (scope) => {
+      registerBackofficeRoutes(scope, { db: database });
     });
     // Cidadão: escopo próprio, sem o limite por IP do /auth/*.
     await app.register(async (scope) => {

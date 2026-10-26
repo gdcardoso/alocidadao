@@ -19,3 +19,14 @@ export async function panelAuthHeader(
     ...(tenantId ? { 'x-tenant-id': tenantId } : {}),
   };
 }
+
+/**
+ * Abre uma sessão do painel para alguém da equipe interna e devolve o cabeçalho Authorization
+ * (para o backoffice). No modo suporte, use `panelAuthHeader` com a prefeitura escolhida.
+ */
+export async function staffAuthHeader(
+  db: Database,
+  userId: string,
+): Promise<{ authorization: string }> {
+  return panelAuthHeader(db, userId) as Promise<{ authorization: string }>;
+}

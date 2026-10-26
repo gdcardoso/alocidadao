@@ -221,8 +221,8 @@ describe('agent detail', () => {
     const view = toAgentDetail(
       makeDetail({
         photos: [
-          { url: 'https://s/1.jpg', takenAt: '2026-10-20T11:12:00.000Z' },
-          { url: 'https://s/2.jpg', takenAt: '2026-10-21T10:05:00.000Z' },
+          { url: 'https://s/1.jpg', takenAt: '2026-10-20T11:12:00.000Z', purpose: 'report' },
+          { url: 'https://s/2.jpg', takenAt: '2026-10-21T10:05:00.000Z', purpose: 'report' },
         ],
       }),
       context(),

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cpfSchema, formatCpf, isValidCpf } from './cpf.js';
+import { cpfSchema, formatCpf, isValidCpf, maskCpf } from './cpf.js';
 
 describe('isValidCpf', () => {
   it('accepts valid CPFs', () => {
@@ -41,5 +41,11 @@ describe('cpfSchema input forms', () => {
 describe('formatCpf', () => {
   it('formatCpf adds the mask', () => {
     expect(formatCpf('52998224725')).toBe('529.982.247-25');
+  });
+});
+
+describe('maskCpf', () => {
+  it('keeps the first 3 and last 2 digits', () => {
+    expect(maskCpf('12345678909')).toBe('123.***.***-09');
   });
 });

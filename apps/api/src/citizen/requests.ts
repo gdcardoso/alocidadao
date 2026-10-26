@@ -145,14 +145,16 @@ async function loadCard(tx: Transaction, requestId: string): Promise<RequestCard
   return toCard(row!);
 }
 
-async function photoViews(
+async function photoViews<Row extends { storageKey: string; createdAt: Date }>(
   storage: Storage,
-  rows: Array<{ storageKey: string; createdAt: Date }>,
+  rows: Row[],
+  purposeOf: (row: Row) => PhotoView['purpose'],
 ): Promise<PhotoView[]> {
   return Promise.all(
     rows.map(async (row) => ({
       url: await storage.presignGet(row.storageKey, PHOTO_URL_SECONDS),
       takenAt: row.createdAt.toISOString(),
+      purpose: purposeOf(row),
     })),
   );
 }
@@ -181,7 +183,11 @@ async function loadDetail(
   const row = request!;
 
   const ownPhotos = await tx
-    .select({ storageKey: photos.storageKey, createdAt: photos.createdAt })
+    .select({
+      storageKey: photos.storageKey,
+      createdAt: photos.createdAt,
+      purpose: photos.purpose,
+    })
     .from(photos)
     .where(eq(photos.requestId, requestId))
     .orderBy(asc(photos.createdAt), asc(photos.id));
@@ -226,7 +232,7 @@ async function loadDetail(
       completion = {
         publicNote: order.publicNote,
         publishedAt: order.publishedAt.toISOString(),
-        photos: await photoViews(storage, published),
+        photos: await photoViews(storage, published, () => 'completion'),
       };
     }
   }
@@ -252,7 +258,9 @@ async function loadDetail(
     description: row.description,
     // geometry em modo xy: x = longitude, y = latitude.
     location: { lat: row.location.y, lng: row.location.x },
-    photos: await photoViews(storage, ownPhotos),
+    photos: await photoViews(storage, ownPhotos, (photo) =>
+      photo.purpose === 'contest' ? 'contest' : 'report',
+    ),
     team: team ? { name: team.name } : null,
     completion,
     rejection,

@@ -32,13 +32,7 @@ const pad = (n: number) => String(n).padStart(2, '0');
 const dayMonth = (p: LocalParts) => `${pad(p.day)} ${MONTHS[p.month]}`;
 const time = (p: LocalParts) => `${pad(p.hour)}:${pad(p.minute)}`;
 
-/** `'+5511987654321'` → `'(11) 98765-4321'`. Número fora do Brasil volta como veio. */
-export function formatPhoneBR(e164: string): string {
-  const match = /^\+55(\d{2})(\d{4,5})(\d{4})$/.exec(e164);
-  if (!match) return e164;
-  const [, ddd, start, end] = match;
-  return `(${ddd}) ${start}-${end}`;
-}
+export { formatPhoneBR, maskPhoneInput } from '@alocidadao/shared';
 
 /** Texto do campo (com ou sem máscara) → E.164; `null` se não tiver DDD + 9 dígitos. */
 export function parsePhoneInput(text: string): string | null {
@@ -58,17 +52,6 @@ export function phoneHintDigits(hint: { number: string; e164: string | null }): 
   }
   const digits = hint.number.replace(/\D/g, '');
   return digits.length === 11 ? digits : null;
-}
-
-/** Máscara `(XX) XXXXX-XXXX` aplicada enquanto o cidadão digita. */
-export function maskPhoneInput(text: string): string {
-  const digits = text.replace(/\D/g, '').slice(0, 11);
-  if (digits.length === 0) return '';
-  if (digits.length <= 2) return `(${digits}`;
-  const ddd = digits.slice(0, 2);
-  const start = digits.slice(2, 7);
-  const end = digits.slice(7);
-  return end ? `(${ddd}) ${start}-${end}` : `(${ddd}) ${start}`;
 }
 
 /** `'há 3 dias'`, `'há 1 dia'` ou `'hoje'`, em dias de calendário. */

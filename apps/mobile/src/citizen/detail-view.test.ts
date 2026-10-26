@@ -28,7 +28,11 @@ const OPENED = '2026-10-20T11:12:00.000Z'; // 20 out, 08:12
 const ASSIGNED = '2026-10-21T17:30:00.000Z'; // 21 out, 14:30
 const PUBLISHED = '2026-10-22T18:40:00.000Z'; // 22 out, 15:40
 
-const photo = (n: number, takenAt = OPENED) => ({ url: `https://fotos/${n}.jpg`, takenAt });
+const photo = (n: number, takenAt = OPENED) => ({
+  url: `https://fotos/${n}.jpg`,
+  takenAt,
+  purpose: 'report' as const,
+});
 
 const detail = (over: Partial<RequestDetail> = {}): RequestDetail => ({
   id: '7d0c6a3e-8f43-4c1e-9a55-2b4f0f6d1a10',

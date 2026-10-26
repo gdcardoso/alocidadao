@@ -163,7 +163,11 @@ async function loadDetail(
     reports.length === 0
       ? []
       : await tx
-          .select({ storageKey: photos.storageKey, createdAt: photos.createdAt })
+          .select({
+            storageKey: photos.storageKey,
+            createdAt: photos.createdAt,
+            purpose: photos.purpose,
+          })
           .from(photos)
           .where(
             and(
@@ -207,6 +211,7 @@ async function loadDetail(
       photoRows.map(async (photo) => ({
         url: await storage.presignGet(photo.storageKey, PHOTO_URL_SECONDS),
         takenAt: photo.createdAt.toISOString(),
+        purpose: photo.purpose === 'contest' ? ('contest' as const) : ('report' as const),
       })),
     ),
     citizenCount: reports.filter((report) => !FINAL_REQUEST_STATUSES.includes(report.status))

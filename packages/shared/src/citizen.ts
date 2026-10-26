@@ -94,6 +94,8 @@ export type RequestCard = z.infer<typeof requestCardSchema>;
 export const photoViewSchema = z.object({
   url: z.string(),
   takenAt: z.iso.datetime(),
+  /** Para o app legendar a foto da contestação. */
+  purpose: z.enum(['report', 'contest', 'completion']),
 });
 export type PhotoView = z.infer<typeof photoViewSchema>;
 

@@ -244,6 +244,7 @@ describe('GET /panel/search', () => {
         protocol: flowers.requests[0]!.protocol,
         categoryName: 'Buraco',
         address: 'Rua das Flores, 100',
+        status: 'triage',
         location: { lat: expect.closeTo(CENTER.lat, 6), lng: expect.closeTo(CENTER.lng, 6) },
       },
     ]);

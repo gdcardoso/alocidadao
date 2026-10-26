@@ -175,6 +175,7 @@ export async function searchOccurrences(
         protocol: sql<string>`${requests.protocol}`.as('protocol'),
         categoryName: sql<string>`${categories.name}`.as('category_name'),
         address: sql<string | null>`${requests.address}`.as('address'),
+        status: sql<OccurrenceStatus>`${occurrences.status}`.as('status'),
         lat: sql<number>`ST_Y(${occurrences.location})`.mapWith(Number).as('lat'),
         lng: sql<number>`ST_X(${occurrences.location})`.mapWith(Number).as('lng'),
       })

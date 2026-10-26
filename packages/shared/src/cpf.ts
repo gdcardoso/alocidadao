@@ -28,3 +28,8 @@ export const cpfSchema = z
   .string()
   .transform((value) => value.replace(/[\s./-]/g, ''))
   .refine(isValidCpf, { message: 'CPF inválido' });
+
+/** Esconde o miolo do CPF para a tela: `12345678909` → `123.***.***-09`. */
+export function maskCpf(digits: string): string {
+  return `${digits.slice(0, 3)}.***.***-${digits.slice(9, 11)}`;
+}

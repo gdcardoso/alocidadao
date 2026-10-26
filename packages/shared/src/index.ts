@@ -11,3 +11,6 @@ export * from './auth.js';
 export * from './citizen.js';
 export * from './agent.js';
 export * from './panel.js';
+export * from './panel-work.js';
+export * from './panel-admin.js';
+export * from './phone.js';

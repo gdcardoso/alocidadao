@@ -40,7 +40,7 @@ describe('agentWorkOrderDetailSchema', () => {
       managerInstructions: null,
       assignedBy: null,
       reports: [{ description: '', createdAt: '2026-10-22T12:00:00.000Z' }],
-      photos: [{ url: 'https://x/a.jpg', takenAt: '2026-10-22T12:00:00.000Z' }],
+      photos: [{ url: 'https://x/a.jpg', takenAt: '2026-10-22T12:00:00.000Z', purpose: 'report' }],
       citizenCount: 1,
       rework: {
         reasons: ['new_photos', 'return_to_site'],

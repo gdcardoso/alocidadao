@@ -57,7 +57,7 @@ export const MAP_PERIODS = [7, 30, 90, null] as const;
 export type MapPeriod = (typeof MAP_PERIODS)[number];
 
 /** Na query string o período vem como texto: `'7' | '30' | '90' | 'all'`. */
-const mapDaysSchema = z.preprocess(
+export const mapDaysSchema = z.preprocess(
   (value) => {
     if (value === undefined) return 30;
     if (value === 'all') return null;
@@ -99,6 +99,7 @@ export const panelSearchResultSchema = z.object({
   categoryName: z.string(),
   address: z.string().nullable(),
   location: geoPointSchema,
+  status: occurrenceStatusSchema,
 });
 export type PanelSearchResult = z.infer<typeof panelSearchResultSchema>;
 

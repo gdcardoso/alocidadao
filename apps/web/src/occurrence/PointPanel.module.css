@@ -1,0 +1,311 @@
+.panel {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  width: 440px;
+  height: 100%;
+  min-height: 0;
+  border-left: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.loadingHeader {
+  display: flex;
+  justify-content: flex-end;
+  padding: 20px 24px 16px;
+}
+
+.headerRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.titles {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.title {
+  font-size: 20px;
+}
+
+.address {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.close {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  align-self: flex-start;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.content {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+  padding: 16px 24px;
+  overflow-y: auto;
+}
+
+.sectionTitle {
+  font-size: 16px;
+}
+
+.reports {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.report {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+
+.checkWrap {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  width: 22px;
+  height: 22px;
+}
+
+.check {
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  border: 1.5px solid var(--border-input);
+  border-radius: 6px;
+  background: var(--surface);
+  cursor: pointer;
+  appearance: none;
+}
+
+.check:checked {
+  border-color: var(--primary);
+  background: var(--primary);
+}
+
+.checkIcon {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  color: #ffffff;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.check:checked + .checkIcon {
+  visibility: visible;
+}
+
+.thumb {
+  flex: none;
+  width: 52px;
+  height: 52px;
+  border-radius: 10px;
+  /* Cor do marcador de foto enquanto a imagem carrega (ou se falhar). */
+  background: #cbd5e1;
+  object-fit: cover;
+}
+
+.thumbEmpty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #cbd5e1;
+  color: var(--surface);
+}
+
+.reportTexts {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.reportText {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.reportMeta {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.link {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--primary);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.suggestion {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--warning);
+  border-radius: 14px;
+  background: var(--warning-soft);
+  color: var(--warning-strong);
+}
+
+.suggestionTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.suggestionTitle svg {
+  flex: none;
+  color: var(--warning);
+}
+
+.suggestionTitle h4 {
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.suggestionText {
+  font-size: 14px;
+}
+
+.suggestionActions {
+  display: flex;
+  gap: 8px;
+}
+
+.footer {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 24px 20px;
+  border-top: 1px solid var(--border);
+}
+
+.footerRow {
+  display: flex;
+  gap: 10px;
+}
+
+.grow {
+  flex: 1;
+}
+
+.hint {
+  color: var(--text-secondary);
+  font-size: 13px;
+  text-align: center;
+}
+
+.assigned {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.assigned svg {
+  flex: none;
+  color: var(--text-secondary);
+}
+
+.state {
+  padding: 0 24px;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+/* Diálogos de separar e recusar */
+
+.dialogText {
+  color: var(--text-primary);
+  font-size: 15px;
+}
+
+.dialogEffect {
+  flex: 1;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fieldLabelRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.fieldLabel {
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.fieldHint {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.textarea {
+  min-height: 112px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-input);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 14px;
+  resize: vertical;
+}

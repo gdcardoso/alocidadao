@@ -13,8 +13,10 @@ import { SessionProvider } from '../session/SessionProvider';
 import { Dialog } from '../ui/Dialog';
 
 vi.mock('../api', () => ({
-  api: { me: vi.fn(), panelContext: vi.fn(), panelCounts: vi.fn() },
+  api: { me: vi.fn(), panelContext: vi.fn(), panelCounts: vi.fn(), panelOccurrences: vi.fn() },
 }));
+// O MapLibre precisa de WebGL, que o jsdom não tem.
+vi.mock('../map/OccurrenceMap', () => ({ OccurrenceMap: () => null }));
 
 const me = vi.mocked(api.me);
 const panelContext = vi.mocked(api.panelContext);
@@ -72,6 +74,7 @@ beforeEach(() => {
   me.mockResolvedValue(meResponse());
   panelContext.mockResolvedValue(context());
   panelCounts.mockResolvedValue({ triage: 12, awaitingReview: 5, impeded: 2 });
+  vi.mocked(api.panelOccurrences).mockResolvedValue({ total: 0, items: [] });
 });
 
 describe('sidebar', () => {

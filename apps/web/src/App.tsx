@@ -3,6 +3,7 @@ import { LoginPage } from './auth/LoginPage';
 import { ComingSoonPage } from './shell/ComingSoonPage';
 import { PanelLayout } from './shell/PanelLayout';
 import { MapPage } from './map/MapPage';
+import { ReviewPage } from './review/ReviewPage';
 import { TriagePage } from './triage/TriagePage';
 import { RequireSession } from './session/RequireSession';
 
@@ -15,7 +16,7 @@ export default function App() {
         <Route element={<PanelLayout />}>
           <Route path="/mapa" element={<MapPage />} />
           <Route path="/triagem" element={<TriagePage />} />
-          <Route path="/revisao" element={<ComingSoonPage title="Aguardando revisão" />} />
+          <Route path="/revisao" element={<ReviewPage />} />
           <Route path="/impedimentos" element={<ComingSoonPage title="Impedimentos" />} />
           <Route path="/em-atendimento" element={<ComingSoonPage title="Em atendimento" />} />
           <Route path="/solicitacoes" element={<ComingSoonPage title="Todas as solicitações" />} />

@@ -13,3 +13,18 @@ export function formatDayMonth(date: Date): string {
   const month = Number(parts.find((part) => part.type === 'month')?.value ?? '1');
   return `${day} ${MONTHS[month - 1]}`;
 }
+
+const DATE_TIME_PARTS = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'America/Sao_Paulo',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+});
+
+/** Dia, mês abreviado e hora no horário de Brasília: `21 out, 15:40`. */
+export function formatDateTime(date: Date): string {
+  const parts = DATE_TIME_PARTS.formatToParts(date);
+  const hour = parts.find((part) => part.type === 'hour')?.value ?? '00';
+  const minute = parts.find((part) => part.type === 'minute')?.value ?? '00';
+  return `${formatDayMonth(date)}, ${hour}:${minute}`;
+}

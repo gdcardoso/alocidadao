@@ -1,0 +1,57 @@
+.layout {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.queue {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 8px;
+  width: 360px;
+  margin: 0;
+  padding: 12px;
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+  list-style: none;
+  overflow-y: auto;
+}
+
+.card {
+  display: block;
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.card[data-selected='true'] {
+  border: 2px solid var(--primary);
+  padding: 13px 15px;
+  background: var(--primary-soft);
+}
+
+.card:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.detail {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--bg);
+}
+
+.empty {
+  padding: 24px;
+  color: var(--text-secondary);
+  font-size: 15px;
+}

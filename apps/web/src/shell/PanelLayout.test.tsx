@@ -148,7 +148,6 @@ describe('no access', () => {
 
 describe('coming soon pages', () => {
   it.each([
-    ['/revisao', 'Aguardando revisão'],
     ['/impedimentos', 'Impedimentos'],
     ['/em-atendimento', 'Em atendimento'],
     ['/solicitacoes', 'Todas as solicitações'],

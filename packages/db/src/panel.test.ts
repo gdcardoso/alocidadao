@@ -1,10 +1,15 @@
-import type { GeoPoint } from '@alocidadao/shared';
-import { and, eq, sql } from 'drizzle-orm';
+import { ACTIVE_WORK_ORDER_STATUSES, type GeoPoint } from '@alocidadao/shared';
+import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { findUserByCpf } from './auth.js';
 import { createDatabase, geoPoint, withContext } from './client.js';
 import { findMergeSuggestions } from './geo.js';
-import { TENANT_ADMIN_CPF, TENANT_ADMIN_EMAIL, seedDev } from './seed-dev-data.js';
+import {
+  RESET_REJECTION_REASON,
+  TENANT_ADMIN_CPF,
+  TENANT_ADMIN_EMAIL,
+  seedDev,
+} from './seed-dev-data.js';
 import {
   categories,
   departments,
@@ -16,6 +21,7 @@ import {
   teams,
   tenants,
   users,
+  workOrders,
 } from './schema.js';
 import { TEST_APP_URL, TEST_OWNER_URL } from './test/urls.js';
 
@@ -446,7 +452,117 @@ describe('dados de demonstração do painel', () => {
     expect(recreated[0]!.id).not.toBe(big.id);
     expect(after).toHaveLength(before.length);
   });
+
+  it('com reset, recusa as sobras do painel e não duplica as atividades da demo', async () => {
+    const seeded = await seedDev(owner.db);
+    const { tenantId } = seeded;
+    const before = await triageRows(tenantId);
+    const big = before.find((row) => row.category === 'Buraco na via' && row.requests === 3)!;
+    const lighting = before.find((row) => row.category === 'Iluminação')!;
+
+    // Sobra de uma separação: um relato da ocorrência grande levado a uma ocorrência nova.
+    const [moved] = await owner.db
+      .select({ id: requests.id, location: requests.location })
+      .from(requests)
+      .where(eq(requests.occurrenceId, big.id))
+      .orderBy(desc(requests.createdAt))
+      .limit(1);
+    const [split] = await owner.db
+      .insert(occurrences)
+      .values({
+        tenantId,
+        categoryId: (await categoryIdOf(tenantId, 'Buraco na via'))!,
+        location: moved!.location,
+        status: 'triage',
+      })
+      .returning({ id: occurrences.id });
+    await owner.db
+      .update(requests)
+      .set({ occurrenceId: split!.id })
+      .where(eq(requests.id, moved!.id));
+
+    // Sobra de uma atribuição: a iluminação foi para a equipe, com atividade ativa.
+    await owner.db
+      .update(occurrences)
+      .set({ status: 'in_progress' })
+      .where(eq(occurrences.id, lighting.id));
+    await owner.db
+      .update(requests)
+      .set({ status: 'in_progress' })
+      .where(eq(requests.occurrenceId, lighting.id));
+    const [assigned] = await owner.db
+      .insert(workOrders)
+      .values({ tenantId, occurrenceId: lighting.id, teamId: seeded.teamId, status: 'assigned' })
+      .returning({ id: workOrders.id });
+
+    const first = await seedDev(owner.db, { reset: true });
+    const second = await seedDev(owner.db, { reset: true });
+
+    // A triagem volta ao desenho, sem as sobras.
+    const after = await triageRows(tenantId);
+    expect(after.map((row) => [row.category, row.requests])).toEqual(
+      before.map((row) => [row.category, row.requests]),
+    );
+    for (const id of [big.id, split!.id, lighting.id]) {
+      const [row] = await owner.db
+        .select({ status: occurrences.status, reason: occurrences.rejectionReason })
+        .from(occurrences)
+        .where(eq(occurrences.id, id));
+      expect(row).toEqual({ status: 'rejected', reason: RESET_REJECTION_REASON });
+      const pending = await owner.db
+        .select({ status: requests.status })
+        .from(requests)
+        .where(eq(requests.occurrenceId, id));
+      expect(pending.every((request) => request.status === 'rejected')).toBe(true);
+      const [event] = await owner.db
+        .select({ from: statusEvents.fromStatus, actor: statusEvents.actorUserId })
+        .from(statusEvents)
+        .where(
+          and(
+            eq(statusEvents.occurrenceId, id),
+            isNull(statusEvents.requestId),
+            isNull(statusEvents.workOrderId),
+            eq(statusEvents.toStatus, 'rejected'),
+          ),
+        );
+      expect(event).toMatchObject({ actor: seeded.managerId });
+    }
+    const [cancelled] = await owner.db
+      .select({ status: workOrders.status })
+      .from(workOrders)
+      .where(eq(workOrders.id, assigned!.id));
+    expect(cancelled!.status).toBe('cancelled');
+
+    // Em atendimento só ficam as 4 atividades da demo, uma vez cada, mesmo após dois resets.
+    const inProgress = await owner.db
+      .select({ id: occurrences.id })
+      .from(occurrences)
+      .where(and(eq(occurrences.tenantId, tenantId), eq(occurrences.status, 'in_progress')));
+    expect(inProgress).toHaveLength(4);
+    const active = await owner.db
+      .select({ id: workOrders.id })
+      .from(workOrders)
+      .where(
+        and(
+          eq(workOrders.teamId, seeded.teamId),
+          inArray(workOrders.status, [...ACTIVE_WORK_ORDER_STATUSES]),
+        ),
+      );
+    expect(active.map((order) => order.id).toSorted()).toEqual(second.workOrderIds.toSorted());
+    expect(second.workOrderIds).not.toEqual(first.workOrderIds);
+    // Sem reset, nada muda.
+    expect(await seedDev(owner.db)).toEqual(second);
+    expect(await triageRows(tenantId)).toHaveLength(before.length);
+  });
 });
+
+async function categoryIdOf(tenantId: string, name: string): Promise<string | undefined> {
+  const [row] = await owner.db
+    .select({ id: categories.id })
+    .from(categories)
+    .where(and(eq(categories.tenantId, tenantId), eq(categories.name, name)));
+  return row?.id;
+}
 
 interface TriageRow {
   id: string;

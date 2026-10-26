@@ -5,7 +5,7 @@ import {
   type IconGroup,
   type ReworkDetails,
 } from '@alocidadao/shared';
-import { and, asc, count, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, notInArray, sql } from 'drizzle-orm';
 import { geoPoint, type Database, type Transaction } from './client.js';
 import {
   categories,
@@ -629,7 +629,8 @@ async function seedDemoTriage(
   tx: Transaction,
   ids: { tenantId: string; citizenId: string },
   { reset = false }: SeedDevOptions,
-): Promise<void> {
+): Promise<string[]> {
+  const occurrenceIds: string[] = [];
   const citizenIds = [ids.citizenId];
   for (const citizen of EXTRA_CITIZENS) {
     citizenIds.push(await ensureCitizen(tx, ids.tenantId, citizen));
@@ -650,7 +651,10 @@ async function seedDemoTriage(
       .orderBy(desc(requests.createdAt))
       .limit(1);
     if (first) {
-      if (!reset) continue;
+      if (!reset) {
+        occurrenceIds.push(first.occurrenceId);
+        continue;
+      }
       const [occurrence] = await tx
         .select({ status: occurrences.status })
         .from(occurrences)
@@ -659,7 +663,10 @@ async function seedDemoTriage(
         .select({ total: count() })
         .from(requests)
         .where(eq(requests.occurrenceId, first.occurrenceId));
-      if (occurrence?.status === 'triage' && reports?.total === expected) continue;
+      if (occurrence?.status === 'triage' && reports?.total === expected) {
+        occurrenceIds.push(first.occurrenceId);
+        continue;
+      }
     }
 
     const location: GeoPoint = { lat: CENTER.lat + item.dLat, lng: CENTER.lng + item.dLng };
@@ -677,6 +684,7 @@ async function seedDemoTriage(
         createdAt: reportedAt,
       })
       .returning({ id: occurrences.id });
+    occurrenceIds.push(occurrence!.id);
     const reports = [item.description, ...(item.extraReports ?? [])];
     for (const [index, description] of reports.entries()) {
       // Poucos metros ao lado do primeiro relato, dentro do raio de agrupamento do tipo.
@@ -706,6 +714,98 @@ async function seedDemoTriage(
       createdAt: reportedAt,
     });
   }
+  return occurrenceIds;
+}
+
+/** Motivo público das ocorrências que o reset tira do mapa e da triagem (10 a 500 caracteres). */
+export const RESET_REJECTION_REASON = 'Retirada ao reiniciar os dados de demonstração.';
+
+/**
+ * Reset: recusa toda ocorrência em triagem ou em atendimento da prefeitura demo que não é uma
+ * das fixtures (`keep`), como o painel faria: a atividade ativa é cancelada, as solicitações não
+ * finais são recusadas e cada passo ganha o evento. Limpa o que sobrou de junções, separações e
+ * atribuições feitas no painel, as ocorrências de resets antigos (o mesmo buraco várias vezes no
+ * mesmo ponto) e os relatos de teste feitos pelo app.
+ */
+async function retireStrayOccurrences(
+  tx: Transaction,
+  ids: { tenantId: string; managerId: string },
+  keep: string[],
+): Promise<void> {
+  const stray = await tx
+    .select({ id: occurrences.id, status: occurrences.status })
+    .from(occurrences)
+    .where(
+      and(
+        eq(occurrences.tenantId, ids.tenantId),
+        inArray(occurrences.status, ['triage', 'in_progress']),
+        keep.length > 0 ? notInArray(occurrences.id, keep) : undefined,
+      ),
+    )
+    .orderBy(asc(occurrences.createdAt))
+    .for('update');
+  const event = { tenantId: ids.tenantId, actorUserId: ids.managerId };
+  const comment = RESET_REJECTION_REASON;
+  for (const occurrence of stray) {
+    const now = new Date();
+    const orders = await tx
+      .select({ id: workOrders.id, status: workOrders.status })
+      .from(workOrders)
+      .where(
+        and(
+          eq(workOrders.occurrenceId, occurrence.id),
+          inArray(workOrders.status, [...ACTIVE_WORK_ORDER_STATUSES]),
+        ),
+      );
+    for (const order of orders) {
+      await tx
+        .update(workOrders)
+        .set({ status: 'cancelled', updatedAt: now })
+        .where(eq(workOrders.id, order.id));
+      await tx.insert(statusEvents).values({
+        ...event,
+        occurrenceId: occurrence.id,
+        workOrderId: order.id,
+        fromStatus: order.status,
+        toStatus: 'cancelled',
+        comment,
+      });
+    }
+    const pending = await tx
+      .select({ id: requests.id, status: requests.status })
+      .from(requests)
+      .where(
+        and(
+          eq(requests.occurrenceId, occurrence.id),
+          inArray(requests.status, ['open', 'in_progress']),
+        ),
+      );
+    for (const request of pending) {
+      await tx
+        .update(requests)
+        .set({ status: 'rejected', statusChangedAt: now, updatedAt: now })
+        .where(eq(requests.id, request.id));
+      await tx.insert(statusEvents).values({
+        ...event,
+        occurrenceId: occurrence.id,
+        requestId: request.id,
+        fromStatus: request.status,
+        toStatus: 'rejected',
+        comment,
+      });
+    }
+    await tx
+      .update(occurrences)
+      .set({ status: 'rejected', rejectionReason: comment, updatedAt: now })
+      .where(eq(occurrences.id, occurrence.id));
+    await tx.insert(statusEvents).values({
+      ...event,
+      occurrenceId: occurrence.id,
+      fromStatus: occurrence.status,
+      toStatus: 'rejected',
+      comment,
+    });
+  }
 }
 
 /**
@@ -713,7 +813,8 @@ async function seedDemoTriage(
  * atividades de DEMO_WORK_ORDERS, cada uma na sua ocorrência e atribuída à equipe pelo gestor.
  * Idempotente: reencontra o que já existe e só cria o que falta; se uma migração apagou os dados
  * operacionais, recria as atividades. Com `reset`, cancela as atividades ativas da demo e cria
- * outras. Exige a conexão do dono do banco (superusuário): ele cria a prefeitura e os usuários, que são
+ * outras, recria a triagem de exemplo que foi tratada e recusa as demais ocorrências abertas da
+ * prefeitura demo (retireStrayOccurrences). Exige a conexão do dono do banco (superusuário): ele cria a prefeitura e os usuários, que são
  * globais, e não passa pelo RLS.
  */
 export async function seedDev(db: Database, options: SeedDevOptions = {}): Promise<SeedDevResult> {
@@ -724,7 +825,15 @@ export async function seedDev(db: Database, options: SeedDevOptions = {}): Promi
     await seedMunicipalities(tx);
     const staff = await seedStaff(tx, base.tenantId);
     const workOrderIds = await seedDemoWorkOrders(tx, { ...base, ...staff }, options);
-    await seedDemoTriage(tx, base, options);
+    const triageIds = await seedDemoTriage(tx, base, options);
+    if (options.reset) {
+      const demoOrders = await tx
+        .select({ occurrenceId: workOrders.occurrenceId })
+        .from(workOrders)
+        .where(inArray(workOrders.id, workOrderIds));
+      const keep = [...demoOrders.map((order) => order.occurrenceId), ...triageIds];
+      await retireStrayOccurrences(tx, { tenantId: base.tenantId, ...staff }, keep);
+    }
     return {
       tenantId: base.tenantId,
       teamId: base.teamId,

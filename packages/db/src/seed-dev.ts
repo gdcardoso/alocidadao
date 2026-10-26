@@ -18,6 +18,9 @@ Cria (ou completa) a prefeitura de demonstração. Pode rodar quantas vezes quis
 
   --reset   Volta a demo ao começo: cancela as atividades ativas da demo (as que o agente
             iniciou, concluiu ou relatou impedimento) e cria outras, atribuídas de novo.
+            Recria a triagem de exemplo que foi tratada no painel e recusa as demais
+            ocorrências abertas da prefeitura demo (sobras de junções, separações,
+            atribuições e relatos de teste), para o mapa e a triagem voltarem ao desenho.
             Também vale SEED_RESET=1.
   --help    Mostra esta ajuda.
 
@@ -38,7 +41,9 @@ const { db, pool } = createDatabase(url);
 try {
   const result = await seedDev(db, { reset });
   if (reset)
-    console.log('Demo reiniciada: atividades ativas da demo canceladas e criadas de novo.');
+    console.log(
+      'Demo reiniciada: atividades e triagem de exemplo recriadas; as demais ocorrências abertas foram recusadas.',
+    );
   console.log(JSON.stringify(result, null, 2));
   console.log(
     [

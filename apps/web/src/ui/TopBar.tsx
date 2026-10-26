@@ -1,3 +1,4 @@
+import { ArrowLeft } from 'lucide-react';
 import type { ReactNode } from 'react';
 import styles from './TopBar.module.css';
 
@@ -8,6 +9,8 @@ export interface TopBarProps {
   actions?: ReactNode;
   /** Linha de filtros (W1/W2/W5). Com ela, a barra fica na variante "com filtros". */
   filters?: ReactNode;
+  /** Seta de voltar à esquerda do título (P2). */
+  onBack?: () => void;
 }
 
 /**
@@ -16,7 +19,7 @@ export interface TopBarProps {
  * - só `actions`: título e botão na mesma linha (W6/W7);
  * - nenhum dos dois: simples (W3/W4).
  */
-export function TopBar({ title, subtitle, actions, filters }: TopBarProps) {
+export function TopBar({ title, subtitle, actions, filters, onBack }: TopBarProps) {
   const titles = (
     <div className={styles.titles}>
       <h1 className={styles.title}>{title}</h1>
@@ -24,6 +27,17 @@ export function TopBar({ title, subtitle, actions, filters }: TopBarProps) {
     </div>
   );
 
+  if (onBack) {
+    return (
+      <header className={`${styles.bar} ${styles.withAction}`}>
+        <button type="button" className={styles.back} aria-label="Voltar" onClick={onBack}>
+          <ArrowLeft size={18} aria-hidden />
+        </button>
+        {titles}
+        {actions}
+      </header>
+    );
+  }
   if (filters) {
     return (
       <header className={`${styles.bar} ${styles.withFilters}`}>

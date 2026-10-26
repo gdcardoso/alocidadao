@@ -1,0 +1,53 @@
+.wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.list {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  left: 0;
+  z-index: 10;
+  max-height: 320px;
+  margin: 4px 0 0;
+  padding: 4px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 8px 24px rgb(15 23 42 / 12%);
+  list-style: none;
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.option:hover {
+  background: var(--primary-soft);
+}
+
+.taken {
+  color: var(--text-secondary);
+  cursor: not-allowed;
+}
+
+.taken:hover {
+  background: transparent;
+}
+
+.badge {
+  font-size: 12px;
+  font-weight: 600;
+}

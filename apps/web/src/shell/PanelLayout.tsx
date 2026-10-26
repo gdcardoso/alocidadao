@@ -5,11 +5,13 @@ import { Outlet, useNavigate } from 'react-router';
 import { api } from '../api';
 import { NETWORK_ERROR_MESSAGE, UNEXPECTED_ERROR_MESSAGE } from '../auth/login-errors';
 import { useSession } from '../session/SessionProvider';
+import { clearSupportTenant, getSupportTenant } from '../session/support-tenant';
 import { Button } from '../ui/Button';
 import { ToastProvider } from '../ui/Toast';
 import { NoAccessPage } from './NoAccessPage';
 import styles from './PanelLayout.module.css';
 import { Sidebar } from './Sidebar';
+import { SupportBanner } from './SupportBanner';
 import { panelCountsKey, PanelValueContext, type PanelValue } from './use-panel';
 
 const COUNTS_REFRESH_MS = 60_000;
@@ -32,6 +34,9 @@ export function PanelLayout() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [noAccess, setNoAccess] = useState(false);
+  // Equipe interna numa prefeitura: o `sessionStorage` mantém o modo suporte ao recarregar.
+  const [support] = useState(getSupportTenant);
+  const [leaving, setLeaving] = useState(false);
 
   // Vínculo ou prefeitura perdidos com o painel aberto: qualquer chamada (inclusive as das
   // telas filhas) que responda 403 not_a_member derruba o painel para a página sem acesso.
@@ -54,8 +59,9 @@ export function PanelLayout() {
   const meQuery = useQuery({
     queryKey: ['me'],
     queryFn: () => session.withAuth(() => api.me()),
+    enabled: !support,
   });
-  const tenantId = meQuery.data?.panelTenants[0]?.tenantId;
+  const tenantId = support ? support.tenantId : meQuery.data?.panelTenants[0]?.tenantId;
 
   const contextQuery = useQuery({
     queryKey: ['panel', 'context', tenantId],
@@ -72,8 +78,8 @@ export function PanelLayout() {
   const context = contextQuery.data;
   const counts = countsQuery.data;
   const value = useMemo<PanelValue | null>(
-    () => (tenantId && context ? { tenantId, context, counts } : null),
-    [tenantId, context, counts],
+    () => (tenantId && context ? { tenantId, context, counts, support } : null),
+    [tenantId, context, counts, support],
   );
 
   async function signOut() {
@@ -81,7 +87,19 @@ export function PanelLayout() {
     void navigate('/entrar', { replace: true });
   }
 
-  const withoutTenant = meQuery.isSuccess && tenantId === undefined;
+  async function leaveSupport() {
+    if (!support) return;
+    setLeaving(true);
+    try {
+      await session.withAuth(() => api.backofficeLeaveSupport(support.tenantId));
+    } catch {
+      // A saída não pode prender a pessoa na prefeitura; a auditoria já tem a entrada.
+    }
+    clearSupportTenant();
+    void navigate(`/backoffice/prefeituras/${support.tenantId}`, { replace: true });
+  }
+
+  const withoutTenant = !support && meQuery.isSuccess && tenantId === undefined;
   if (noAccess || withoutTenant) return <NoAccessPage />;
 
   const error = meQuery.error ?? contextQuery.error;
@@ -104,8 +122,20 @@ export function PanelLayout() {
   return (
     <PanelValueContext.Provider value={value}>
       <ToastProvider>
-        <div className={styles.shell}>
-          <Sidebar context={value.context} counts={value.counts} onSignOut={() => void signOut()} />
+        {support ? (
+          <SupportBanner
+            displayName={support.displayName}
+            pending={leaving}
+            onLeave={() => void leaveSupport()}
+          />
+        ) : null}
+        <div className={`${styles.shell} ${support ? styles.shellWithBanner : ''}`}>
+          <Sidebar
+            context={value.context}
+            counts={value.counts}
+            onSignOut={() => void signOut()}
+            support={support !== null}
+          />
           <div className={styles.main}>
             <Outlet />
           </div>

@@ -1,0 +1,50 @@
+.banner {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  height: 44px;
+  padding: 0 24px;
+  background: var(--text-primary);
+  color: #fff;
+  font-size: 14px;
+}
+
+.icon {
+  flex: none;
+  color: #fbbf24;
+}
+
+.text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.leave {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 15px;
+  background: #fff;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.leave:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.leave:focus-visible {
+  outline: 2px solid #fbbf24;
+  outline-offset: 2px;
+}

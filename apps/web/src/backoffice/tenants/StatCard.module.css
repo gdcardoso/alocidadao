@@ -26,3 +26,11 @@
 .warning .value {
   color: var(--warning);
 }
+
+.warning {
+  border-color: var(--warning);
+}
+
+.warning .help {
+  color: var(--warning-strong);
+}

@@ -22,3 +22,9 @@ export function previousMonthName(now: Date): string {
   const previous = new Date(Date.UTC(year, month - 2, 15));
   return new Intl.DateTimeFormat('pt-BR', { month: 'long', timeZone: 'UTC' }).format(previous);
 }
+
+/** `2026-11-01` vira `01/11/2026`. */
+export function formatIsoDate(value: string): string {
+  const [year, month, day] = value.split('-');
+  return `${day}/${month}/${year}`;
+}

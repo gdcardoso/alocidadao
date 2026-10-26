@@ -111,7 +111,7 @@ function renderPage(path = '/revisao') {
   render(
     <QueryClientProvider client={queryClient}>
       <SessionProvider session={session}>
-        <PanelValueContext.Provider value={{ tenantId, context, counts: undefined }}>
+        <PanelValueContext.Provider value={{ tenantId, context, counts: undefined, support: null }}>
           <ToastProvider>
             <MemoryRouter initialEntries={[path]}>
               <ReviewPage />

@@ -4,6 +4,7 @@ import { Navigate, Outlet, useNavigate } from 'react-router';
 import { api } from '../api';
 import { NETWORK_ERROR_MESSAGE, UNEXPECTED_ERROR_MESSAGE } from '../auth/login-errors';
 import { useSession } from '../session/SessionProvider';
+import { clearSupportTenant } from '../session/support-tenant';
 import styles from '../shell/PanelLayout.module.css';
 import { Button } from '../ui/Button';
 import { ToastProvider } from '../ui/Toast';
@@ -27,6 +28,7 @@ export function BackofficeLayout() {
   });
 
   async function signOut() {
+    clearSupportTenant();
     await session.signOut();
     void navigate('/entrar', { replace: true });
   }

@@ -1,0 +1,185 @@
+.header {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 24px 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.titleRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.titles {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.titleLine {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.title {
+  font-size: 22px;
+}
+
+.subtitle {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.actions {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.actionButtons {
+  display: flex;
+  gap: 12px;
+}
+
+.actionHelp {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.tabs {
+  display: flex;
+  gap: 24px;
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 24px;
+  overflow: auto;
+}
+
+.cards {
+  display: flex;
+  gap: 16px;
+}
+
+.blocks {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.block {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.blockTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.blockTitle svg {
+  color: var(--primary);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+  font-size: 14px;
+}
+
+.rowLabel {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.rowValue {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-secondary);
+  text-align: right;
+}
+
+.manage {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--primary);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.manage:disabled {
+  color: var(--text-secondary);
+  cursor: default;
+}
+
+.manage:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.empty {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.actionsList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.actionItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.actionName {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.actionMeta {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  color: var(--text-secondary);
+}

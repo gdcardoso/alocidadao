@@ -78,7 +78,7 @@ function renderDialog() {
   render(
     <QueryClientProvider client={queryClient}>
       <SessionProvider session={session}>
-        <PanelValueContext.Provider value={{ tenantId, context, counts: undefined }}>
+        <PanelValueContext.Provider value={{ tenantId, context, counts: undefined, support: null }}>
           <ToastProvider>
             <AssignDialog occurrence={occurrence} onClose={onClose} onAssigned={onAssigned} />
           </ToastProvider>

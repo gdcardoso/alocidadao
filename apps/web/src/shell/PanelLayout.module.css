@@ -4,6 +4,12 @@
   min-height: 600px;
 }
 
+.shellWithBanner {
+  /* A faixa de suporte ocupa 44 do topo. */
+  height: calc(100% - 44px);
+  min-height: 556px;
+}
+
 .main {
   display: flex;
   flex: 1;

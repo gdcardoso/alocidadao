@@ -9,9 +9,11 @@ export interface SidebarProps {
   context: PanelContext;
   counts: PanelCounts | undefined;
   onSignOut: () => void;
+  /** Modo suporte: a caixa do usuário mostra `Equipe Alô Cidadão` e não tem `Sair`. */
+  support?: boolean;
 }
 
-export function Sidebar({ context, counts, onSignOut }: SidebarProps) {
+export function Sidebar({ context, counts, onSignOut, support = false }: SidebarProps) {
   return (
     <aside className={styles.sidebar}>
       <div className={styles.brand}>
@@ -58,11 +60,15 @@ export function Sidebar({ context, counts, onSignOut }: SidebarProps) {
         </span>
         <div className={styles.userText}>
           <span className={styles.userName}>{context.user.name}</span>
-          <span className={styles.userRole}>{roleLabel(context)}</span>
+          <span className={styles.userRole}>
+            {support ? 'Equipe Alô Cidadão' : roleLabel(context)}
+          </span>
         </div>
-        <button type="button" className={styles.signOut} aria-label="Sair" onClick={onSignOut}>
-          <LogOut size={18} />
-        </button>
+        {support ? null : (
+          <button type="button" className={styles.signOut} aria-label="Sair" onClick={onSignOut}>
+            <LogOut size={18} />
+          </button>
+        )}
       </div>
     </aside>
   );

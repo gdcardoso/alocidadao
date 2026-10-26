@@ -269,6 +269,32 @@ describe('GET /panel/search', () => {
       avenue.id,
     ]);
   });
+  it('search ignores other departments', async () => {
+    const seed = await fx.seedPanelTenant();
+    const { tenantId, potholeId, worksId, lightsId } = seed;
+    const pothole = await occurrenceWithReports(seed, {
+      categoryId: potholeId,
+      at: CENTER,
+      address: 'Travessa do Escopo, 7',
+    });
+    const protocol = pothole.requests[0]!.protocol;
+    const search = async (q: string, userId: string) => {
+      const res = await get(`/panel/search?q=${encodeURIComponent(q)}`, userId, tenantId);
+      expect(res.statusCode).toBe(200);
+      return panelSearchResponseSchema.parse(res.json()).items.map((item) => item.occurrenceId);
+    };
+
+    const worksManager = await fx.newManager(tenantId, [worksId]);
+    expect(await search(protocol, worksManager)).toEqual([pothole.id]);
+    expect(await search('Travessa do Escopo', worksManager)).toEqual([pothole.id]);
+
+    const lightsManager = await fx.newManager(tenantId, [lightsId]);
+    expect(await search(protocol, lightsManager)).toEqual([]);
+    expect(await search('Travessa do Escopo', lightsManager)).toEqual([]);
+    // Gestor sem setor não acha nada.
+    const noDepartment = await fx.newManager(tenantId, []);
+    expect(await search(protocol, noDepartment)).toEqual([]);
+  });
 });
 
 describe('GET /panel/occurrences/:id', () => {

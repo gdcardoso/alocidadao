@@ -667,6 +667,152 @@ describe('POST /panel/occurrences/:id/split', () => {
   });
 });
 
+describe('department scope of the actions', () => {
+  it('manager of another department gets 404 on every action', async () => {
+    const seed = await fx.seedPanelTenant();
+    const { tenantId, potholeId, worksId, lightsId } = seed;
+    const lightsManager = await fx.newManager(tenantId, [lightsId]);
+    const teamId = await fx.addTeam(tenantId, { departmentId: worksId, name: 'Equipe Obras' });
+    const occ = await occurrenceWithReports(seed, {
+      categoryId: potholeId,
+      at: CENTER,
+      reports: 2,
+    });
+    const near = await occurrenceWithReports(seed, {
+      categoryId: potholeId,
+      at: metersNorth(CENTER, 10),
+    });
+    const eventsBefore = await loadEvents(tenantId, occ.id);
+
+    const attempts: [string, unknown][] = [
+      ['assign', { teamId, dueDate: addDays(todayInSaoPaulo(), 3), instructions: null }],
+      ['reject', { reason: REASON }],
+      ['split', { requestIds: [occ.requests[1]!.id] }],
+      ['dismiss-suggestion', { otherOccurrenceId: near.id }],
+    ];
+    for (const [action, body] of attempts) {
+      const response = await post(
+        `/panel/occurrences/${occ.id}/${action}`,
+        lightsManager,
+        tenantId,
+        body,
+      );
+      expect(response.statusCode, action).toBe(404);
+      expect(response.json(), action).toEqual({ code: 'occurrence_not_found' });
+    }
+
+    // Nada mudou: status, relatos, atividade, pares e eventos.
+    const after = await loadOccurrence(tenantId, occ.id);
+    expect(after.status).toBe('triage');
+    expect(after.rejectionReason).toBeNull();
+    const rows = await loadRequests(tenantId, occ.id);
+    expect(rows.map((r) => [r.id, r.status])).toEqual(occ.requests.map((r) => [r.id, 'open']));
+    expect(await loadWorkOrders(tenantId, occ.id)).toEqual([]);
+    const separations = await read(tenantId, (tx) => tx.execute(sqlSeparations(tenantId)));
+    expect(separations.rows).toEqual([]);
+    expect(await loadEvents(tenantId, occ.id)).toEqual(eventsBefore);
+  });
+});
+
+describe('ids in another case', () => {
+  it('merge with the same id in upper case is 422 same_occurrence', async () => {
+    const seed = await fx.seedPanelTenant();
+    const { tenantId, potholeId, worksId } = seed;
+    const managerId = await fx.newManager(tenantId, [worksId]);
+    const occ = await occurrenceWithReports(seed, { categoryId: potholeId, at: CENTER });
+
+    const response = await post(`/panel/occurrences/${occ.id}/merge`, managerId, tenantId, {
+      otherOccurrenceId: occ.id.toUpperCase(),
+    });
+
+    expect(response.statusCode).toBe(422);
+    expect(response.json()).toEqual({ code: 'same_occurrence' });
+    expect((await loadOccurrence(tenantId, occ.id)).status).toBe('triage');
+  });
+
+  it('dismiss with the same id is 422 same_occurrence, in any case', async () => {
+    const seed = await fx.seedPanelTenant();
+    const { tenantId, potholeId, worksId } = seed;
+    const managerId = await fx.newManager(tenantId, [worksId]);
+    const occ = await occurrenceWithReports(seed, { categoryId: potholeId, at: CENTER });
+
+    for (const otherOccurrenceId of [occ.id, occ.id.toUpperCase()]) {
+      const response = await post(
+        `/panel/occurrences/${occ.id}/dismiss-suggestion`,
+        managerId,
+        tenantId,
+        { otherOccurrenceId },
+      );
+      expect(response.statusCode).toBe(422);
+      expect(response.json()).toEqual({ code: 'same_occurrence' });
+    }
+  });
+
+  it('dismiss with upper-case ids stores the canonical pair', async () => {
+    const seed = await fx.seedPanelTenant();
+    const { tenantId, potholeId, worksId } = seed;
+    const managerId = await fx.newManager(tenantId, [worksId]);
+    const a = await occurrenceWithReports(seed, { categoryId: potholeId, at: CENTER });
+    const b = await occurrenceWithReports(seed, {
+      categoryId: potholeId,
+      at: metersNorth(CENTER, 10),
+    });
+
+    for (const [opened, other] of [
+      [a.id.toUpperCase(), b.id],
+      [a.id, b.id.toUpperCase()],
+    ]) {
+      const response = await post(
+        `/panel/occurrences/${opened}/dismiss-suggestion`,
+        managerId,
+        tenantId,
+        { otherOccurrenceId: other },
+      );
+      expect(response.statusCode).toBe(204);
+    }
+    const separations = await read(tenantId, (tx) =>
+      tx.execute<{ a: string; b: string }>(sqlSeparations(tenantId)),
+    );
+    const [low, high] = [a.id, b.id].toSorted();
+    expect(separations.rows).toEqual([{ a: low, b: high, created_by: managerId }]);
+  });
+
+  it('dismiss with a merged occurrence is 409 occurrence_unavailable', async () => {
+    const seed = await fx.seedPanelTenant();
+    const { tenantId, potholeId, worksId } = seed;
+    const managerId = await fx.newManager(tenantId, [worksId]);
+    const survivor = await occurrenceWithReports(seed, { categoryId: potholeId, at: CENTER });
+    const absorbed = await occurrenceWithReports(seed, {
+      categoryId: potholeId,
+      at: metersNorth(CENTER, 10),
+    });
+    const third = await occurrenceWithReports(seed, {
+      categoryId: potholeId,
+      at: metersNorth(CENTER, 20),
+    });
+    const merge = await post(`/panel/occurrences/${survivor.id}/merge`, managerId, tenantId, {
+      otherOccurrenceId: absorbed.id,
+    });
+    expect(merge.statusCode).toBe(200);
+
+    for (const [opened, other] of [
+      [absorbed.id, third.id],
+      [third.id, absorbed.id],
+    ]) {
+      const response = await post(
+        `/panel/occurrences/${opened}/dismiss-suggestion`,
+        managerId,
+        tenantId,
+        { otherOccurrenceId: other },
+      );
+      expect(response.statusCode).toBe(409);
+      expect(response.json()).toEqual({ code: 'occurrence_unavailable' });
+    }
+    const separations = await read(tenantId, (tx) => tx.execute(sqlSeparations(tenantId)));
+    expect(separations.rows).toEqual([]);
+  });
+});
+
 function sqlSeparations(tenantId: string) {
   return sql`
     select occurrence_a_id as a, occurrence_b_id as b, created_by

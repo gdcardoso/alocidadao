@@ -60,6 +60,9 @@ function run<T>(db: Database, identity: PanelIdentity, fn: (tx: Transaction) => 
 const lockOccurrence = (tx: Transaction, identity: PanelIdentity, id: string) =>
   findScopedOccurrence(tx, identity, id, { lock: true, includeMerged: true });
 
+/** Mesmo UUID, sem diferenciar maiúsculas (o Postgres também não diferencia). */
+const sameId = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+
 /** Atividade ativa da ocorrência; ler só depois de travar a ocorrência. */
 async function findActiveWorkOrder(tx: Transaction, occurrenceId: string) {
   const [row] = await tx
@@ -245,8 +248,10 @@ export function rejectOccurrence(
   });
 }
 
-/** Trava as duas ocorrências em ordem de id (evita impasse entre juntas cruzadas). */
-async function lockPair(tx: Transaction, identity: PanelIdentity, a: string, b: string) {
+/** Trava as duas ocorrências em ordem de id (evita impasse entre junções cruzadas). */
+async function lockPair(tx: Transaction, identity: PanelIdentity, idA: string, idB: string) {
+  // Em minúsculas, a ordem de travamento é a mesma qualquer que seja a caixa do parâmetro.
+  const [a, b] = [idA.toLowerCase(), idB.toLowerCase()];
   const [low, high] = sortedPair(a, b);
   const first = await lockOccurrence(tx, identity, low);
   if (!first) return undefined;
@@ -267,13 +272,15 @@ export function mergeOccurrences(
   occurrenceId: string,
   otherOccurrenceId: string,
 ): Promise<Result<MergeResponse>> {
-  if (occurrenceId === otherOccurrenceId) {
+  if (sameId(occurrenceId, otherOccurrenceId)) {
     return Promise.resolve(unprocessable('same_occurrence'));
   }
   return run(db, identity, async (tx) => {
     const pair = await lockPair(tx, identity, occurrenceId, otherOccurrenceId);
     if (!pair) return NOT_FOUND;
     const [opened, other] = pair;
+    // Compara os ids canônicos das linhas (o parâmetro pode vir em outra caixa).
+    if (opened.id === other.id) return unprocessable('same_occurrence');
     if (opened.categoryId !== other.categoryId) return unprocessable('category_mismatch');
     if (
       !applyOccurrenceAction(opened.status, 'merge', identity.role).ok ||
@@ -311,16 +318,21 @@ export function dismissSuggestion(
   occurrenceId: string,
   otherOccurrenceId: string,
 ): Promise<Result<null>> {
-  if (occurrenceId === otherOccurrenceId) {
+  if (sameId(occurrenceId, otherOccurrenceId)) {
     return Promise.resolve(unprocessable('same_occurrence'));
   }
   return run(db, identity, async (tx) => {
+    const found = [];
     for (const id of [occurrenceId, otherOccurrenceId]) {
-      if (!(await findScopedOccurrence(tx, identity, id, { includeMerged: true }))) {
-        return NOT_FOUND;
-      }
+      const row = await findScopedOccurrence(tx, identity, id, { includeMerged: true });
+      if (!row) return NOT_FOUND;
+      found.push(row);
     }
-    const [low, high] = sortedPair(occurrenceId, otherOccurrenceId);
+    const [opened, other] = found as [ScopedOccurrence, ScopedOccurrence];
+    // Juntada responde 409, como nas outras ações.
+    if (opened.status === 'merged' || other.status === 'merged') return UNAVAILABLE;
+    // Os ids das linhas são canônicos: o par respeita `a < b` mesmo com o parâmetro em maiúsculas.
+    const [low, high] = sortedPair(opened.id, other.id);
     await tx
       .insert(occurrenceSeparations)
       .values({

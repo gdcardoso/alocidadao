@@ -252,7 +252,13 @@ export function registerPanelRoutes(instance: FastifyInstance, deps: PanelDeps) 
       schema: {
         params: occurrenceParamsSchema,
         body: dismissSuggestionBodySchema,
-        response: { 204: z.null(), ...panelErrors, 404: apiErrorSchema, 422: apiErrorSchema },
+        response: {
+          204: z.null(),
+          ...panelErrors,
+          404: apiErrorSchema,
+          409: apiErrorSchema,
+          422: apiErrorSchema,
+        },
       },
     },
     async (request, reply) => {

@@ -2,7 +2,12 @@ import type { Database } from '@alocidadao/db';
 import {
   apiErrorSchema,
   assignBodySchema,
+  agentCreateBodySchema,
+  agentRowSchema,
+  agentUpdateBodySchema,
+  agentsResponseSchema,
   assignResponseSchema,
+  departmentsResponseSchema,
   dismissSuggestionBodySchema,
   mergeBodySchema,
   mergeResponseSchema,
@@ -25,6 +30,10 @@ import {
   reworkBodySchema,
   splitBodySchema,
   splitResponseSchema,
+  teamCreateBodySchema,
+  teamSummarySchema,
+  teamUpdateBodySchema,
+  teamsResponseSchema,
   teamOptionsResponseSchema,
   triageQuerySchema,
   triageResponseSchema,
@@ -53,6 +62,16 @@ import {
   loadTeamOptions,
   searchOccurrences,
 } from './occurrences.js';
+import {
+  addAgent,
+  createTeam,
+  loadDepartments,
+  loadTeamAgents,
+  loadTeams,
+  updateAgent,
+  updateTeam,
+  type TeamsResult,
+} from './teams.js';
 import { loadTriage } from './triage.js';
 import {
   publishWorkOrder,
@@ -90,6 +109,19 @@ const actionErrors = {
 
 const sendActionError = (reply: FastifyReply, { error }: ActionError) =>
   reply.code(error.status).send({ code: error.code });
+
+const teamsErrorSchema = apiErrorSchema.extend({ teamName: z.string().optional() });
+const userParamsSchema = z.object({ userId: z.uuid() });
+
+const sendTeamsError = (
+  reply: FastifyReply,
+  { error }: Extract<TeamsResult<unknown>, { error: unknown }>,
+) =>
+  reply
+    .code(error.status)
+    .send(
+      'teamName' in error ? { code: error.code, teamName: error.teamName } : { code: error.code },
+    );
 
 /**
  * Rotas do painel da prefeitura (/panel/*). Todas exigem token do painel e vínculo ativo de
@@ -487,6 +519,126 @@ export function registerPanelRoutes(instance: FastifyInstance, deps: PanelDeps) 
       const result = await rescheduleWorkOrder(db, identity, request.params.id, request.body);
       if ('error' in result) return sendActionError(reply, result);
       return result.ok;
+    },
+  );
+
+  const teamErrors = {
+    ...panelErrors,
+    404: apiErrorSchema,
+    409: teamsErrorSchema,
+    422: apiErrorSchema,
+  } as const;
+
+  app.get(
+    '/panel/teams',
+    { preHandler: panelAuth, schema: { response: { 200: teamsResponseSchema, ...panelErrors } } },
+    async (request, reply) => {
+      const identity = await requirePanelMember(db, request, reply);
+      if (!identity) return reply;
+      return { items: await loadTeams(db, identity) };
+    },
+  );
+
+  app.post(
+    '/panel/teams',
+    {
+      preHandler: panelAuth,
+      schema: { body: teamCreateBodySchema, response: { 201: teamSummarySchema, ...teamErrors } },
+    },
+    async (request, reply) => {
+      const identity = await requirePanelMember(db, request, reply);
+      if (!identity) return reply;
+      const result = await createTeam(db, identity, request.body);
+      if ('error' in result) return sendTeamsError(reply, result);
+      return reply.code(201).send(result.ok);
+    },
+  );
+
+  app.patch(
+    '/panel/teams/:id',
+    {
+      preHandler: panelAuth,
+      schema: {
+        params: idParamsSchema,
+        body: teamUpdateBodySchema,
+        response: { 200: teamSummarySchema, ...teamErrors },
+      },
+    },
+    async (request, reply) => {
+      const identity = await requirePanelMember(db, request, reply);
+      if (!identity) return reply;
+      const result = await updateTeam(db, identity, request.params.id, request.body);
+      if ('error' in result) return sendTeamsError(reply, result);
+      return result.ok;
+    },
+  );
+
+  app.get(
+    '/panel/teams/:id/agents',
+    {
+      preHandler: panelAuth,
+      schema: {
+        params: idParamsSchema,
+        response: { 200: agentsResponseSchema, ...panelErrors, 404: apiErrorSchema },
+      },
+    },
+    async (request, reply) => {
+      const identity = await requirePanelMember(db, request, reply);
+      if (!identity) return reply;
+      const agents = await loadTeamAgents(db, identity, request.params.id);
+      if (!agents) return reply.code(404).send({ code: 'team_not_found' });
+      return agents;
+    },
+  );
+
+  app.post(
+    '/panel/teams/:id/agents',
+    {
+      preHandler: panelAuth,
+      schema: {
+        params: idParamsSchema,
+        body: agentCreateBodySchema,
+        response: { 201: agentRowSchema, ...teamErrors },
+      },
+    },
+    async (request, reply) => {
+      const identity = await requirePanelMember(db, request, reply);
+      if (!identity) return reply;
+      const result = await addAgent(db, identity, request.params.id, request.body);
+      if ('error' in result) return sendTeamsError(reply, result);
+      return reply.code(201).send(result.ok);
+    },
+  );
+
+  app.patch(
+    '/panel/agents/:userId',
+    {
+      preHandler: panelAuth,
+      schema: {
+        params: userParamsSchema,
+        body: agentUpdateBodySchema,
+        response: { 200: agentRowSchema, ...teamErrors },
+      },
+    },
+    async (request, reply) => {
+      const identity = await requirePanelMember(db, request, reply);
+      if (!identity) return reply;
+      const result = await updateAgent(db, identity, request.params.userId, request.body);
+      if ('error' in result) return sendTeamsError(reply, result);
+      return result.ok;
+    },
+  );
+
+  app.get(
+    '/panel/departments',
+    {
+      preHandler: panelAuth,
+      schema: { response: { 200: departmentsResponseSchema, ...panelErrors } },
+    },
+    async (request, reply) => {
+      const identity = await requirePanelMember(db, request, reply);
+      if (!identity) return reply;
+      return loadDepartments(db, identity);
     },
   );
 }

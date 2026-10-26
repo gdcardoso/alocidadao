@@ -223,6 +223,10 @@
 }
 
 .searchResult {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   padding: 10px 12px;
   border-radius: 8px;
   font-size: 14px;
@@ -238,4 +242,8 @@
   padding: 10px 12px;
   color: var(--text-secondary);
   font-size: 14px;
+}
+
+.searchResultText {
+  min-width: 0;
 }

@@ -1,15 +1,14 @@
-import { isTriageLate, type OccurrenceDetail } from '@alocidadao/shared';
+import { isTriageLate } from '@alocidadao/shared';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Map as MapIcon, Merge, Users } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { api } from '../api';
 import { NETWORK_ERROR_MESSAGE, UNEXPECTED_ERROR_MESSAGE } from '../auth/login-errors';
 import { formatElapsedShort } from '../format/elapsed';
 import { useNow } from '../format/use-now';
 import { FilterSelect } from '../map/MapFilters';
-import { AssignDialog } from '../occurrence/AssignDialog';
-import { PointPanel } from '../occurrence/PointPanel';
+import { OccurrenceDrawer } from '../occurrence/OccurrenceDrawer';
 import { useSession } from '../session/SessionProvider';
 import { usePanel } from '../shell/use-panel';
 import { CategorySquare } from '../ui/CategorySquare';
@@ -41,8 +40,6 @@ export function TriagePage() {
   const onlySuggestions = params.get('sugestao') === '1';
   const occurrenceId = uuidOrNull(params.get('ocorrencia'));
   const now = useNow();
-  // Ocorrência da W2 (Atribuir a uma equipe), aberta a partir do painel do ponto.
-  const [assignTarget, setAssignTarget] = useState<OccurrenceDetail | null>(null);
 
   function update(next: {
     categoryId?: string | null;
@@ -84,17 +81,6 @@ export function TriagePage() {
       .toSorted((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
   }, [optionsQuery.data]);
   const categoryName = categories.find((item) => item.id === categoryId)?.name;
-
-  // Esc fecha a gaveta, a menos que haja um diálogo aberto (ele fecha primeiro).
-  useEffect(() => {
-    if (!occurrenceId) return;
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key !== 'Escape' || document.querySelector('[role="dialog"]')) return;
-      update({ occurrenceId: null });
-    }
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  });
 
   const data = queue.data;
   const rows = data?.items ?? [];
@@ -238,30 +224,8 @@ export function TriagePage() {
             </>
           ) : null}
         </div>
-        {occurrenceId ? (
-          <div className={styles.drawer}>
-            <PointPanel
-              key={occurrenceId}
-              occurrenceId={occurrenceId}
-              onClose={() => update({ occurrenceId: null })}
-              onAssign={setAssignTarget}
-              onChanged={(result) => {
-                // A junção pode manter a outra (a que tem atividade): a gaveta segue a que ficou.
-                if (result.kind === 'merge' && result.survivorId !== occurrenceId) {
-                  update({ occurrenceId: result.survivorId });
-                }
-              }}
-            />
-          </div>
-        ) : null}
+        <OccurrenceDrawer tenantId={tenantId} />
       </div>
-      {assignTarget ? (
-        <AssignDialog
-          occurrence={assignTarget}
-          onClose={() => setAssignTarget(null)}
-          onAssigned={() => setAssignTarget(null)}
-        />
-      ) : null}
     </div>
   );
 }

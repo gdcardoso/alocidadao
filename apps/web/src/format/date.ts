@@ -28,3 +28,14 @@ export function formatDateTime(date: Date): string {
   const minute = parts.find((part) => part.type === 'minute')?.value ?? '00';
   return `${formatDayMonth(date)}, ${hour}:${minute}`;
 }
+
+const YEAR_PARTS = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'America/Sao_Paulo',
+  year: 'numeric',
+});
+
+/** Dia, mês abreviado e ano no horário de Brasília: `20 out 2026`. */
+export function formatDate(date: Date): string {
+  const year = YEAR_PARTS.formatToParts(date).find((part) => part.type === 'year')?.value ?? '';
+  return `${formatDayMonth(date)} ${year}`;
+}

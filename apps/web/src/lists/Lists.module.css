@@ -1,0 +1,118 @@
+.page {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.area {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.content {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding: 24px;
+  overflow: auto;
+}
+
+.state {
+  color: var(--text-secondary);
+  font-size: 15px;
+}
+
+.cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.cellText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.cellText strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.protocol {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.name {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.muted {
+  color: var(--text-secondary);
+}
+
+.overdue {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.pager {
+  display: flex;
+  gap: 8px;
+}
+
+.pagerButton {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--border-input);
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pagerButton:disabled {
+  color: var(--text-placeholder);
+  cursor: not-allowed;
+}
+
+.pagerButton:focus-visible,
+.searchInput:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.searchInput {
+  width: 260px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--border-input);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 14px;
+}
+
+.searchInput::placeholder {
+  color: var(--text-placeholder);
+}

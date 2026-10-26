@@ -148,8 +148,6 @@ describe('no access', () => {
 
 describe('coming soon pages', () => {
   it.each([
-    ['/em-atendimento', 'Em atendimento'],
-    ['/solicitacoes', 'Todas as solicitações'],
     ['/equipes', 'Equipes e agentes'],
     ['/categorias', 'Categorias'],
   ])('coming soon pages show the menu title and the notice (%s)', async (path, title) => {

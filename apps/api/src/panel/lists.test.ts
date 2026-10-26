@@ -203,7 +203,11 @@ describe('request list', () => {
     expect(first).toMatchObject({ total: 55, page: 1, pageSize: 50 });
     expect(first.items).toHaveLength(50);
     expect(first.items[0]!.address).toBe('Rua 54');
-    expect(first.items[0]).toMatchObject({ occurrenceId: occurrence, categoryName: 'Buraco' });
+    expect(first.items[0]).toMatchObject({
+      occurrenceId: occurrence,
+      categoryName: 'Buraco',
+      categoryId: expect.any(String),
+    });
     const second = await requestList('?page=2', adminId, tenantId);
     expect(second.page).toBe(2);
     expect(second.items.map((item) => item.address)).toEqual([

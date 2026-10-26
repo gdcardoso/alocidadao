@@ -119,6 +119,8 @@ export function useOccurrenceActions(tenantId: string) {
       ),
       queryClient.invalidateQueries({ queryKey: ['occurrences'] }),
       queryClient.invalidateQueries({ queryKey: ['triage'] }),
+      queryClient.invalidateQueries({ queryKey: ['in-progress'] }),
+      queryClient.invalidateQueries({ queryKey: ['requests'] }),
       queryClient.invalidateQueries({ queryKey: panelCountsKey(tenantId) }),
     ]);
   }

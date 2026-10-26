@@ -146,6 +146,7 @@ export async function loadRequestList(
       request_id: string;
       occurrence_id: string;
       protocol: string;
+      category_id: string;
       category_name: string;
       icon: string | null;
       icon_group: IconGroup;
@@ -157,6 +158,7 @@ export async function loadRequestList(
         requests.id AS request_id,
         requests.occurrence_id,
         requests.protocol,
+        categories.id AS category_id,
         categories.name AS category_name,
         categories.icon,
         categories.icon_group,
@@ -177,6 +179,7 @@ export async function loadRequestList(
       requestId: row.request_id,
       occurrenceId: row.occurrence_id,
       protocol: row.protocol,
+      categoryId: row.category_id,
       categoryName: row.category_name,
       icon: row.icon,
       iconGroup: row.icon_group,

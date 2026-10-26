@@ -147,6 +147,8 @@ export const requestRowSchema = z.object({
   requestId: z.uuid(),
   occurrenceId: z.uuid(),
   protocol: z.string(),
+  /** Para o filtro de categoria da lista. */
+  categoryId: z.uuid(),
   categoryName: z.string(),
   icon: z.string().nullable(),
   iconGroup: iconGroupSchema,

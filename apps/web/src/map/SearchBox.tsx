@@ -1,10 +1,11 @@
-import type { PanelSearchResult } from '@alocidadao/shared';
+import { PANEL_OCCURRENCE_STATUS_LABELS, type PanelSearchResult } from '@alocidadao/shared';
 import { useQuery } from '@tanstack/react-query';
 import { Search } from 'lucide-react';
 import { useEffect, useId, useState } from 'react';
 import { api } from '../api';
 import { useSession } from '../session/SessionProvider';
 import { usePanel } from '../shell/use-panel';
+import { Badge } from '../ui/Badge';
 import { isSearchable } from './map-query';
 import styles from './MapPage.module.css';
 
@@ -12,6 +13,13 @@ const DEBOUNCE_MS = 300;
 
 function resultLabel(item: PanelSearchResult): string {
   return [item.protocol, item.categoryName, item.address].filter(Boolean).join(' · ');
+}
+
+/** Em triagem e em atendimento primeiro; dentro de cada grupo, a ordem que a API devolveu. */
+function byWorkingFirst(items: readonly PanelSearchResult[]): PanelSearchResult[] {
+  const working = (item: PanelSearchResult) =>
+    item.status === 'triage' || item.status === 'in_progress';
+  return [...items.filter(working), ...items.filter((item) => !working(item))];
 }
 
 export interface SearchBoxProps {
@@ -40,7 +48,7 @@ export function SearchBox({ onSelect }: SearchBoxProps) {
     enabled,
     staleTime: 30_000,
   });
-  const items = enabled ? (query.data?.items ?? []) : [];
+  const items = enabled ? byWorkingFirst(query.data?.items ?? []) : [];
   const showList = open && enabled && query.isSuccess;
 
   function choose(item: PanelSearchResult) {
@@ -109,7 +117,8 @@ export function SearchBox({ onSelect }: SearchBoxProps) {
                   choose(item);
                 }}
               >
-                {resultLabel(item)}
+                <span className={styles.searchResultText}>{resultLabel(item)}</span>
+                <Badge>{PANEL_OCCURRENCE_STATUS_LABELS[item.status]}</Badge>
               </li>
             ))
           )}

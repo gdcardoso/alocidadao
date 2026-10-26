@@ -5,16 +5,15 @@ import {
   type ReviewDetail,
   type ReworkBody,
 } from '@alocidadao/shared';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { TriangleAlert, Undo2, Send, Users } from 'lucide-react';
 import { useId, useState } from 'react';
 import { api } from '../api';
 import { NETWORK_ERROR_MESSAGE, UNEXPECTED_ERROR_MESSAGE } from '../auth/login-errors';
-import { errorCode } from '../occurrence/use-occurrence-actions';
 import { useSession } from '../session/SessionProvider';
-import { panelCountsKey, usePanel } from '../shell/use-panel';
+import { usePanel } from '../shell/use-panel';
 import { Button } from '../ui/Button';
-import { useToast } from '../ui/Toast';
+import { useWorkOrderDecision } from '../work/use-work-order-decision';
 import { WorkOrderHeader } from '../work/WorkOrderHeader';
 import { PhotoToggle } from './PhotoToggle';
 import { ReworkDialog } from './ReworkDialog';
@@ -22,8 +21,6 @@ import { reviewQueueKey } from './review-keys';
 import styles from './ReviewDetail.module.css';
 
 const reviewKey = (tenantId: string, id: string) => ['review', tenantId, id] as const;
-
-export const WORK_ORDER_CHANGED_MESSAGE = 'Esta atividade mudou. Atualizamos o painel.';
 
 function citizensHelp(count: number): string {
   return count > 1
@@ -53,40 +50,19 @@ export function ReviewDetailView({ workOrderId }: { workOrderId: string }) {
 function ReviewForm({ review }: { review: ReviewDetail }) {
   const { tenantId } = usePanel();
   const { session } = useSession();
-  const queryClient = useQueryClient();
-  const toast = useToast();
   const noteId = useId();
   const [checked, setChecked] = useState<string[]>(() => review.pendingPhotos.map((p) => p.id));
   const [note, setNote] = useState(review.agentNote ?? '');
   const [reworking, setReworking] = useState(false);
-  const [pending, setPending] = useState(false);
   const trimmed = note.trim();
   const validNote = trimmed.length >= PUBLIC_NOTE_MIN && trimmed.length <= PUBLIC_NOTE_MAX;
   const count = review.activeRequestCount;
 
-  /** Roda a decisão. Dá certo ou não, a fila e os contadores se recarregam; o layout abre o próximo. */
-  async function decide(action: () => Promise<unknown>, success: string) {
-    setPending(true);
-    try {
-      await action();
-      toast.show(success);
-    } catch (error) {
-      const code = errorCode(error);
-      if (code === 'not_a_member') return;
-      if (code === 'work_order_unavailable' || code === 'work_order_not_found') {
-        toast.show(WORK_ORDER_CHANGED_MESSAGE);
-      } else {
-        toast.show(error instanceof ApiError ? UNEXPECTED_ERROR_MESSAGE : NETWORK_ERROR_MESSAGE);
-        return;
-      }
-    } finally {
-      setPending(false);
-    }
-    setReworking(false);
-    queryClient.removeQueries({ queryKey: reviewKey(tenantId, review.workOrderId) });
-    void queryClient.invalidateQueries({ queryKey: reviewQueueKey(tenantId) });
-    void queryClient.invalidateQueries({ queryKey: panelCountsKey(tenantId) });
-  }
+  const { pending, decide } = useWorkOrderDecision({
+    tenantId,
+    queueKey: reviewQueueKey(tenantId),
+    detailKey: reviewKey(tenantId, review.workOrderId),
+  });
 
   function publish() {
     void decide(
@@ -100,14 +76,18 @@ function ReviewForm({ review }: { review: ReviewDetail }) {
           }),
         ),
       'Publicado para os cidadãos.',
-    );
+    ).then((done) => {
+      if (done) setReworking(false);
+    });
   }
 
   function rework(body: ReworkBody) {
     void decide(
       () => session.withAuth(() => api.panelRework(tenantId, review.workOrderId, body)),
       'Devolvida ao agente.',
-    );
+    ).then((done) => {
+      if (done) setReworking(false);
+    });
   }
 
   return (

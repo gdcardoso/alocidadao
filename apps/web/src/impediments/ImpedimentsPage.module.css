@@ -1,0 +1,54 @@
+.page {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.state {
+  padding: 24px;
+  color: var(--text-secondary);
+  font-size: 15px;
+}
+
+.cardTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.category {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.wait {
+  flex: none;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.address {
+  display: block;
+  margin-top: 6px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.reason {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 3px 8px;
+  border-radius: 8px;
+  background: var(--warning-soft);
+  color: var(--warning-strong);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.reason svg {
+  color: var(--warning);
+}

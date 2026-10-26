@@ -3,6 +3,7 @@ import { useId, useState } from 'react';
 import { Button } from '../ui/Button';
 import { Dialog } from '../ui/Dialog';
 import styles from './PointPanel.module.css';
+import { rejectHelp } from './reject-help';
 
 export interface RejectDialogProps {
   detail: OccurrenceDetail;
@@ -66,9 +67,7 @@ export function RejectDialog({ detail, pending, onCancel, onConfirm }: RejectDia
           onChange={(event) => setReason(event.target.value)}
         />
         <p id={helpId} className={styles.fieldHint}>
-          {count === 1
-            ? 'O cidadão que relatou recebe este texto.'
-            : `Os ${count} cidadãos que relataram recebem este texto.`}
+          {rejectHelp(count)}
         </p>
       </div>
     </Dialog>

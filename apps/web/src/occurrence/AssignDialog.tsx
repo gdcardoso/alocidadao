@@ -1,17 +1,18 @@
 import { ApiError } from '@alocidadao/api-client';
 import { MANAGER_INSTRUCTIONS_MAX, type OccurrenceDetail } from '@alocidadao/shared';
 import { useQuery } from '@tanstack/react-query';
-import { Calendar, EyeOff, UserCheck } from 'lucide-react';
+import { EyeOff, UserCheck } from 'lucide-react';
 import { useId, useState } from 'react';
 import { api } from '../api';
 import { NETWORK_ERROR_MESSAGE, UNEXPECTED_ERROR_MESSAGE } from '../auth/login-errors';
-import { dueDateHint, todayInSaoPaulo } from '../format/due-date';
+import { todayInSaoPaulo } from '../format/due-date';
 import { useNow } from '../format/use-now';
 import { useSession } from '../session/SessionProvider';
 import { usePanel } from '../shell/use-panel';
 import { Button } from '../ui/Button';
 import { Dialog } from '../ui/Dialog';
 import styles from './AssignDialog.module.css';
+import { DueDateField } from './DueDateField';
 import { teamMeta } from './team-meta';
 import { useOccurrenceActions } from './use-occurrence-actions';
 
@@ -37,7 +38,6 @@ export function AssignDialog({ occurrence, onClose, onAssigned }: AssignDialogPr
   const now = useNow();
   const today = todayInSaoPaulo(now);
   const dateId = useId();
-  const dateHelpId = useId();
   const instructionsId = useId();
   const instructionsHelpId = useId();
   const [teamChoice, setTeamChoice] = useState<string | null>(null);
@@ -147,32 +147,13 @@ export function AssignDialog({ occurrence, onClose, onAssigned }: AssignDialogPr
         </ul>
       </div>
 
-      <div className={styles.field}>
-        <div className={styles.labelRow}>
-          <label htmlFor={dateId} className={styles.label}>
-            Prazo interno
-          </label>
-          <span className={styles.hint}>visível só para a prefeitura e a equipe</span>
-        </div>
-        <div className={styles.dateRow}>
-          <span className={styles.dateBox}>
-            <Calendar size={16} aria-hidden="true" />
-            <input
-              id={dateId}
-              type="date"
-              className={styles.dateInput}
-              min={today}
-              value={dueDate}
-              aria-describedby={dateHelpId}
-              onChange={(event) => setDueChoice(event.target.value)}
-            />
-          </span>
-          {dueDate ? <span className={styles.dateHint}>{dueDateHint(dueDate, today)}</span> : null}
-        </div>
-        <p id={dateHelpId} className={styles.hint}>
-          Sugerido pela categoria {occurrence.category.name}.
-        </p>
-      </div>
+      <DueDateField
+        label="Prazo interno"
+        hint="visível só para a prefeitura e a equipe"
+        help={`Sugerido pela categoria ${occurrence.category.name}.`}
+        value={dueDate}
+        onChange={setDueChoice}
+      />
 
       <div className={styles.field}>
         <div className={styles.labelRow}>

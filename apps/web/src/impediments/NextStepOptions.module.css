@@ -1,0 +1,158 @@
+.options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.option {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--border-input);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.optionSelected {
+  padding: 13px;
+  border: 2px solid var(--primary);
+  background: var(--primary-soft);
+}
+
+.option:focus-within {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.optionHead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+}
+
+.radio {
+  flex: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  border: 2px solid var(--border-input);
+  border-radius: 50%;
+  background: var(--surface);
+}
+
+.radio:checked {
+  border-color: var(--primary);
+  background: radial-gradient(circle, var(--primary) 0 4px, var(--surface) 5px);
+}
+
+.icon,
+.dangerIcon {
+  display: inline-flex;
+  flex: none;
+  color: var(--text-primary);
+}
+
+.dangerIcon {
+  color: var(--danger);
+}
+
+.optionText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.optionTitle,
+.dangerTitle {
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.dangerTitle {
+  color: var(--danger);
+}
+
+.optionSubtitle {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.labelRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.label {
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.hint {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.message {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.select {
+  display: flex;
+  align-items: center;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--border-input);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-secondary);
+}
+
+.select:focus-within {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.selectInput {
+  flex: 1;
+  min-width: 0;
+  appearance: none;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 14px;
+}
+
+.textarea {
+  min-height: 64px;
+  padding: 12px;
+  border: 1px solid var(--border-input);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.45;
+  resize: vertical;
+}

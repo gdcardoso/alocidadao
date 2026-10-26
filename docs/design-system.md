@@ -145,6 +145,20 @@ Telas em `docs/superpowers/specs/2026-10-24-telas-agente-pencil.md`; no app, em 
 - **Botão primário em `warning`** ("Enviar ao gestor" da A4): pílula `warning` com texto branco (5,0:1), pressionado em `warning-strong`.
 - **Faixa de local** (A3): raio 16, padding 14, gap 10, texto 15/600. No local: `success-soft` com texto `success`. Longe ou sem posição: `warning-soft` com `map-pin-x`/`map-pin-off` e texto `warning-strong`. Lendo a posição: fundo `#F1F5F9`, indicador e texto `text-secondary`. Nunca bloqueia o envio.
 
+## Painel WEB
+
+Telas em `docs/superpowers/specs/2026-10-26-telas-painel-pencil.md`; no painel, em `apps/web/src/`. Os tokens moram em `apps/web/src/styles/tokens.css` como variáveis CSS com os mesmos nomes (`--primary`, `--text-secondary`…), inclusive `--warning-strong` (`#78350F`, texto âmbar sobre `warning-soft`). Desenho para 1440x900; mínimo de 1280 de largura, abaixo disso rolagem horizontal. Listas, tabelas e painéis rolam por dentro.
+
+- **Escala densa** (só no painel; o app continua com 56/raio 16): corpo 14 (dominante), metadados e ajudas 13, selos e protocolos 12, rótulos 15/600, itens de menu 15. Títulos de página Lexend 22/600; de painel e diálogo 20/600 ("Relatos neste ponto" 16); login 28. Botões 40 (raio 20), ação de linha 32, botões do painel do ponto 48/44; campos 40 (raio 8), no login 48 (raio 10). Peso 700 só em contadores, cabeçalhos de tabela, selos, grupos do menu e números dos pinos.
+- **Menu lateral** (256): grupos em caixa alta 12/700, item 44 com raio 12 (ativo `primary-soft` com texto `primary`). Contador do item: pílula raio 10, texto branco 13/700, some quando é zero. Embaixo, a caixa do usuário com as iniciais, o papel (`Gestor · {setores}` ou `Admin da prefeitura`) e `Sair` (`log-out`) sem confirmação.
+- **Tabela** (triagem): contêiner raio 12 com borda `border`; cabeçalho fundo `bg`, texto 13/700 `text-secondary`; linhas com divisória `border`; linha aberta na gaveta em `primary-soft`; ação de linha `Analisar` em contorno `primary`. Selo de sugestão `+N parecida(s)` em `warning-soft` com `merge`.
+- **Regra de atraso**: na triagem, o "Aberta há" a partir de 72 h (`TRIAGE_LATE_HOURS`) fica em `danger` 700. Na etiqueta do painel do ponto o tempo fica neutro (fundo `border`), como no Pencil. A W3 (5b) usa `warning` para espera antiga.
+- **Pinos do mapa**: círculo com o número de relatos, borda branca 3, agrupados pelo MapLibre (raio 50, até o zoom 16) somando os relatos. Cor pela soma: até 4 `primary`, de 5 a 15 `warning`, acima de 15 `danger` (escala de volume, não de estado). Tamanho de 32 (1 relato) a 64 (acima de 15). Selecionado: borda branca 4 e brilho `#1557B0` translúcido. Legenda e controle de zoom por cima do mapa. Estilo `https://tiles.openfreemap.org/styles/liberty`, o mesmo do app.
+- **Painel do ponto** (440 à direita; na triagem, a mesma peça como gaveta sobre a tabela): cabeçalho com o quadrado da categoria 44, endereço e etiquetas; relatos com caixa 22 e miniatura 52 (sem foto: ícone `image` sobre `#CBD5E1`); cartão de sugestão âmbar com `Juntar a este ponto` e `É outro problema`; rodapé fixo com as ações.
+- **Diálogo**: `role="dialog"` com `aria-modal`, 560 de largura, raio 20, sombra `#0F172A40` e escurecimento `#0F172A80` (exceções às "sem sombras"). Cabeçalho com título, apoio e Fechar 36; rodapé fundo `bg` com o efeito da ação à esquerda e Cancelar/Confirmar à direita (destrutivo em `danger`). `Esc` e o `x` fecham; o foco vai para o primeiro campo e volta a quem abriu.
+- **Aviso (toast)**: embaixo, no centro; fundo `text-primary`, texto branco 14/600, raio 12, padding 12/20, por 4 s; `role="status"`. Um aviso novo troca o anterior.
+- **Foco visível**: contorno `primary` 2 em todo elemento focável; todo botão só com ícone tem `aria-label` e todo campo tem `label`.
+
 ## Padrões de interação
 
 - **Uma ação principal por tela**, no rodapé fixo, ao alcance do polegar.

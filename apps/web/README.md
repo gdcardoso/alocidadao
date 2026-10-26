@@ -1,0 +1,36 @@
+# Painel da prefeitura (`@alocidadao/web`)
+
+Painel WEB do Alô Cidadão (React + Vite). Telas em `docs/superpowers/specs/2026-10-26-telas-painel-pencil.md`; decisões em `docs/superpowers/plans/2026-10-26-painel-5a.md`; visual em `docs/design-system.md` (seção "Painel WEB").
+
+## Como rodar
+
+Na raiz do monorepo:
+
+1. Banco e armazenamento (Docker): `pnpm infra:up`.
+2. Migrações: `pnpm db:migrate`.
+3. Dados de demonstração: `pnpm db:seed:dev`. Para voltar a demo ao começo (atividades do agente, triagem de exemplo e mapa limpos), `pnpm db:seed:dev --reset`. Pode rodar quantas vezes quiser.
+4. API em `http://localhost:3333`: `pnpm --filter @alocidadao/api dev`. Ela lê `apps/api/.env` (copie de `apps/api/.env.example`).
+5. Painel em `http://localhost:5173`: `pnpm --filter @alocidadao/web dev`.
+
+O navegador fala só com o Vite. O proxy de `vite.config.ts` manda `/api/*` para a API (sem o prefixo) e reescreve o caminho do cookie de renovação de `/auth/panel` para `/api/auth/panel`, para o cookie `ac_panel_refresh` (`HttpOnly`, `SameSite=Strict`) valer na mesma origem. Por isso `VITE_API_URL` tem padrão `/api` (veja `.env.example`); não aponte para `http://localhost:3333` direto. Em produção, sirva a API no mesmo prefixo de `VITE_API_URL` ou reescreva o `Path` do cookie.
+
+## Entrar
+
+O código de verificação de desenvolvimento é o valor de `AUTH_DEV_FIXED_CODE` em `apps/api/.env` (no exemplo, `123456`). Sem ele, o código sai no log da API.
+
+| Quem                              | CPF           | O que vê                                                         |
+| --------------------------------- | ------------- | ---------------------------------------------------------------- |
+| Gestor (Carlos Demo, setor Obras) | `52998224725` | Só as ocorrências das categorias de Obras                        |
+| Admin da prefeitura (Rita Demo)   | `39053344705` | Tudo, inclusive Lixo e entulho e Poda de árvore (Limpeza Urbana) |
+
+O admin interno (`11144477735`) não tem vínculo com prefeitura e cai na página "Seu acesso ao painel não está ativo" até o Plano 6.
+
+## Observações de desenvolvimento
+
+- As miniaturas das fotos usam `S3_PUBLIC_ENDPOINT` da API. O exemplo aponta para o emulador Android (`http://10.0.2.2:9000`); para ver as fotos no navegador, use `http://localhost:9000` (e volte ao do emulador para testar o app).
+- O console mostra avisos do estilo do mapa ("Expected value to be of type number, but found null instead." e imagens do sprite ausentes). Vêm do estilo `liberty` do OpenFreeMap, não do painel.
+
+## Testes
+
+- `pnpm --filter @alocidadao/web test`: lógica e componentes com `@testing-library/react` e o cliente da API simulado. O mapa (MapLibre) não roda no `jsdom`; só as funções de estilo dele têm teste.
+- `pnpm --filter @alocidadao/web typecheck`.

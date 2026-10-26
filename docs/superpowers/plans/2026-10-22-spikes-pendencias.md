@@ -60,24 +60,43 @@ Os demais itens deste plano continuam em aberto e passaram para o Plano 4 (Labor
 
 ## Plano 5 — Painel
 
-- Restringir a leitura de `staff_audit_events` a admin e gestor da prefeitura e à equipe interna (hoje qualquer contexto da prefeitura lê); não gravar dados pessoais em `details`.
-- Admin e gestor da prefeitura ainda não conseguem cadastrar nem achar pelo telefone um usuário de fora: precisa de função `SECURITY DEFINER`.
-- `merged_into_id` sem `CHECK` ligando ao status `merged` (e diferente do próprio id).
-- `status_events.request_id` não é amarrado à mesma ocorrência (precisa acompanhar a junção).
-- Exigir e-mail e CPF para gestor e admin é regra da API (o banco só exige telefone ou CPF); vale também para o Plano 6.
-- Decidir onde o painel guarda o token de renovação (cookie `httpOnly` ou memória).
-- Cadastro de gestor com função `SECURITY DEFINER`.
-- O login do painel aceita gestor de prefeitura suspensa ou em implantação (`has_panel_access` não olha o status).
-- Um token do painel continua valendo em `/me` depois de perder o vínculo: as rotas do painel conferem o vínculo a cada chamada.
-- Troca de e-mail de quem tem acesso ao painel é feita pelo admin (hoje `PATCH /me` recusa com `email_managed_by_admin`).
-- A máscara do e-mail usa a caixa original, enquanto o envio usa minúsculas.
-- CPF com espaço ou `/` é recusado (só `.` e `-` são removidos); `PanelStartBody` é o tipo de saída (o cliente precisa de `z.input`).
-- ~~Categorias na ordem do Pencil~~: decidido em 26/10 manter a ordem alfabética.
-- Fotos da contestação aparecem como "Sua foto · abertura" no detalhe e na galeria: o `PhotoView` não diz a origem da foto. Decidido em 26/10: legenda "Sua foto · contestação".
+O Plano 5 tem duas partes: 5a (login, menu, mapa, triagem, juntar e separar, atribuir e recusar; `2026-10-26-painel-5a.md`) e 5b (o resto). Os itens resolvidos no 5a estão marcados; os abertos passaram para o Plano 5b.
 
-- Ajuste pedido: o painel grava o evento para `rework_requested` no formato `reworkDetailsSchema` (mensagem em `comment`; `{ reasons, discardedPhotoIds }` em `details`) e usa `POST /dev/work-orders/:id/manager` como referência.
-- Revisão (W3): mostrar a distância da conclusão ao local da ocorrência (`details.distanceM` do evento de conclusão).
+- [x] `merged_into_id` sem `CHECK` ligando ao status `merged` (e diferente do próprio id).
+- [x] `status_events.request_id` não é amarrado à mesma ocorrência. Decidido no 5a: fica sem amarração, de propósito; o evento é histórico e guarda a ocorrência da época.
+- [x] Decidir onde o painel guarda o token de renovação: cookie `ac_panel_refresh` (`HttpOnly`, `SameSite=Strict`, `Path=/auth/panel`); o token de acesso fica só na memória.
+- [x] O login do painel aceita gestor de prefeitura suspensa ou em implantação: o painel aceita `onboarding` e `active`; a suspensa não entra.
+- [x] Um token do painel continua valendo em `/me` depois de perder o vínculo: as rotas do painel conferem o vínculo a cada chamada (com teste no painel).
+- [x] A máscara do e-mail usa a caixa original, enquanto o envio usa minúsculas (`maskEmail` usa minúsculas).
+- [x] CPF com espaço ou `/` é recusado; `PanelStartBody` é o tipo de saída (o cliente usa `z.input`).
+- ~~Categorias na ordem do Pencil~~: decidido em 26/10 manter a ordem alfabética.
 - Textos do app do agente criados sem Pencil (confirmados pelo usuário em 26/10): 'Foto do cidadão'; 'Esta atividade não está mais com você' / 'Ela foi concluída, cancelada ou passada para outra equipe.' / 'Voltar para minhas atividades'; 'Não foi possível carregar a atividade' / 'Confira sua internet e tente de novo.'; 'Não foi possível iniciar. Tente de novo.'; 'Não foi possível enviar. Tente de novo.'; 'O gestor revisa as fotos e o relato.'; pílula 'Cidadão' (fundo surface com borda).
+
+Os demais itens deste plano continuam em aberto e passaram para o Plano 5b.
+
+## Plano 5b — Painel (segunda parte)
+
+- Restringir a leitura de `staff_audit_events` a admin e gestor da prefeitura e à equipe interna (hoje qualquer contexto da prefeitura lê); não gravar dados pessoais em `details`. (veio do Plano 5)
+- Cadastro de pessoas (gestor, agente) com função `SECURITY DEFINER`: admin e gestor da prefeitura ainda não conseguem cadastrar nem achar pelo telefone um usuário de fora. (veio do Plano 5)
+- Exigir e-mail e CPF para gestor e admin é regra da API (o banco só exige telefone ou CPF); vale também para o Plano 6. (veio do Plano 5)
+- Troca de e-mail de quem tem acesso ao painel é feita pelo admin (hoje `PATCH /me` recusa com `email_managed_by_admin`). (veio do Plano 5)
+- Ajuste pedido: o painel grava o evento para `rework_requested` no formato `reworkDetailsSchema` (mensagem em `comment`; `{ reasons, discardedPhotoIds }` em `details`) e usa `POST /dev/work-orders/:id/manager` como referência. (veio do Plano 5)
+- Revisão (W3): mostrar a distância da conclusão ao local da ocorrência (`details.distanceM` do evento de conclusão). (veio do Plano 5)
+- Fotos da contestação aparecem como "Sua foto · abertura" no detalhe e na galeria: o `PhotoView` não diz a origem da foto. Decidido em 26/10: legenda "Sua foto · contestação". (veio do Plano 5)
+- "Em atendimento" e "Todas as solicitações" viram listas simples (no 5a, página provisória "Esta tela chega na próxima etapa do painel."). (veio do Plano 5a)
+- Edição da base da equipe (`teams.base_address` e `teams.base_location`) na W6; no 5a só o seed preenche. (veio do Plano 5a)
+- Setores: cadastro (só o admin) e a lista da W7. (veio do Plano 5a)
+- Busca do mapa: o resultado não diz o status, e uma recusada ou concluída aparece junto das abertas no mesmo endereço (ordem por protocolo). Decidir se mostra o status ou põe as abertas primeiro. (veio do Plano 5a, passada no navegador)
+- Textos do painel criados sem Pencil para confirmar (decisões do `2026-10-26-painel-5a.md`):
+  - Login: 'Confira o CPF.'; 'Não encontramos acesso ao painel para este CPF. Fale com o administrador do Alô Cidadão na sua prefeitura.'; 'Aguarde {m:ss} para pedir outro código.'; 'Código incorreto. Confira e tente de novo.'; 'O código expirou. Peça um novo.'; 'Muitas tentativas. Peça um novo código.'; 'Não chegou? Veja o spam ou' + 'reenvie o código'; 'Enviando…'; 'Entrando…'.
+  - Gerais: 'Não foi possível conectar. Confira sua internet e tente de novo.'; 'Sua sessão expirou. Entre de novo.'; 'Seu acesso ao painel não está ativo' / 'Fale com o administrador do Alô Cidadão na sua prefeitura.' / 'Sair'; 'Esta ocorrência mudou. Atualizamos o painel.'; 'Não foi possível concluir. Tente de novo.'; 'Nenhuma ocorrência com estes filtros.'; 'Tentar de novo' (botão do erro de carga).
+  - Páginas do 5b: 'Esta tela chega na próxima etapa do painel.'.
+  - Mapa e busca: 'Nada encontrado para "{texto}".'; subtítulo no singular '1 ocorrência aberta e em atendimento · últimos 30 dias' (e '1 ocorrência aberta', '1 ocorrência em atendimento'); '· todo o período'.
+  - Painel do ponto: 'Sem observação'; '{n} relatos parecidos a {d} m' / '1 relato parecido a {d} m'; 'Ver mais 1 relato'; 'Separe os relatos desmarcados antes de atribuir.'; 'Atribuída a {equipe} · {status da atividade}'.
+  - Juntar e separar: 'As duas ocorrências têm atividade em andamento. Cancele uma antes de juntar.'; 'Relatos juntados a este ponto.'; 'Separar {n} relatos?' / 'Separar 1 relato?'; 'Eles viram uma nova ocorrência em triagem, no mesmo lugar.'; '{n} relatos separados em uma nova ocorrência.' / '1 relato separado em uma nova ocorrência.'.
+  - Recusar: 'Recusar ocorrência'; 'Motivo para os cidadãos'; 'Os {n} cidadãos que relataram recebem este texto.' / 'O cidadão que relatou recebe este texto.'; 'A ocorrência sai das filas e os cidadãos veem "Recusada".'; 'Ocorrência recusada.'.
+  - Atribuir: 'Nenhuma equipe do setor {setor}. Cadastre uma em Equipes e agentes.'; '(hoje)', '(1 dia)', '(N dias)'; 'Atribuída a {equipe}.'; meta no singular ('1 agente', '1 atividade aberta').
+  - Triagem: 'Nenhuma solicitação nova. Tudo em dia.'; subtítulo no singular '1 solicitação nova aguardando análise · mais antigas primeiro'; '+1 parecida'.
 
 ## Plano 6 — Backoffice
 
@@ -97,6 +116,7 @@ Os demais itens deste plano continuam em aberto e passaram para o Plano 4 (Labor
 - Avisos por push ao cidadão nas mudanças de status da solicitação (o app já diz "Você recebe um aviso a cada mudança").
 - Conclusão automática em 7 dias: solicitação aguardando a confirmação do cidadão é confirmada sozinha (o texto da tela já promete).
 - Push de nova atividade e de ajuste pedido para os agentes da equipe.
+- Push de atribuição para a equipe: o painel atribui (`POST /panel/occurrences/:id/assign`) sem avisar os agentes. (veio do Plano 5a)
 - Aviso da contestação: as outras solicitações reabertas ganham o evento 'Outro morador informou que o problema continua; a prefeitura vai reavaliar.', mas o detalhe não mostra comentários; levar esse aviso no push (ou expor como aviso do sistema no detalhe).
 
 ## Plano 8 — Infraestrutura
@@ -123,3 +143,7 @@ Os demais itens deste plano continuam em aberto e passaram para o Plano 4 (Labor
 - Foto de conclusão ou impedimento enviada ao armazenamento e recusada depois (conflito, vínculo encerrado) fica órfã no MinIO: falta uma limpeza periódica das chaves sem linha em `photos`. (veio do Plano 4)
 - Página de login de Wi-Fi público com 200 no envio da foto passa (o servidor recusa depois com 422). (veio do Plano 4)
 - Modo agente: o estado `online` de `useAgentWorkOrders` e `useAgentWorkOrder` começa verdadeiro antes do primeiro evento do NetInfo; os hooks do agente não têm teste próprio (a lógica está nos módulos puros testados). (veio do Plano 4)
+- Cookie do painel: `Secure` só com `NODE_ENV=production`; atrás de proxy, conferir que o cookie sai com `Secure` (e `trustProxy`). (veio do Plano 5a)
+- Domínio do painel: servir a API no mesmo prefixo do `VITE_API_URL` (o cookie tem `Path=/auth/panel`) ou reescrever o `Path`, como o proxy do Vite faz em desenvolvimento. (veio do Plano 5a)
+- `/auth/panel/refresh` cai no limite de 20/min por IP de `/auth/*` (a rede da prefeitura junta muitos servidores num IP). (veio do Plano 5a)
+- Fotos no painel: `S3_PUBLIC_ENDPOINT` de desenvolvimento aponta para o emulador Android (`10.0.2.2`), então as miniaturas não abrem no navegador; em produção, o endereço público do armazenamento vale para os dois. (veio do Plano 5a)

@@ -1,8 +1,11 @@
 const MINUTE_MS = 60_000;
 
-/** Tempo desde `from` sem o "há": `N min`, `N h`, `1 dia` ou `N dias` (data futura vale 0 min). */
+/**
+ * Tempo desde `from` sem o "há": `N min`, `N h`, `1 dia` ou `N dias`. Menos de um minuto (ou
+ * data futura) vale `1 min`, para a ação recém-feita não aparecer como "há 0 min".
+ */
 export function formatElapsedShort(from: Date, now: Date): string {
-  const minutes = Math.max(0, Math.floor((now.getTime() - from.getTime()) / MINUTE_MS));
+  const minutes = Math.max(1, Math.floor((now.getTime() - from.getTime()) / MINUTE_MS));
   if (minutes < 60) return `${minutes} min`;
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours} h`;

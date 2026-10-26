@@ -48,6 +48,8 @@ export function OccurrenceMap({ items, bounds, selectedId, focus, onSelect }: Oc
   const onSelectRef = useRef(onSelect);
   const selectedIdRef = useRef(selectedId);
   const openedFramedRef = useRef(false);
+  /** Destino do voo da busca em andamento; some quando o mapa para. */
+  const flightRef = useRef<maplibregl.FlyToOptions | null>(null);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -103,8 +105,23 @@ export function OccurrenceMap({ items, bounds, selectedId, focus, onSelect }: Oc
       setReady(true);
     });
 
-    // O painel do ponto abre e fecha: o mapa acompanha a largura.
-    const observer = new ResizeObserver(() => map.resize());
+    map.on('moveend', () => {
+      flightRef.current = null;
+    });
+
+    // O painel do ponto abre e fecha: o mapa acompanha a largura. O voo do MapLibre fixa o
+    // ponto da tela no início; se o painel abre no meio do voo, voa de novo para o ponto
+    // terminar no centro do mapa já estreito.
+    const observer = new ResizeObserver(() => {
+      // O resize também dispara `moveend`: guarda o destino antes.
+      const flight = flightRef.current;
+      map.resize();
+      if (flight) {
+        // O flyTo para o voo anterior (outro `moveend`): o destino volta depois dele.
+        map.flyTo(flight);
+        flightRef.current = flight;
+      }
+    });
     observer.observe(container);
     return () => {
       observer.disconnect();
@@ -147,7 +164,12 @@ export function OccurrenceMap({ items, bounds, selectedId, focus, onSelect }: Oc
     framedRef.current = true;
     // O painel do ponto abre junto com a busca: mede o mapa antes de voar.
     map.resize();
-    map.flyTo({ center: [focus.lng, focus.lat], zoom: Math.max(map.getZoom(), FOCUS_ZOOM) });
+    const flight = {
+      center: [focus.lng, focus.lat] as [number, number],
+      zoom: Math.max(map.getZoom(), FOCUS_ZOOM),
+    };
+    map.flyTo(flight);
+    flightRef.current = flight;
   }, [ready, focus]);
 
   return (

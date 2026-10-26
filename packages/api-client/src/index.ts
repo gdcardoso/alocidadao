@@ -1,5 +1,21 @@
 import {
   agentWorkOrderCardSchema,
+  agentRowSchema,
+  agentsResponseSchema,
+  categoriesResponseSchema,
+  categoryRowSchema,
+  departmentRowSchema,
+  departmentsResponseSchema,
+  impedimentDetailSchema,
+  inProgressResponseSchema,
+  managerRowSchema,
+  managersResponseSchema,
+  requestListResponseSchema,
+  reviewDetailSchema,
+  teamSummarySchema,
+  teamsResponseSchema,
+  workOrderResultSchema,
+  workQueueResponseSchema,
   assignResponseSchema,
   agentWorkOrderDetailSchema,
   challengeResponseSchema,
@@ -27,6 +43,37 @@ import {
   similarOccurrenceSchema,
   uploadResponseSchema,
   type AgentWorkOrderCard,
+  type AgentCreateBody,
+  type AgentRow,
+  type AgentUpdateBody,
+  type AgentsResponse,
+  type CategoriesResponse,
+  type CategoryCreateBody,
+  type CategoryRow,
+  type CategoryUpdateBody,
+  type DepartmentBody,
+  type DepartmentRow,
+  type DepartmentsResponse,
+  type ImpedimentDetail,
+  type InProgressQuery,
+  type InProgressResponse,
+  type ManagerCreateBody,
+  type ManagerRow,
+  type ManagerUpdateBody,
+  type ManagersResponse,
+  type PublishBody,
+  type ReassignBody,
+  type RequestListQuery,
+  type RequestListResponse,
+  type RescheduleBody,
+  type ReviewDetail,
+  type ReworkBody,
+  type TeamCreateBody,
+  type TeamSummary,
+  type TeamUpdateBody,
+  type TeamsResponse,
+  type WorkOrderResult,
+  type WorkQueueResponse,
   type AgentWorkOrderDetail,
   type AssignBody,
   type AssignResponse,
@@ -228,6 +275,8 @@ export function createApiClient({
 
   const panelPath = (id: string, action?: string) =>
     `/panel/occurrences/${encodeURIComponent(id)}${action ? `/${action}` : ''}`;
+  const workOrderPath = (id: string, action: string) =>
+    `/panel/work-orders/${encodeURIComponent(id)}/${action}`;
   const panelHeaders = { 'x-requested-with': 'alocidadao-panel' };
 
   return {
@@ -488,6 +537,257 @@ export function createApiClient({
     ): Promise<SplitResponse> =>
       splitResponseSchema.parse(
         await send('POST', panelPath(id, 'split'), body, { ...options, tenantId }),
+      ),
+
+    // Painel da prefeitura, parte B
+
+    panelReviews: async (tenantId: string, options?: RequestOptions): Promise<WorkQueueResponse> =>
+      workQueueResponseSchema.parse(
+        await send('GET', '/panel/reviews', undefined, { ...options, tenantId }),
+      ),
+
+    panelReview: async (
+      tenantId: string,
+      id: string,
+      options?: RequestOptions,
+    ): Promise<ReviewDetail> =>
+      reviewDetailSchema.parse(
+        await send('GET', `/panel/reviews/${encodeURIComponent(id)}`, undefined, {
+          ...options,
+          tenantId,
+        }),
+      ),
+
+    panelPublish: async (
+      tenantId: string,
+      id: string,
+      body: PublishBody,
+      options?: RequestOptions,
+    ): Promise<WorkOrderResult> =>
+      workOrderResultSchema.parse(
+        await send('POST', workOrderPath(id, 'publish'), body, { ...options, tenantId }),
+      ),
+
+    panelRework: async (
+      tenantId: string,
+      id: string,
+      body: ReworkBody,
+      options?: RequestOptions,
+    ): Promise<WorkOrderResult> =>
+      workOrderResultSchema.parse(
+        await send('POST', workOrderPath(id, 'rework'), body, { ...options, tenantId }),
+      ),
+
+    panelImpediments: async (
+      tenantId: string,
+      options?: RequestOptions,
+    ): Promise<WorkQueueResponse> =>
+      workQueueResponseSchema.parse(
+        await send('GET', '/panel/impediments', undefined, { ...options, tenantId }),
+      ),
+
+    panelImpediment: async (
+      tenantId: string,
+      id: string,
+      options?: RequestOptions,
+    ): Promise<ImpedimentDetail> =>
+      impedimentDetailSchema.parse(
+        await send('GET', `/panel/impediments/${encodeURIComponent(id)}`, undefined, {
+          ...options,
+          tenantId,
+        }),
+      ),
+
+    panelReassign: async (
+      tenantId: string,
+      id: string,
+      body: ReassignBody,
+      options?: RequestOptions,
+    ): Promise<WorkOrderResult> =>
+      workOrderResultSchema.parse(
+        await send('POST', workOrderPath(id, 'reassign'), body, { ...options, tenantId }),
+      ),
+
+    panelReschedule: async (
+      tenantId: string,
+      id: string,
+      body: RescheduleBody,
+      options?: RequestOptions,
+    ): Promise<WorkOrderResult> =>
+      workOrderResultSchema.parse(
+        await send('POST', workOrderPath(id, 'reschedule'), body, { ...options, tenantId }),
+      ),
+
+    panelInProgress: async (
+      tenantId: string,
+      params: InProgressQuery,
+      options?: RequestOptions,
+    ): Promise<InProgressResponse> =>
+      inProgressResponseSchema.parse(
+        await send('GET', `/panel/in-progress${panelQuery({ ...params })}`, undefined, {
+          ...options,
+          tenantId,
+        }),
+      ),
+
+    panelRequests: async (
+      tenantId: string,
+      params: RequestListQuery,
+      options?: RequestOptions,
+    ): Promise<RequestListResponse> =>
+      requestListResponseSchema.parse(
+        await send('GET', `/panel/requests${panelQuery({ ...params })}`, undefined, {
+          ...options,
+          tenantId,
+        }),
+      ),
+
+    panelTeamsList: async (tenantId: string, options?: RequestOptions): Promise<TeamsResponse> =>
+      teamsResponseSchema.parse(
+        await send('GET', '/panel/teams', undefined, { ...options, tenantId }),
+      ),
+
+    panelCreateTeam: async (
+      tenantId: string,
+      body: TeamCreateBody,
+      options?: RequestOptions,
+    ): Promise<TeamSummary> =>
+      teamSummarySchema.parse(await send('POST', '/panel/teams', body, { ...options, tenantId })),
+
+    panelUpdateTeam: async (
+      tenantId: string,
+      id: string,
+      body: TeamUpdateBody,
+      options?: RequestOptions,
+    ): Promise<TeamSummary> =>
+      teamSummarySchema.parse(
+        await send('PATCH', `/panel/teams/${encodeURIComponent(id)}`, body, {
+          ...options,
+          tenantId,
+        }),
+      ),
+
+    panelAgents: async (
+      tenantId: string,
+      teamId: string,
+      options?: RequestOptions,
+    ): Promise<AgentsResponse> =>
+      agentsResponseSchema.parse(
+        await send('GET', `/panel/teams/${encodeURIComponent(teamId)}/agents`, undefined, {
+          ...options,
+          tenantId,
+        }),
+      ),
+
+    panelAddAgent: async (
+      tenantId: string,
+      teamId: string,
+      body: AgentCreateBody,
+      options?: RequestOptions,
+    ): Promise<AgentRow> =>
+      agentRowSchema.parse(
+        await send('POST', `/panel/teams/${encodeURIComponent(teamId)}/agents`, body, {
+          ...options,
+          tenantId,
+        }),
+      ),
+
+    panelUpdateAgent: async (
+      tenantId: string,
+      userId: string,
+      body: AgentUpdateBody,
+      options?: RequestOptions,
+    ): Promise<AgentRow> =>
+      agentRowSchema.parse(
+        await send('PATCH', `/panel/agents/${encodeURIComponent(userId)}`, body, {
+          ...options,
+          tenantId,
+        }),
+      ),
+
+    panelDepartments: async (
+      tenantId: string,
+      options?: RequestOptions,
+    ): Promise<DepartmentsResponse> =>
+      departmentsResponseSchema.parse(
+        await send('GET', '/panel/departments', undefined, { ...options, tenantId }),
+      ),
+
+    panelCreateDepartment: async (
+      tenantId: string,
+      body: DepartmentBody,
+      options?: RequestOptions,
+    ): Promise<DepartmentRow> =>
+      departmentRowSchema.parse(
+        await send('POST', '/panel/departments', body, { ...options, tenantId }),
+      ),
+
+    panelUpdateDepartment: async (
+      tenantId: string,
+      id: string,
+      body: DepartmentBody,
+      options?: RequestOptions,
+    ): Promise<DepartmentRow> =>
+      departmentRowSchema.parse(
+        await send('PATCH', `/panel/departments/${encodeURIComponent(id)}`, body, {
+          ...options,
+          tenantId,
+        }),
+      ),
+
+    panelManagers: async (tenantId: string, options?: RequestOptions): Promise<ManagersResponse> =>
+      managersResponseSchema.parse(
+        await send('GET', '/panel/managers', undefined, { ...options, tenantId }),
+      ),
+
+    panelCreateManager: async (
+      tenantId: string,
+      body: ManagerCreateBody,
+      options?: RequestOptions,
+    ): Promise<ManagerRow> =>
+      managerRowSchema.parse(await send('POST', '/panel/managers', body, { ...options, tenantId })),
+
+    panelUpdateManager: async (
+      tenantId: string,
+      userId: string,
+      body: ManagerUpdateBody,
+      options?: RequestOptions,
+    ): Promise<ManagerRow> =>
+      managerRowSchema.parse(
+        await send('PATCH', `/panel/managers/${encodeURIComponent(userId)}`, body, {
+          ...options,
+          tenantId,
+        }),
+      ),
+
+    panelCategories: async (
+      tenantId: string,
+      options?: RequestOptions,
+    ): Promise<CategoriesResponse> =>
+      categoriesResponseSchema.parse(
+        await send('GET', '/panel/categories', undefined, { ...options, tenantId }),
+      ),
+
+    panelCreateCategory: async (
+      tenantId: string,
+      body: CategoryCreateBody,
+      options?: RequestOptions,
+    ): Promise<CategoryRow> =>
+      categoryRowSchema.parse(
+        await send('POST', '/panel/categories', body, { ...options, tenantId }),
+      ),
+
+    panelUpdateCategory: async (
+      tenantId: string,
+      id: string,
+      body: CategoryUpdateBody,
+      options?: RequestOptions,
+    ): Promise<CategoryRow> =>
+      categoryRowSchema.parse(
+        await send('PATCH', `/panel/categories/${encodeURIComponent(id)}`, body, {
+          ...options,
+          tenantId,
+        }),
       ),
 
     // Perfil

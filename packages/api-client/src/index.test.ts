@@ -315,4 +315,62 @@ describe('panel calls', () => {
     ).resolves.toBeUndefined();
     expect(calls[0]?.url).toBe(`http://api/panel/occurrences/${REQUEST_ID}/reject`);
   });
+
+  it('panelRequests serializes days null as all and page as text', async () => {
+    const { calls, fakeFetch } = recorder(() =>
+      Response.json({ total: 0, page: 2, pageSize: 50, items: [] }),
+    );
+    const api = createApiClient({ baseUrl: 'http://api', fetch: fakeFetch });
+    await api.panelRequests(TENANT_ID, { days: null, q: '', page: 2 });
+    expect(calls[0]?.url).toBe('http://api/panel/requests?days=all&q=&page=2');
+    expect(new Headers(calls[0]?.init?.headers).get('x-tenant-id')).toBe(TENANT_ID);
+  });
+
+  it('panelPublish posts the body to the work order', async () => {
+    const { calls, fakeFetch } = recorder(() =>
+      Response.json({ workOrderId: REQUEST_ID, status: 'completed' }),
+    );
+    const api = createApiClient({ baseUrl: 'http://api', fetch: fakeFetch });
+    const body = { publicNote: 'Buraco tapado com asfalto', publishedPhotoIds: [] };
+    await api.panelPublish(TENANT_ID, REQUEST_ID, body);
+    expect(calls[0]?.url).toBe(`http://api/panel/work-orders/${REQUEST_ID}/publish`);
+    expect(calls[0]?.init?.method).toBe('POST');
+    expect(JSON.parse(String(calls[0]?.init?.body))).toEqual(body);
+  });
+
+  it('panelAddAgent surfaces 409 with teamName in the error body', async () => {
+    const { calls, fakeFetch } = recorder(() =>
+      Response.json({ code: 'agent_in_other_team', teamName: 'Equipe Norte' }, { status: 409 }),
+    );
+    const api = createApiClient({ baseUrl: 'http://api', fetch: fakeFetch });
+    const error = await api
+      .panelAddAgent(TENANT_ID, REQUEST_ID, { name: 'Maria Souza', phone: '+5511999990000' })
+      .catch((e: unknown) => e);
+    expect(calls[0]?.url).toBe(`http://api/panel/teams/${REQUEST_ID}/agents`);
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).body).toEqual({
+      code: 'agent_in_other_team',
+      teamName: 'Equipe Norte',
+    });
+  });
+
+  it('panelUpdateCategory sends PATCH', async () => {
+    const { calls, fakeFetch } = recorder(() =>
+      Response.json({
+        id: REQUEST_ID,
+        name: 'Iluminação',
+        icon: null,
+        iconGroup: 'infrastructure',
+        departmentId: REQUEST_ID,
+        departmentName: 'Obras',
+        defaultDeadlineDays: 5,
+        clusterRadiusM: 50,
+        active: true,
+      }),
+    );
+    const api = createApiClient({ baseUrl: 'http://api', fetch: fakeFetch });
+    await api.panelUpdateCategory(TENANT_ID, REQUEST_ID, { defaultDeadlineDays: 5 });
+    expect(calls[0]?.url).toBe(`http://api/panel/categories/${REQUEST_ID}`);
+    expect(calls[0]?.init?.method).toBe('PATCH');
+  });
 });

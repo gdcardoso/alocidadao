@@ -51,6 +51,13 @@ function clearRefreshCookie(reply: FastifyReply) {
   });
 }
 
+/**
+ * Renovar e sair têm limite próprio por IP, fora dos 20/min do login: a prefeitura sai por um
+ * só IP (NAT) e um 429 aqui não pode derrubar os gestores. As duas rotas só funcionam com o
+ * cookie, então não servem para força bruta.
+ */
+export const PANEL_SESSION_RATE_LIMIT = { max: 600, timeWindow: 60_000 } as const;
+
 const hasCsrfHeader = (request: FastifyRequest) =>
   request.headers[PANEL_CSRF_HEADER] === PANEL_CSRF_VALUE;
 
@@ -144,6 +151,7 @@ export function registerPanelAuthRoutes(instance: FastifyInstance, deps: AuthDep
   app.post(
     '/auth/panel/refresh',
     {
+      config: { rateLimit: PANEL_SESSION_RATE_LIMIT },
       schema: {
         response: { 200: panelRefreshResponseSchema, 401: apiErrorSchema, 403: apiErrorSchema },
       },
@@ -170,7 +178,10 @@ export function registerPanelAuthRoutes(instance: FastifyInstance, deps: AuthDep
 
   app.post(
     '/auth/panel/logout',
-    { schema: { response: { 204: z.null(), 403: apiErrorSchema } } },
+    {
+      config: { rateLimit: PANEL_SESSION_RATE_LIMIT },
+      schema: { response: { 204: z.null(), 403: apiErrorSchema } },
+    },
     async (request, reply) => {
       if (!hasCsrfHeader(request)) return reply.code(403).send({ code: 'csrf_required' });
       const token = request.cookies[PANEL_REFRESH_COOKIE];

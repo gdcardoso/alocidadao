@@ -39,7 +39,7 @@ export interface PanelSessionOptions {
 
 /** Renova o token de acesso este tempo antes de ele vencer. */
 const REFRESH_MARGIN_SECONDS = 60;
-/** Depois de uma falha de rede na renovação agendada, tenta de novo neste prazo. */
+/** Depois de uma falha (rede, 429, 5xx) na renovação agendada, tenta de novo neste prazo. */
 const RETRY_DELAY_MS = 30_000;
 
 const isUnauthorized = (error: unknown) => error instanceof ApiError && error.status === 401;
@@ -69,13 +69,13 @@ export function createPanelSession({ client, onExpired }: PanelSessionOptions): 
     timer = null;
   }
 
-  /** Agenda a renovação. Falha de rede tenta de novo em 30 s enquanto a sessão estiver aberta. */
+  /** Agenda a renovação. Falha que não seja 401 tenta de novo em 30 s com a sessão aberta. */
   function scheduleRefresh(delayMs: number) {
     clearTimer();
     timer = setTimeout(() => {
       timer = null;
       refresh().catch(() => {
-        // Um 401 já encerrou a sessão dentro de `refresh`; aqui só chega falha de rede. Se
+        // Um 401 já encerrou a sessão dentro de `refresh`; aqui chega falha de rede, 429 ou 5xx. Se
         // outra entrada ou renovação já agendou um timer, ele vale.
         if (state.status === 'signed_in' && timer === null) scheduleRefresh(RETRY_DELAY_MS);
       });
@@ -100,7 +100,7 @@ export function createPanelSession({ client, onExpired }: PanelSessionOptions): 
     onExpired?.();
   }
 
-  /** Renova o token (uma só renovação por vez). Recusa da API encerra a sessão. */
+  /** Renova o token (uma só renovação por vez). Só o 401 da API encerra a sessão. */
   function refresh(): Promise<boolean> {
     if (refreshing) return refreshing;
     const started = generation;
@@ -114,8 +114,9 @@ export function createPanelSession({ client, onExpired }: PanelSessionOptions): 
         },
         (error: unknown) => {
           if (started !== generation) return false;
-          // Falha de rede não derruba a sessão: a próxima chamada tenta de novo.
-          if (!(error instanceof ApiError)) throw error;
+          // Só a recusa do cookie (401 session_expired) encerra a sessão. Rede, 429 e 5xx
+          // não derrubam o gestor: o erro volta à chamada e a renovação agendada tenta de novo.
+          if (!isUnauthorized(error)) throw error;
           expire();
           return false;
         },

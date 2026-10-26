@@ -381,4 +381,62 @@ describe('panel auth routes', () => {
     const again = await panelPost('/auth/panel/logout');
     expect(again.statusCode).toBe(204);
   });
+
+  it('refresh and logout stay out of the per-IP limit of the login', async () => {
+    const limited = await buildApp({
+      database: appDb.db,
+      auth: {
+        secret,
+        devFixedCode: '123456',
+        sms,
+        email,
+        rateLimit: { max: 2, timeWindowMs: 60_000 },
+      },
+    });
+    try {
+      const { cpf } = await newManagerCpf();
+      const start = await limited.inject({
+        method: 'POST',
+        url: '/auth/panel/start',
+        payload: { cpf },
+      });
+      expect(start.statusCode).toBe(200);
+      const verify = await limited.inject({
+        method: 'POST',
+        url: '/auth/panel/verify',
+        payload: { challengeId: start.json<PanelChallengeResponse>().challengeId, code: '123456' },
+      });
+      expect(verify.statusCode).toBe(200);
+      const cookie = refreshCookie(verify)!.value;
+
+      // O login gastou o limite deste IP.
+      const blocked = await limited.inject({
+        method: 'POST',
+        url: '/auth/panel/start',
+        payload: { cpf },
+      });
+      expect(blocked.statusCode).toBe(429);
+      expect(blocked.json()).toMatchObject({ code: 'rate_limited' });
+
+      // Vários gestores atrás do mesmo IP seguem renovando e saindo.
+      for (let i = 0; i < 5; i++) {
+        const refresh = await limited.inject({
+          method: 'POST',
+          url: '/auth/panel/refresh',
+          headers: CSRF,
+          cookies: { [PANEL_REFRESH_COOKIE]: cookie },
+        });
+        expect(refresh.statusCode).toBe(200);
+      }
+      const out = await limited.inject({
+        method: 'POST',
+        url: '/auth/panel/logout',
+        headers: CSRF,
+        cookies: { [PANEL_REFRESH_COOKIE]: cookie },
+      });
+      expect(out.statusCode).toBe(204);
+    } finally {
+      await limited.close();
+    }
+  });
 });

@@ -200,6 +200,7 @@ export type SplitResponse = z.infer<typeof splitResponseSchema>;
 export const triageRowSchema = z.object({
   occurrenceId: z.uuid(),
   protocol: z.string(),
+  categoryId: z.uuid(),
   categoryName: z.string(),
   icon: z.string().nullable(),
   iconGroup: iconGroupSchema,

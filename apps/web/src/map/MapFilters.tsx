@@ -28,7 +28,7 @@ interface FilterSelectProps {
  * Filtro "Nome: valor" do Pencil (32, raio 8). O `select` nativo fica invisível por cima
  * da pílula: o navegador cuida da lista e do teclado.
  */
-function FilterSelect({ name, valueLabel, value, options, onChange }: FilterSelectProps) {
+export function FilterSelect({ name, valueLabel, value, options, onChange }: FilterSelectProps) {
   return (
     <span className={styles.filter}>
       <span aria-hidden="true">

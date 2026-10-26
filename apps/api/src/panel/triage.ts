@@ -30,6 +30,7 @@ export async function loadTriage(
     tx.execute<{
       occurrence_id: string;
       protocol: string;
+      category_id: string;
       category_name: string;
       icon: string | null;
       icon_group: IconGroup;
@@ -44,6 +45,7 @@ export async function loadTriage(
         SELECT
           occurrences.id AS occurrence_id,
           oldest.protocol,
+          categories.id AS category_id,
           categories.name AS category_name,
           categories.icon,
           categories.icon_group,
@@ -110,6 +112,7 @@ export async function loadTriage(
     items: rows.map((row) => ({
       occurrenceId: row.occurrence_id,
       protocol: row.protocol,
+      categoryId: row.category_id,
       categoryName: row.category_name,
       icon: row.icon,
       iconGroup: row.icon_group,

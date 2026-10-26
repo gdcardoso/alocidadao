@@ -132,6 +132,7 @@ describe('GET /panel/triage', () => {
     expect(body.items[0]).toEqual({
       occurrenceId: oldest.id,
       protocol: oldest.request.protocol,
+      categoryId: expect.any(String),
       categoryName: 'Buraco',
       icon: 'construction',
       iconGroup: 'infrastructure',

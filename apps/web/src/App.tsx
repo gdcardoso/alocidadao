@@ -3,9 +3,10 @@ import { LoginPage } from './auth/LoginPage';
 import { ComingSoonPage } from './shell/ComingSoonPage';
 import { PanelLayout } from './shell/PanelLayout';
 import { MapPage } from './map/MapPage';
+import { TriagePage } from './triage/TriagePage';
 import { RequireSession } from './session/RequireSession';
 
-/** Rotas do painel. `/triagem` ganha a tela real na Task 10. */
+/** Rotas do painel. As telas do 5b ainda são páginas provisórias. */
 export default function App() {
   return (
     <Routes>
@@ -13,7 +14,7 @@ export default function App() {
       <Route element={<RequireSession />}>
         <Route element={<PanelLayout />}>
           <Route path="/mapa" element={<MapPage />} />
-          <Route path="/triagem" element={<ComingSoonPage title="Triagem" />} />
+          <Route path="/triagem" element={<TriagePage />} />
           <Route path="/revisao" element={<ComingSoonPage title="Aguardando revisão" />} />
           <Route path="/impedimentos" element={<ComingSoonPage title="Impedimentos" />} />
           <Route path="/em-atendimento" element={<ComingSoonPage title="Em atendimento" />} />

@@ -61,7 +61,7 @@ REVOKE ALL ON FUNCTION panel_find_or_create_agent_user(text, text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION panel_find_or_create_agent_user(text, text) TO app_user;
 --> statement-breakpoint
 
--- ── Gestor: acha a conta ativa pelo CPF ou cria uma ──
+-- ── Gestor: acha a conta ativa pelo CPF ou cria uma (só o admin da prefeitura) ──
 -- A conta que já existe mantém nome e e-mail; sem e-mail, recebe o digitado. Devolve o e-mail
 -- final: a API compara com o digitado para responder email_mismatch. E-mail de outra conta cai
 -- em users_email_lower_idx (23505).
@@ -75,7 +75,7 @@ CREATE FUNCTION panel_find_or_create_manager_user(p_name text, p_cpf text, p_ema
     v_id uuid;
     v_email text;
   BEGIN
-    PERFORM panel_require_manager('panel_find_or_create_manager_user', false);
+    PERFORM panel_require_manager('panel_find_or_create_manager_user', true);
 
     SELECT u.id, u.email INTO v_id, v_email
     FROM users u
@@ -102,8 +102,9 @@ GRANT EXECUTE ON FUNCTION panel_find_or_create_manager_user(text, text, text) TO
 
 -- ── Troca do celular de um agente que nunca entrou ──
 -- Quem já entrou no app troca o número no Perfil (account_change_phone): assim o gestor nunca
--- muda o login de quem já usa o app, nem o de um cidadão. Número de outra conta ativa cai em
--- users_phone_active_idx (23505).
+-- muda o login de quem já usa o app, nem o de um cidadão. Também recusa quem tem vínculo em outra
+-- prefeitura: o login é global e a troca mexeria no acesso dela. Número de outra conta ativa cai
+-- em users_phone_active_idx (23505).
 
 CREATE FUNCTION panel_change_agent_phone(p_user_id uuid, p_phone text)
   RETURNS void
@@ -131,7 +132,10 @@ CREATE FUNCTION panel_change_agent_phone(p_user_id uuid, p_phone text)
       RAISE EXCEPTION 'panel_change_agent_phone: agente inexistente nesta prefeitura'
         USING ERRCODE = 'no_data_found';
     END IF;
-    IF v_last_active IS NOT NULL THEN
+    IF v_last_active IS NOT NULL OR EXISTS (
+      SELECT 1 FROM memberships m
+      WHERE m.user_id = p_user_id AND m.tenant_id <> app_current_tenant()
+    ) THEN
       RAISE EXCEPTION 'phone_change_not_allowed'
         USING ERRCODE = 'check_violation';
     END IF;
@@ -146,29 +150,51 @@ GRANT EXECUTE ON FUNCTION panel_change_agent_phone(uuid, text) TO app_user;
 --> statement-breakpoint
 
 -- ── Troca do e-mail de um gestor (só o admin da prefeitura) ──
--- E-mail de outra conta cai em users_email_lower_idx (23505).
+-- O e-mail é global e recebe o código de entrada no painel: trocá-lo é trocar o login. Por isso
+-- só vale para quem é só gestor desta prefeitura. Recusa (check_violation,
+-- email_change_not_allowed) a equipe interna da plataforma, quem é gestor ou admin de outra
+-- prefeitura (em qualquer situação) e o admin desta. E-mail de outra conta cai em
+-- users_email_lower_idx (23505).
 
 CREATE FUNCTION panel_change_manager_email(p_user_id uuid, p_email text)
   RETURNS void
   LANGUAGE plpgsql VOLATILE SECURITY DEFINER
   SET search_path = public, pg_temp
   AS $$
+  DECLARE
+    v_platform_role platform_role;
   BEGIN
     PERFORM panel_require_manager('panel_change_manager_email', true);
 
-    UPDATE users u SET email = p_email
+    SELECT u.platform_role INTO v_platform_role
+    FROM users u
     WHERE u.id = p_user_id
+      AND u.account_status = 'active'
       AND u.deleted_at IS NULL
       AND EXISTS (
         SELECT 1 FROM memberships m
         WHERE m.user_id = u.id
           AND m.tenant_id = app_current_tenant()
           AND m.role = 'manager'
-      );
+      )
+    FOR UPDATE;
     IF NOT FOUND THEN
       RAISE EXCEPTION 'panel_change_manager_email: gestor inexistente nesta prefeitura'
         USING ERRCODE = 'no_data_found';
     END IF;
+    IF v_platform_role IS NOT NULL OR EXISTS (
+      SELECT 1 FROM memberships m
+      WHERE m.user_id = p_user_id
+        AND (
+          (m.tenant_id <> app_current_tenant() AND m.role IN ('manager', 'tenant_admin'))
+          OR (m.tenant_id = app_current_tenant() AND m.role = 'tenant_admin')
+        )
+    ) THEN
+      RAISE EXCEPTION 'email_change_not_allowed'
+        USING ERRCODE = 'check_violation';
+    END IF;
+
+    UPDATE users u SET email = p_email WHERE u.id = p_user_id;
   END;
   $$;
 --> statement-breakpoint

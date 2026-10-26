@@ -675,6 +675,28 @@ describe('fila de revisão e de impedimentos da demo', () => {
     expect(after.panelWorkOrderIds.slice(1)).toEqual(reset.panelWorkOrderIds.slice(1));
     await checkFixtures(after);
   });
+
+  it('seed mantém a atividade da fila devolvida ao agente, sem duplicar', async () => {
+    const before = await seedDev(owner.db, { reset: true });
+    const returned = before.panelWorkOrderIds[1]!;
+    await owner.db
+      .update(workOrders)
+      .set({ status: 'rework_requested' })
+      .where(eq(workOrders.id, returned));
+
+    const after = await seedDev(owner.db);
+    expect(after.panelWorkOrderIds).toEqual(before.panelWorkOrderIds);
+    const order = await activeOrderOf(before.tenantId, DEMO_REVIEW_DESCRIPTIONS[1]);
+    expect(order).toMatchObject({ id: returned, status: 'rework_requested' });
+    const inProgress = await owner.db
+      .select({ id: occurrences.id })
+      .from(occurrences)
+      .where(and(eq(occurrences.tenantId, before.tenantId), eq(occurrences.status, 'in_progress')));
+    expect(inProgress).toHaveLength(7);
+
+    // O reset volta a fila ao desenho.
+    await checkFixtures(await seedDev(owner.db, { reset: true }));
+  });
 });
 
 async function categoryIdOf(tenantId: string, name: string): Promise<string | undefined> {

@@ -20,6 +20,8 @@ let agentId: string;
 let citizenId: string;
 let inactiveManagerId: string;
 let otherTenantManagerId: string;
+let otherTenantAdminId: string;
+let otherTenantAgentId: string;
 
 let phoneSeq = 0;
 /** Telefone novo a cada chamada, para os testes não colidirem no índice único. */
@@ -139,6 +141,10 @@ beforeAll(async () => {
   await link(tenantA, inactiveManagerId, 'manager', 'inactive');
   otherTenantManagerId = await createUser({ name: 'Gestor B', cpf: newCpf() });
   await link(tenantB, otherTenantManagerId, 'manager');
+  otherTenantAdminId = await createUser({ name: 'Admin B', cpf: newCpf() });
+  await link(tenantB, otherTenantAdminId, 'tenant_admin');
+  otherTenantAgentId = await createUser({ name: 'Agente B', phone: newPhone() });
+  await link(tenantB, otherTenantAgentId, 'field_agent', 'invited');
 });
 
 afterAll(async () => {
@@ -188,8 +194,9 @@ describe('cadastro de agentes pelo painel', () => {
       { tenantId: tenantA, userId: citizenId },
       // Gestor desativado.
       { tenantId: tenantA, userId: inactiveManagerId },
-      // Gestor de outra prefeitura.
+      // Gestor e admin de outra prefeitura, com esta no contexto.
       { tenantId: tenantA, userId: otherTenantManagerId },
+      { tenantId: tenantA, userId: otherTenantAdminId },
       // Sem usuário no contexto.
       { tenantId: tenantA },
     ];
@@ -220,11 +227,31 @@ describe('cadastro de agentes pelo painel', () => {
     expect(refused).toMatchObject({ code: '23514', message: 'phone_change_not_allowed' });
     expect((await userRow(newAgent)).phone).toBe(phone);
 
-    // Só para agentes desta prefeitura: cidadão e gestor não.
-    for (const target of [citizenId, managerId]) {
+    // Só para agentes desta prefeitura: cidadão, gestor e agente de outra prefeitura não.
+    for (const target of [citizenId, managerId, otherTenantAgentId]) {
       const notAgent = await pgError(changeAgentPhone(asManager(), target, newPhone()));
       expect(notAgent.code).toBe('P0002');
     }
+  });
+
+  it('troca de número recusada para agente que também é de outra prefeitura', async () => {
+    // Convidado nas duas e nunca entrou: o login é global, a troca mexeria no acesso da outra.
+    const shared = await findOrCreateAgent(asManager(), 'Rui Prado', newPhone());
+    await link(tenantA, shared, 'field_agent', 'invited');
+    await link(tenantB, shared, 'field_agent', 'invited');
+    const before = (await userRow(shared)).phone;
+    const refused = await pgError(changeAgentPhone(asManager(), shared, newPhone()));
+    expect(refused).toMatchObject({ code: '23514', message: 'phone_change_not_allowed' });
+    expect((await userRow(shared)).phone).toBe(before);
+
+    // Vínculo de outro papel (cidadão) em outra prefeitura também conta.
+    const citizenElsewhere = await findOrCreateAgent(asManager(), 'Lia Matos', newPhone());
+    await link(tenantA, citizenElsewhere, 'field_agent', 'invited');
+    await link(tenantB, citizenElsewhere, 'citizen', 'inactive');
+    expect(await pgError(changeAgentPhone(asAdmin(), citizenElsewhere, newPhone()))).toMatchObject({
+      code: '23514',
+      message: 'phone_change_not_allowed',
+    });
   });
 
   it('troca de número para um número em uso cai no índice único', async () => {
@@ -261,7 +288,14 @@ describe('cadastro de gestores pelo painel', () => {
   it('gestor com CPF existente sem e-mail recebe o digitado', async () => {
     const cpf = newCpf();
     const existing = await createUser({ name: 'Cidadão com CPF', cpf, phone: newPhone() });
-    const found = await findOrCreateManager(asManager(), 'Nome digitado', cpf, 'novo@pessoas.dev');
+    // Só o admin cadastra gestor.
+    const byManager = await pgError(
+      findOrCreateManager(asManager(), 'Nome digitado', cpf, 'novo@pessoas.dev'),
+    );
+    expect(byManager.code).toBe('42501');
+    expect((await userRow(existing)).email).toBeNull();
+
+    const found = await findOrCreateManager(asAdmin(), 'Nome digitado', cpf, 'novo@pessoas.dev');
     expect(found).toEqual({ id: existing, email: 'novo@pessoas.dev' });
     expect(await userRow(existing)).toMatchObject({
       name: 'Cidadão com CPF',
@@ -305,6 +339,52 @@ describe('cadastro de gestores pelo painel', () => {
       const notManager = await pgError(changeManagerEmail(asAdmin(), other, 'x@pessoas.dev'));
       expect(notManager.code).toBe('P0002');
     }
+  });
+
+  it('troca de e-mail recusada para quem tem outro acesso de gestão', async () => {
+    const notAllowed = { code: '23514', message: 'email_change_not_allowed' };
+    const manager = async (email: string, values: Partial<typeof users.$inferInsert> = {}) => {
+      const id = await createUser({ name: 'Gestor', cpf: newCpf(), email, ...values });
+      await link(tenantA, id, 'manager');
+      return id;
+    };
+
+    // Equipe interna da plataforma.
+    const staff = await manager('suporte@pessoas.dev', { platformRole: 'support' });
+    // Gestor também em outra prefeitura, mesmo desativado lá.
+    const alsoB = await manager('tambem.b@pessoas.dev');
+    await link(tenantB, alsoB, 'manager', 'inactive');
+    // Admin de outra prefeitura.
+    const adminB = await manager('admin.b@pessoas.dev');
+    await link(tenantB, adminB, 'tenant_admin');
+    // Admin desta prefeitura (e gestor).
+    const adminHere = await manager('admin.aqui@pessoas.dev');
+    await link(tenantA, adminHere, 'tenant_admin');
+
+    for (const [id, email] of [
+      [staff, 'suporte@pessoas.dev'],
+      [alsoB, 'tambem.b@pessoas.dev'],
+      [adminB, 'admin.b@pessoas.dev'],
+      [adminHere, 'admin.aqui@pessoas.dev'],
+    ] as const) {
+      expect(
+        await pgError(changeManagerEmail(asAdmin(), id, 'novo.login@pessoas.dev')),
+      ).toMatchObject(notAllowed);
+      expect((await userRow(id)).email).toBe(email);
+    }
+
+    // Conta congelada não é alvo.
+    const frozen = await manager('congelado@pessoas.dev', { accountStatus: 'frozen' });
+    expect((await pgError(changeManagerEmail(asAdmin(), frozen, 'y@pessoas.dev'))).code).toBe(
+      'P0002',
+    );
+
+    // Gestor só desta prefeitura, desativado aqui: troca.
+    const onlyHere = await createUser({ name: 'Só aqui', cpf: newCpf(), email: 'so@pessoas.dev' });
+    await link(tenantA, onlyHere, 'manager', 'inactive');
+    await link(tenantB, onlyHere, 'citizen');
+    await changeManagerEmail(asAdmin(), onlyHere, 'so.aqui@pessoas.dev');
+    expect((await userRow(onlyHere)).email).toBe('so.aqui@pessoas.dev');
   });
 });
 

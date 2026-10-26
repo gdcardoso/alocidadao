@@ -533,9 +533,10 @@ async function createDemoWorkOrder(
 /**
  * Garante as atividades da fila do painel (DEMO_QUEUE), cada uma na sua ocorrência em
  * atendimento, e devolve os ids na ordem da lista. Idempotente: reencontra cada uma pela
- * descrição do relato do cidadão demo enquanto ela continua no status da fila; a que o gestor já
- * decidiu é criada de novo. Com `reset`, cancela as que estão ativas e cria outras, com as
- * esperas do desenho (o reset recusa a ocorrência antiga, que fica fora do `keep`).
+ * descrição do relato do cidadão demo enquanto ela continua ativa, mesmo que o gestor a tenha
+ * devolvido ao agente; a concluída ou cancelada é criada de novo. Com `reset`, cancela as que
+ * estão ativas e cria outras, com as esperas do desenho (o reset recusa a ocorrência antiga, que
+ * fica fora do `keep`).
  */
 async function seedDemoQueue(
   tx: Transaction,
@@ -569,13 +570,13 @@ async function seedDemoQueue(
           .orderBy(desc(workOrders.createdAt))
           .limit(1)
       : [];
-    if (found && found.status === item.status && !reset) {
+    const active = found && ACTIVE_WORK_ORDER_STATUSES.includes(found.status);
+    if (active && !reset) {
+      // Ainda ativa, mesmo fora da fila (devolvida ao agente, reagendada): fica como está.
       workOrderIds.push(found.id);
       continue;
     }
-    if (found && reset && ACTIVE_WORK_ORDER_STATUSES.includes(found.status)) {
-      await cancelDemoWorkOrder(tx, ids, found.id);
-    }
+    if (active) await cancelDemoWorkOrder(tx, ids, found.id);
     workOrderIds.push(await createDemoQueueOrder(tx, ids, item, extraCitizenIds, now, index));
   }
   return workOrderIds;

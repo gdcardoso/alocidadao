@@ -15,13 +15,6 @@ function resultLabel(item: PanelSearchResult): string {
   return [item.protocol, item.categoryName, item.address].filter(Boolean).join(' · ');
 }
 
-/** Em triagem e em atendimento primeiro; dentro de cada grupo, a ordem que a API devolveu. */
-function byWorkingFirst(items: readonly PanelSearchResult[]): PanelSearchResult[] {
-  const working = (item: PanelSearchResult) =>
-    item.status === 'triage' || item.status === 'in_progress';
-  return [...items.filter(working), ...items.filter((item) => !working(item))];
-}
-
 export interface SearchBoxProps {
   onSelect: (item: PanelSearchResult) => void;
 }
@@ -48,7 +41,7 @@ export function SearchBox({ onSelect }: SearchBoxProps) {
     enabled,
     staleTime: 30_000,
   });
-  const items = enabled ? byWorkingFirst(query.data?.items ?? []) : [];
+  const items = enabled ? (query.data?.items ?? []) : [];
   const showList = open && enabled && query.isSuccess;
 
   function choose(item: PanelSearchResult) {

@@ -3,6 +3,7 @@ import {
   ACTIVE_WORK_ORDER_STATUSES,
   IN_PROGRESS_LIMIT,
   REQUESTS_PAGE_SIZE,
+  type CategoryOptionsResponse,
   type IconGroup,
   type InProgressQuery,
   type InProgressResponse,
@@ -188,4 +189,25 @@ export async function loadRequestList(
       createdAt: new Date(row.created_at_ms).toISOString(),
     })),
   };
+}
+
+/**
+ * Categorias do alcance (ativas e inativas) em ordem de nome, para o filtro das listas.
+ * O gestor vê as dos seus setores; o admin, todas.
+ */
+export async function loadCategoryOptions(
+  db: Database,
+  identity: PanelIdentity,
+): Promise<CategoryOptionsResponse> {
+  const { userId, tenantId } = identity;
+  const result = await withContext(db, { tenantId, userId }, (tx) =>
+    tx.execute<{ id: string; name: string }>(sql`
+      SELECT categories.id, categories.name
+      FROM categories
+      WHERE categories.tenant_id = ${tenantId}
+        AND ${departmentScope(identity) ?? sql`true`}
+      ORDER BY lower(categories.name), categories.id
+    `),
+  );
+  return { items: result.rows.map((row) => ({ id: row.id, name: row.name })) };
 }

@@ -6,14 +6,12 @@ import {
 } from '@alocidadao/shared';
 import { ApiError } from '@alocidadao/api-client';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { useMemo } from 'react';
 import { useSearchParams } from 'react-router';
 import { api } from '../api';
 import { NETWORK_ERROR_MESSAGE, UNEXPECTED_ERROR_MESSAGE } from '../auth/login-errors';
 import { formatDayMonth } from '../format/date';
 import { formatElapsedShort } from '../format/elapsed';
 import { useNow } from '../format/use-now';
-import { categoriesOf } from '../map/map-query';
 import { FilterSelect } from '../map/MapFilters';
 import { OccurrenceDrawer } from '../occurrence/OccurrenceDrawer';
 import { useSession } from '../session/SessionProvider';
@@ -76,16 +74,13 @@ export function InProgressPage() {
     queryFn: () => fetchList(categoryId),
     placeholderData: keepPreviousData,
   });
-  // Opções de categoria: a mesma lista sem o filtro de categoria (como na Triagem).
+  // Opções de categoria: as do alcance, vindas da rota própria.
   const optionsQuery = useQuery({
-    queryKey: ['in-progress', tenantId, null, workOrderStatus],
-    queryFn: () => fetchList(null),
-    placeholderData: keepPreviousData,
+    queryKey: ['category-options', tenantId],
+    queryFn: () => session.withAuth(() => api.panelCategoryOptions(tenantId)),
+    staleTime: 60_000,
   });
-  const categories = useMemo(
-    () => categoriesOf(optionsQuery.data?.items ?? []),
-    [optionsQuery.data],
-  );
+  const categories = optionsQuery.data?.items ?? [];
   const categoryName = categories.find((item) => item.id === categoryId)?.name;
 
   const data = list.data;

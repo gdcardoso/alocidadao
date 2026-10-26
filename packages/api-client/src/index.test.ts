@@ -316,6 +316,16 @@ describe('panel calls', () => {
     expect(calls[0]?.url).toBe(`http://api/panel/occurrences/${REQUEST_ID}/reject`);
   });
 
+  it('panelCategoryOptions gets the scoped options', async () => {
+    const { calls, fakeFetch } = recorder(() =>
+      Response.json({ items: [{ id: REQUEST_ID, name: 'Buraco' }] }),
+    );
+    const api = createApiClient({ baseUrl: 'http://api', fetch: fakeFetch });
+    const result = await api.panelCategoryOptions(TENANT_ID);
+    expect(calls[0]?.url).toBe('http://api/panel/category-options');
+    expect(result.items[0]?.name).toBe('Buraco');
+  });
+
   it('panelRequests serializes days null as all and page as text', async () => {
     const { calls, fakeFetch } = recorder(() =>
       Response.json({ total: 0, page: 2, pageSize: 50, items: [] }),

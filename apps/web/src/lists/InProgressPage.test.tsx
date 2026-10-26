@@ -6,7 +6,7 @@ import { InProgressPage } from './InProgressPage';
 import { renderListPage, tenantId } from './test-render';
 
 vi.mock('../api', () => ({
-  api: { panelInProgress: vi.fn(), panelOccurrence: vi.fn() },
+  api: { panelInProgress: vi.fn(), panelOccurrence: vi.fn(), panelCategoryOptions: vi.fn() },
 }));
 
 const panelInProgress = vi.mocked(api.panelInProgress);
@@ -74,6 +74,9 @@ function detail(): OccurrenceDetail {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(api.panelCategoryOptions).mockResolvedValue({
+    items: [{ id: holesCategory, name: 'Buraco na via' }],
+  });
   panelInProgress.mockImplementation(async (_tenant, params) => {
     let items = rows;
     if (params.categoryId) items = items.filter((r) => r.categoryId === params.categoryId);

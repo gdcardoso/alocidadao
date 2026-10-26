@@ -6,7 +6,7 @@ import { RequestsPage } from './RequestsPage';
 import { renderListPage, tenantId } from './test-render';
 
 vi.mock('../api', () => ({
-  api: { panelRequests: vi.fn(), panelOccurrence: vi.fn() },
+  api: { panelRequests: vi.fn(), panelOccurrence: vi.fn(), panelCategoryOptions: vi.fn() },
 }));
 
 const panelRequests = vi.mocked(api.panelRequests);
@@ -42,6 +42,13 @@ const rows: RequestRow[] = [
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(api.panelCategoryOptions).mockResolvedValue({
+    items: [
+      { id: holesCategory, name: 'Buraco na via' },
+      { id: '66666666-6666-4666-8666-666666666666', name: 'Iluminação' },
+      { id: '77777777-7777-4777-8777-777777777777', name: 'Zeladoria' },
+    ],
+  });
   panelRequests.mockImplementation(async (_tenant, params) => ({
     total: 120,
     page: params.page,
@@ -51,7 +58,7 @@ beforeEach(() => {
 });
 
 describe('requests page', () => {
-  it('category options come from the rows of the first page without the category filter', async () => {
+  it('category options come from the scope route, not from the rows', async () => {
     renderListPage(<RequestsPage />, '/solicitacoes');
     await screen.findByText('2026-000123');
     const select = screen.getByLabelText('Categoria') as HTMLSelectElement;
@@ -59,6 +66,7 @@ describe('requests page', () => {
       'todas',
       'Buraco na via',
       'Iluminação',
+      'Zeladoria',
     ]);
   });
 
@@ -105,6 +113,18 @@ describe('requests page', () => {
     expect(await screen.findByText('101–120 de 120')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Próxima' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Anterior' })).toBeEnabled();
+  });
+
+  it('page beyond the last goes back to the last page', async () => {
+    panelRequests.mockImplementation(async (_tenant, params) => ({
+      total: 120,
+      page: params.page,
+      pageSize: 50,
+      items: params.page > 3 ? [] : rows,
+    }));
+    renderListPage(<RequestsPage />, '/solicitacoes?pagina=9');
+    await screen.findByText('2026-000123');
+    expect(screen.getByTestId('location')).toHaveTextContent('?pagina=3');
   });
 
   it('shows status badge and date, and the default period is 30 days', async () => {

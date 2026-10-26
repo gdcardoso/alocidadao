@@ -10,6 +10,7 @@ import {
   inProgressResponseSchema,
   managerRowSchema,
   managersResponseSchema,
+  categoryOptionsResponseSchema,
   requestListResponseSchema,
   reviewDetailSchema,
   teamSummarySchema,
@@ -64,6 +65,7 @@ import {
   type PublishBody,
   type ReassignBody,
   type RequestListQuery,
+  type CategoryOptionsResponse,
   type RequestListResponse,
   type RescheduleBody,
   type ReviewDetail,
@@ -628,6 +630,14 @@ export function createApiClient({
           ...options,
           tenantId,
         }),
+      ),
+
+    panelCategoryOptions: async (
+      tenantId: string,
+      options?: RequestOptions,
+    ): Promise<CategoryOptionsResponse> =>
+      categoryOptionsResponseSchema.parse(
+        await send('GET', '/panel/category-options', undefined, { ...options, tenantId }),
       ),
 
     panelRequests: async (

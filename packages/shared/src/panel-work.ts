@@ -185,3 +185,8 @@ export type RequestListResponse = z.infer<typeof requestListResponseSchema>;
 export function isReviewLate(statusSince: Date, now: Date): boolean {
   return now.getTime() - statusSince.getTime() >= REVIEW_LATE_HOURS * 3_600_000;
 }
+
+export const categoryOptionsResponseSchema = z.object({
+  items: z.array(z.object({ id: z.uuid(), name: z.string() })),
+});
+export type CategoryOptionsResponse = z.infer<typeof categoryOptionsResponseSchema>;

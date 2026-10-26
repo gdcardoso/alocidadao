@@ -9,12 +9,12 @@ import {
   type RequestStatus,
 } from '@alocidadao/shared';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { api } from '../api';
 import { NETWORK_ERROR_MESSAGE, UNEXPECTED_ERROR_MESSAGE } from '../auth/login-errors';
 import { formatDate } from '../format/date';
-import { categoriesOf, periodLabel } from '../map/map-query';
+import { periodLabel } from '../map/map-query';
 import { FilterSelect } from '../map/MapFilters';
 import { OccurrenceDrawer } from '../occurrence/OccurrenceDrawer';
 import { useSession } from '../session/SessionProvider';
@@ -155,17 +155,13 @@ export function RequestsPage() {
     queryFn: () => fetchList(categoryId, page),
     placeholderData: keepPreviousData,
   });
-  // Opções de categoria: a primeira página sem o filtro de categoria (como na Triagem).
-  // Só enxerga as categorias dessa página.
+  // Opções de categoria: as do alcance, vindas da rota própria.
   const optionsQuery = useQuery({
-    queryKey: ['requests', tenantId, status, null, days, term, 1],
-    queryFn: () => fetchList(null, 1),
-    placeholderData: keepPreviousData,
+    queryKey: ['category-options', tenantId],
+    queryFn: () => session.withAuth(() => api.panelCategoryOptions(tenantId)),
+    staleTime: 60_000,
   });
-  const categories = useMemo(
-    () => categoriesOf(optionsQuery.data?.items ?? []),
-    [optionsQuery.data],
-  );
+  const categories = optionsQuery.data?.items ?? [];
   const categoryName = categories.find((item) => item.id === categoryId)?.name;
 
   const data = list.data;
@@ -173,6 +169,12 @@ export function RequestsPage() {
   const total = data?.total ?? 0;
   const from = (page - 1) * REQUESTS_PAGE_SIZE + 1;
   const to = from + rows.length - 1;
+  // `?pagina=` além da última: volta para a última página.
+  const lastPage = Math.max(1, Math.ceil(total / REQUESTS_PAGE_SIZE));
+  const beyondLast = Boolean(data) && !list.isPlaceholderData && total > 0 && page > lastPage;
+  useEffect(() => {
+    if (beyondLast) update({ page: lastPage });
+  });
   const error = list.error
     ? list.error instanceof ApiError
       ? UNEXPECTED_ERROR_MESSAGE
@@ -236,7 +238,7 @@ export function RequestsPage() {
       <div className={styles.area}>
         <div className={styles.content}>
           {error ? <p className={styles.state}>{error}</p> : null}
-          {data && rows.length === 0 ? (
+          {data && rows.length === 0 && !beyondLast ? (
             <p className={styles.state}>Nenhuma solicitação com estes filtros.</p>
           ) : null}
           {rows.length > 0 ? (

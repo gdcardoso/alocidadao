@@ -35,11 +35,10 @@ describe('search box', () => {
     const user = renderListPage(<SearchBox onSelect={vi.fn()} />, '/mapa');
     await user.type(screen.getByRole('combobox'), '2026');
     const options = await screen.findAllByRole('option');
-    // Em atendimento e em triagem primeiro, cada grupo na ordem da API.
-    expect(within(options[0]!).getByText('Em atendimento')).toBeInTheDocument();
-    expect(options[0]).toHaveTextContent('2026-000002 · Buraco na via · Rua das Flores, 120');
-    expect(within(options[1]!).getByText('Aberta')).toBeInTheDocument();
-    expect(within(options[2]!).getByText('Concluída')).toBeInTheDocument();
-    expect(options[2]).toHaveTextContent('2026-000001');
+    // A ordem é a da API.
+    expect(options[0]).toHaveTextContent('2026-000001');
+    expect(within(options[0]!).getByText('Concluída')).toBeInTheDocument();
+    expect(within(options[1]!).getByText('Em atendimento')).toBeInTheDocument();
+    expect(within(options[2]!).getByText('Aberta')).toBeInTheDocument();
   });
 });

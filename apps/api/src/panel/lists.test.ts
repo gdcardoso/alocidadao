@@ -1,5 +1,6 @@
 import { createDatabase } from '@alocidadao/db';
 import {
+  categoryOptionsResponseSchema,
   inProgressResponseSchema,
   requestListResponseSchema,
   type GeoPoint,
@@ -296,5 +297,23 @@ describe('request list', () => {
     // Outra prefeitura não aparece.
     const other = await seedBase();
     expect((await inProgress('', other.adminId, other.tenantId)).items).toEqual([]);
+  });
+});
+
+describe('category options', () => {
+  it('category options are scoped and alphabetical', async () => {
+    const seed = await seedBase();
+    const adminId = seed.adminId;
+    const managerId = await fx.newManager(seed.tenantId, [seed.lightsId]);
+    const all = await get('/panel/category-options', adminId, seed.tenantId);
+    expect(all.statusCode).toBe(200);
+    expect(categoryOptionsResponseSchema.parse(all.json()).items.map((i) => i.name)).toEqual([
+      'Buraco',
+      'Poste apagado',
+    ]);
+    const scoped = await get('/panel/category-options', managerId, seed.tenantId);
+    expect(categoryOptionsResponseSchema.parse(scoped.json()).items).toEqual([
+      { id: seed.lampId, name: 'Poste apagado' },
+    ]);
   });
 });

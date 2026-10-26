@@ -18,6 +18,7 @@ import {
   panelCountsSchema,
   panelSearchResponseSchema,
   impedimentDetailSchema,
+  categoryOptionsResponseSchema,
   inProgressQuerySchema,
   inProgressResponseSchema,
   requestListQuerySchema,
@@ -55,7 +56,7 @@ import {
 } from './actions.js';
 import { registerAdminRoutes } from './admin.js';
 import { loadPanelContext, loadPanelCounts } from './context.js';
-import { loadInProgress, loadRequestList } from './lists.js';
+import { loadCategoryOptions, loadInProgress, loadRequestList } from './lists.js';
 import { requirePanelMember } from './member.js';
 import {
   loadOccurrenceDetail,
@@ -182,6 +183,19 @@ export function registerPanelRoutes(instance: FastifyInstance, deps: PanelDeps) 
       const identity = await requirePanelMember(db, request, reply);
       if (!identity) return reply;
       return loadInProgress(db, identity, request.query);
+    },
+  );
+
+  app.get(
+    '/panel/category-options',
+    {
+      preHandler: panelAuth,
+      schema: { response: { 200: categoryOptionsResponseSchema, ...panelErrors } },
+    },
+    async (request, reply) => {
+      const identity = await requirePanelMember(db, request, reply);
+      if (!identity) return reply;
+      return loadCategoryOptions(db, identity);
     },
   );
 

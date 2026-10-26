@@ -266,7 +266,11 @@ export function toGalleryPhotos(model: DetailModel): GalleryPhoto[] {
     meta: `${formatDateTime(photo.takenAt)} · ${model.place}`,
   });
   return [
-    ...model.before.map(toItem('Sua foto · abertura')),
+    ...model.before.map((photo: PhotoView) => ({
+      url: photo.url,
+      caption: photo.purpose === 'contest' ? 'Sua foto · contestação' : 'Sua foto · abertura',
+      meta: `${formatDateTime(photo.takenAt)} · ${model.place}`,
+    })),
     ...(model.after ?? []).map(toItem('Depois do atendimento')),
   ];
 }

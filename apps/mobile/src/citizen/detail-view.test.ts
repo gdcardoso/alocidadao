@@ -302,6 +302,24 @@ describe('gallery and actions', () => {
     expect(parseGalleryPhotos(JSON.stringify([{ url: 1 }]))).toEqual([]);
   });
 
+  it('gallery labels contest photos as Sua foto · contestação', () => {
+    const model = toDetailModel(
+      detail({
+        photos: [
+          photo(1, OPENED),
+          { url: 'https://fotos/2.jpg', takenAt: OPENED, purpose: 'contest' as const },
+          photo(3, OPENED),
+        ],
+      }),
+      NOW,
+    );
+    expect(toGalleryPhotos(model).map((p) => p.caption)).toEqual([
+      'Sua foto · abertura',
+      'Sua foto · contestação',
+      'Sua foto · abertura',
+    ]);
+  });
+
   it('action errors explain the missing network and a status that changed', () => {
     const offline = { kind: 'message', message: 'Sem internet. Tente de novo quando conectar.' };
     const fallback = { kind: 'message', message: 'Algo deu errado. Tente de novo.' };

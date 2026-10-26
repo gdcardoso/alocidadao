@@ -234,3 +234,85 @@ const agentDetail = {
   rework: null,
   previousNote: null,
 };
+
+describe('panel calls', () => {
+  const recorder = (response: () => Response) => {
+    const calls: { url: string; init?: RequestInit }[] = [];
+    const fakeFetch: typeof fetch = async (input, init) => {
+      calls.push({ url: String(input), init });
+      return response();
+    };
+    return { calls, fakeFetch };
+  };
+
+  it('panelRefresh sends the csrf header and no authorization', async () => {
+    const { calls, fakeFetch } = recorder(() =>
+      Response.json({ accessToken: 'a', accessExpiresInSeconds: 900 }),
+    );
+    const api = createApiClient({
+      baseUrl: 'http://api',
+      fetch: fakeFetch,
+      getToken: () => 'session-token',
+      credentials: 'same-origin',
+    });
+    await api.panelRefresh();
+    const headers = new Headers(calls[0]?.init?.headers);
+    expect(calls[0]?.url).toBe('http://api/auth/panel/refresh');
+    expect(calls[0]?.init?.method).toBe('POST');
+    expect(calls[0]?.init?.credentials).toBe('same-origin');
+    expect(headers.get('x-requested-with')).toBe('alocidadao-panel');
+    expect(headers.get('Authorization')).toBeNull();
+  });
+
+  it('panelLogout sends the csrf header and accepts 204', async () => {
+    const { calls, fakeFetch } = recorder(() => new Response(null, { status: 204 }));
+    const api = createApiClient({ baseUrl: 'http://api', fetch: fakeFetch, getToken: () => 't' });
+    await api.panelLogout();
+    const headers = new Headers(calls[0]?.init?.headers);
+    expect(headers.get('x-requested-with')).toBe('alocidadao-panel');
+    expect(headers.get('Authorization')).toBeNull();
+  });
+
+  it('panel calls send the tenant header', async () => {
+    const { calls, fakeFetch } = recorder(() => Response.json({ total: 0, items: [] }));
+    const api = createApiClient({ baseUrl: 'http://api', fetch: fakeFetch, getToken: () => 't' });
+    await api.panelTriage(TENANT_ID, { onlySuggestions: true });
+    const headers = new Headers(calls[0]?.init?.headers);
+    expect(headers.get('x-tenant-id')).toBe(TENANT_ID);
+    expect(headers.get('Authorization')).toBe('Bearer t');
+    expect(calls[0]?.url).toBe('http://api/panel/triage?onlySuggestions=true');
+  });
+
+  it('panelOccurrences serializes days null as all', async () => {
+    const { calls, fakeFetch } = recorder(() => Response.json({ total: 0, items: [] }));
+    const api = createApiClient({ baseUrl: 'http://api', fetch: fakeFetch });
+    await api.panelOccurrences(TENANT_ID, { status: 'open', days: null });
+    expect(calls[0]?.url).toBe('http://api/panel/occurrences?status=open&days=all');
+    await api.panelOccurrences(TENANT_ID, { status: 'open', days: 7, categoryId: REQUEST_ID });
+    expect(calls[1]?.url).toBe(
+      `http://api/panel/occurrences?status=open&days=7&categoryId=${REQUEST_ID}`,
+    );
+  });
+
+  it('panelReject surfaces 409 as ApiError with the code', async () => {
+    const { fakeFetch } = recorder(() =>
+      Response.json({ code: 'invalid_status' }, { status: 409 }),
+    );
+    const api = createApiClient({ baseUrl: 'http://api', fetch: fakeFetch });
+    const error = await api
+      .panelReject(TENANT_ID, REQUEST_ID, { reason: 'Fora da competência' })
+      .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).status).toBe(409);
+    expect((error as ApiError).body).toEqual({ code: 'invalid_status' });
+  });
+
+  it('panelReject resolves on 204', async () => {
+    const { calls, fakeFetch } = recorder(() => new Response(null, { status: 204 }));
+    const api = createApiClient({ baseUrl: 'http://api', fetch: fakeFetch });
+    await expect(
+      api.panelReject(TENANT_ID, REQUEST_ID, { reason: 'Fora da competência' }),
+    ).resolves.toBeUndefined();
+    expect(calls[0]?.url).toBe(`http://api/panel/occurrences/${REQUEST_ID}/reject`);
+  });
+});

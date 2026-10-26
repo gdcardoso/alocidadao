@@ -1,30 +1,59 @@
 import {
   agentWorkOrderCardSchema,
+  assignResponseSchema,
   agentWorkOrderDetailSchema,
   challengeResponseSchema,
   createRequestResponseSchema,
   healthResponseSchema,
   locateResponseSchema,
   meResponseSchema,
+  mergeResponseSchema,
+  occurrenceDetailSchema,
+  occurrenceMapResponseSchema,
+  panelChallengeResponseSchema,
+  panelContextSchema,
+  panelCountsSchema,
+  panelRefreshResponseSchema,
+  panelSearchResponseSchema,
+  panelSessionResponseSchema,
   phoneVerifyResponseSchema,
   refreshResponseSchema,
   requestCardSchema,
   requestDetailSchema,
   sessionResponseSchema,
+  splitResponseSchema,
+  teamOptionsResponseSchema,
+  triageResponseSchema,
   similarOccurrenceSchema,
   uploadResponseSchema,
   type AgentWorkOrderCard,
   type AgentWorkOrderDetail,
+  type AssignBody,
+  type AssignResponse,
   type ChallengeResponse,
   type CityInterestBody,
   type ContestBody,
   type CreateRequestInput,
   type CreateRequestResponse,
   type DeviceUpdateBody,
+  type DismissSuggestionBody,
   type HealthResponse,
   type LocateQuery,
   type LocateResponse,
   type MeResponse,
+  type MergeBody,
+  type MergeResponse,
+  type OccurrenceDetail,
+  type OccurrenceMapQuery,
+  type OccurrenceMapResponse,
+  type PanelChallengeResponse,
+  type PanelContext,
+  type PanelCounts,
+  type PanelRefreshResponse,
+  type PanelSearchResponse,
+  type PanelSessionResponse,
+  type PanelStartInput,
+  type PanelVerifyBody,
   type PhoneChangeStartBody,
   type PhoneChangeVerifyBody,
   type PhoneStartBody,
@@ -32,6 +61,7 @@ import {
   type PhoneVerifyResponse,
   type RecoveryVerifyBody,
   type RefreshResponse,
+  type RejectBody,
   type RequestActionBody,
   type RequestCard,
   type RequestDetail,
@@ -40,6 +70,11 @@ import {
   type SignupBody,
   type SimilarOccurrence,
   type SimilarQuery,
+  type SplitBody,
+  type SplitResponse,
+  type TeamOptionsResponse,
+  type TriageQuery,
+  type TriageResponse,
   type UpdateMeBody,
   type UploadResponse,
 } from '@alocidadao/shared';
@@ -67,6 +102,8 @@ export interface ApiClientOptions {
   fetch?: typeof fetch;
   /** Tempo máximo de cada requisição (padrão: 30 s). Conexão ruim pode deixar o fetch parado. */
   timeoutMs?: number;
+  /** Repassado ao `fetch`. O painel web usa `'same-origin'` para o cookie de renovação. */
+  credentials?: RequestCredentials;
 }
 
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -97,6 +134,17 @@ function query(params: Record<string, string | number>): string {
     .join('&');
 }
 
+/** Query string do painel: omite o que é indefinido; `days: null` vira `all`. */
+function panelQuery(params: Record<string, string | number | boolean | null | undefined>): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined) continue;
+    search.set(key, value === null ? 'all' : String(value));
+  }
+  const text = search.toString();
+  return text ? `?${text}` : '';
+}
+
 /** Erro de cancelamento quando o sinal de quem chama não traz motivo. */
 function abortError(signal: AbortSignal): unknown {
   if (signal.reason !== undefined) return signal.reason;
@@ -120,6 +168,7 @@ export function createApiClient({
   getToken,
   fetch: fetchImpl = fetch,
   timeoutMs = DEFAULT_TIMEOUT_MS,
+  credentials,
 }: ApiClientOptions) {
   async function request(path: string, init: RequestInit = {}, auth: Auth = 'session') {
     const callerSignal = init.signal ?? null;
@@ -146,6 +195,7 @@ export function createApiClient({
       if (callerSignal?.aborted) throw abortError(callerSignal);
       const response = await fetchImpl(`${baseUrl}${path}`, {
         ...init,
+        ...(credentials !== undefined && { credentials }),
         headers,
         signal: controller.signal,
       });
@@ -175,6 +225,10 @@ export function createApiClient({
 
   const requestPath = (id: string, action?: string) =>
     `/citizen/requests/${encodeURIComponent(id)}${action ? `/${action}` : ''}`;
+
+  const panelPath = (id: string, action?: string) =>
+    `/panel/occurrences/${encodeURIComponent(id)}${action ? `/${action}` : ''}`;
+  const panelHeaders = { 'x-requested-with': 'alocidadao-panel' };
 
   return {
     health: async (): Promise<HealthResponse> =>
@@ -295,6 +349,145 @@ export function createApiClient({
     agentUpload: async (tenantId: string, options?: RequestOptions): Promise<UploadResponse> =>
       uploadResponseSchema.parse(
         await send('POST', '/agent/uploads', undefined, { ...options, tenantId }),
+      ),
+
+    // Painel da prefeitura
+
+    panelStart: async (body: PanelStartInput): Promise<PanelChallengeResponse> =>
+      panelChallengeResponseSchema.parse(await post('/auth/panel/start', body)),
+
+    /** O servidor também grava o cookie de renovação (`credentials` do cliente). */
+    panelVerify: async (body: PanelVerifyBody): Promise<PanelSessionResponse> =>
+      panelSessionResponseSchema.parse(await post('/auth/panel/verify', body)),
+
+    /** Renova pelo cookie; o cabeçalho é a defesa contra CSRF e não leva `Authorization`. */
+    panelRefresh: async (options?: RequestOptions): Promise<PanelRefreshResponse> =>
+      panelRefreshResponseSchema.parse(
+        await request(
+          '/auth/panel/refresh',
+          { method: 'POST', headers: panelHeaders, signal: options?.signal ?? null },
+          'none',
+        ),
+      ),
+
+    panelLogout: async (options?: RequestOptions): Promise<void> => {
+      await request(
+        '/auth/panel/logout',
+        { method: 'POST', headers: panelHeaders, signal: options?.signal ?? null },
+        'none',
+      );
+    },
+
+    panelContext: async (tenantId: string, options?: RequestOptions): Promise<PanelContext> =>
+      panelContextSchema.parse(
+        await send('GET', '/panel/context', undefined, { ...options, tenantId }),
+      ),
+
+    panelCounts: async (tenantId: string, options?: RequestOptions): Promise<PanelCounts> =>
+      panelCountsSchema.parse(
+        await send('GET', '/panel/counts', undefined, { ...options, tenantId }),
+      ),
+
+    panelOccurrences: async (
+      tenantId: string,
+      params: OccurrenceMapQuery,
+      options?: RequestOptions,
+    ): Promise<OccurrenceMapResponse> =>
+      occurrenceMapResponseSchema.parse(
+        await send('GET', `/panel/occurrences${panelQuery({ ...params })}`, undefined, {
+          ...options,
+          tenantId,
+        }),
+      ),
+
+    panelSearch: async (
+      tenantId: string,
+      q: string,
+      options?: RequestOptions,
+    ): Promise<PanelSearchResponse> =>
+      panelSearchResponseSchema.parse(
+        await send('GET', `/panel/search${panelQuery({ q })}`, undefined, {
+          ...options,
+          tenantId,
+        }),
+      ),
+
+    panelOccurrence: async (
+      tenantId: string,
+      id: string,
+      options?: RequestOptions,
+    ): Promise<OccurrenceDetail> =>
+      occurrenceDetailSchema.parse(
+        await send('GET', panelPath(id), undefined, { ...options, tenantId }),
+      ),
+
+    panelTeams: async (
+      tenantId: string,
+      id: string,
+      options?: RequestOptions,
+    ): Promise<TeamOptionsResponse> =>
+      teamOptionsResponseSchema.parse(
+        await send('GET', panelPath(id, 'teams'), undefined, { ...options, tenantId }),
+      ),
+
+    panelTriage: async (
+      tenantId: string,
+      params: TriageQuery,
+      options?: RequestOptions,
+    ): Promise<TriageResponse> =>
+      triageResponseSchema.parse(
+        await send('GET', `/panel/triage${panelQuery({ ...params })}`, undefined, {
+          ...options,
+          tenantId,
+        }),
+      ),
+
+    panelAssign: async (
+      tenantId: string,
+      id: string,
+      body: AssignBody,
+      options?: RequestOptions,
+    ): Promise<AssignResponse> =>
+      assignResponseSchema.parse(
+        await send('POST', panelPath(id, 'assign'), body, { ...options, tenantId }),
+      ),
+
+    panelReject: async (
+      tenantId: string,
+      id: string,
+      body: RejectBody,
+      options?: RequestOptions,
+    ): Promise<void> => {
+      await send('POST', panelPath(id, 'reject'), body, { ...options, tenantId });
+    },
+
+    panelMerge: async (
+      tenantId: string,
+      id: string,
+      body: MergeBody,
+      options?: RequestOptions,
+    ): Promise<MergeResponse> =>
+      mergeResponseSchema.parse(
+        await send('POST', panelPath(id, 'merge'), body, { ...options, tenantId }),
+      ),
+
+    panelDismissSuggestion: async (
+      tenantId: string,
+      id: string,
+      body: DismissSuggestionBody,
+      options?: RequestOptions,
+    ): Promise<void> => {
+      await send('POST', panelPath(id, 'dismiss-suggestion'), body, { ...options, tenantId });
+    },
+
+    panelSplit: async (
+      tenantId: string,
+      id: string,
+      body: SplitBody,
+      options?: RequestOptions,
+    ): Promise<SplitResponse> =>
+      splitResponseSchema.parse(
+        await send('POST', panelPath(id, 'split'), body, { ...options, tenantId }),
       ),
 
     // Perfil

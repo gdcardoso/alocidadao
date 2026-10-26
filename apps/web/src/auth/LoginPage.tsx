@@ -57,6 +57,8 @@ export function LoginPage() {
   }, [resendAt]);
 
   if (status === 'loading') return null;
+  // Sessão restaurada: o painel (`PanelLayout`) manda a equipe interna sem modo suporte ao
+  // backoffice e mantém quem está no modo suporte na prefeitura.
   if (status === 'signed_in' && !busy) return <Navigate to={HOME_PATH} replace />;
 
   /** Pede o código (primeira vez ou reenvio) e vai para a etapa do código. */

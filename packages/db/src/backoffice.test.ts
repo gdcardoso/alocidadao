@@ -544,4 +544,29 @@ describe('admin da prefeitura nova', () => {
     );
     expect(frozen).toMatchObject({ code: '23505', constraint: 'users_cpf_unique' });
   });
+
+  it('conta da equipe interna não vira admin de prefeitura', async () => {
+    for (const platformRole of ['support', 'admin'] as const) {
+      const cpf = newCpf();
+      const staff = await createUser({
+        name: 'Equipe com CPF',
+        cpf,
+        email: `equipe-${platformRole}@backoffice.dev`,
+        platformRole,
+      });
+      const error = await pgError(
+        findOrCreateTenantAdmin(
+          asPlatformAdmin(),
+          'Fulano',
+          cpf,
+          `equipe-${platformRole}@backoffice.dev`,
+        ),
+      );
+      expect(error).toMatchObject({ code: '23514', message: 'staff_account_not_allowed' });
+      expect(await userRow(staff)).toMatchObject({
+        name: 'Equipe com CPF',
+        platformRole,
+      });
+    }
+  });
 });

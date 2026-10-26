@@ -90,7 +90,8 @@ Decididas com o usuário em 26/10/2026:
   - a conta é achada ou criada pela função do banco `platform_find_or_create_tenant_admin`, com as mesmas regras do gestor no 5b:
     - CPF de conta com outro e-mail: 409 `email_mismatch` com `maskedEmail`;
     - e-mail de outra conta: 409 `email_in_use`;
-    - CPF numa conta bloqueada: 409 `cpf_unavailable`.
+    - CPF numa conta bloqueada: 409 `cpf_unavailable`;
+    - CPF de conta da equipe interna: 409 `staff_account_not_allowed` (`Esta pessoa é da equipe Alô Cidadão. Use outro CPF.`, decidido na revisão final).
 - **Contrato:**
   - `Plano`: select com `PLANS = ['essential', 'complete']` (`Essencial`, `Completo`);
   - `Agentes e gestores incluídos`: inteiro de 1 a 10000;
@@ -463,7 +464,7 @@ Decididas com o usuário em 26/10/2026:
     - texto com pelo menos 2 letras busca o nome com `unaccent` e `ILIKE` (se a extensão `unaccent` não existir, comparar `lower()` e anotar);
     - até 10 resultados, por nome.
   - `POST /backoffice/tenants` → 201 `tenantCreateResponseSchema`, só para o admin, numa transação só:
-    - 409 `tenant_exists`, `email_mismatch` (com `maskedEmail`), `email_in_use` e `cpf_unavailable`;
+    - 409 `tenant_exists`, `email_mismatch` (com `maskedEmail`), `email_in_use`, `cpf_unavailable` e `staff_account_not_allowed`;
     - 422 `municipality_not_found`.
 
 - [ ] **Step 1: Write the failing tests:**
@@ -645,8 +646,8 @@ Decididas com o usuário em 26/10/2026:
   - este plano: seção "Resultado no navegador".
 - Create: capturas em `docs/superpowers/plans/resultado-backoffice-6a/`.
 
-- [ ] **Step 1:** Subir o banco (`pnpm infra:up`), `pnpm db:migrate`, `pnpm db:seed:dev --reset`, a API e o web.
-- [ ] **Step 2:** Passada no navegador (Playwright MCP, 1440x900). Uma captura de cada tela e estado, e a lista do que não foi exercitado:
+- [x] **Step 1:** Subir o banco (`pnpm infra:up`), `pnpm db:migrate`, `pnpm db:seed:dev --reset`, a API e o web.
+- [x] **Step 2:** Passada no navegador (Playwright MCP, 1440x900). Uma captura de cada tela e estado, e a lista do que não foi exercitado:
   - entrada do admin e do suporte;
   - P1;
   - P2 com busca e criação;
@@ -654,9 +655,9 @@ Decididas com o usuário em 26/10/2026:
   - ativar, suspender e reativar;
   - entrar no modo suporte, agir e sair;
   - a ação aparecendo em "Últimas ações".
-- [ ] **Step 3:** Corrigir o que a passada achar, com teste quando for lógica.
-- [ ] **Step 4:** Atualizar as pendências e a documentação.
-- [ ] **Step 5:** `pnpm test`, `pnpm lint`, `pnpm format:check` → PASS. Commit: `Backoffice 6a: documentação, pendências e passada no navegador`.
+- [x] **Step 3:** Corrigir o que a passada achar, com teste quando for lógica.
+- [x] **Step 4:** Atualizar as pendências e a documentação.
+- [x] **Step 5:** `pnpm test`, `pnpm lint`, `pnpm format:check` → PASS. Commit: `Backoffice 6a: documentação, pendências e passada no navegador`.
 
 ## Resultado no navegador
 

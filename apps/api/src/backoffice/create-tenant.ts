@@ -14,6 +14,7 @@ import type { FastifyInstance, preHandlerHookHandler } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import {
+  isPgError,
   isUniqueViolation,
   TENANT_IBGE_CONSTRAINT,
   USER_CPF_CONSTRAINT,
@@ -33,7 +34,10 @@ const staffErrors = {
 } as const;
 
 type CreateRefusal =
-  | { status: 409; code: 'tenant_exists' | 'email_in_use' | 'cpf_unavailable' }
+  | {
+      status: 409;
+      code: 'tenant_exists' | 'email_in_use' | 'cpf_unavailable' | 'staff_account_not_allowed';
+    }
   | { status: 409; code: 'email_mismatch'; maskedEmail: string }
   | { status: 422; code: 'municipality_not_found' };
 
@@ -52,7 +56,11 @@ const foldJs = (text: string) =>
 /** Escapa `%`, `_` e `\` para o LIKE. */
 const escapeLike = (text: string) => text.replace(/[\\%_]/g, (c) => `\\${c}`);
 
-function translateUnique(error: unknown): CreateRefusal | undefined {
+/** Erros do banco que viram recusa: índices únicos e a conta da equipe interna no CPF. */
+function translateDbError(error: unknown): CreateRefusal | undefined {
+  if (isPgError(error, '23514', 'staff_account_not_allowed')) {
+    return { status: 409, code: 'staff_account_not_allowed' };
+  }
   if (!isUniqueViolation(error)) return undefined;
   switch (violatedConstraint(error)) {
     case TENANT_IBGE_CONSTRAINT:
@@ -149,7 +157,7 @@ export function registerCreateTenantRoutes(
         );
       } catch (error) {
         const refusal =
-          error instanceof Refusal ? (error.refusal as CreateRefusal) : translateUnique(error);
+          error instanceof Refusal ? (error.refusal as CreateRefusal) : translateDbError(error);
         if (!refusal) throw error;
         const { status, ...payload } = refusal;
         return reply.code(status).send(payload);

@@ -243,6 +243,52 @@ describe('nova prefeitura', () => {
     expect(response.json()).toEqual({ code: 'email_in_use' });
   });
 
+  it.each([
+    ['frozen', { accountStatus: 'frozen' as const }],
+    ['deleted', { deletedAt: new Date() }],
+  ])(
+    'admin CPF held by a %s account is 409 cpf_unavailable and nothing is created',
+    async (_, extra) => {
+      const staffId = await fx.newStaff('admin');
+      const code = await addMunicipality('Cidade Bloqueada');
+      const cpf = nextCpf();
+      await owner.db.insert(users).values({ name: 'Conta Bloqueada', cpf, ...extra });
+      const payload = body(code);
+      (payload.admin as Record<string, string>).cpf = cpf;
+      const response = await create(staffId, payload);
+      expect(response.statusCode).toBe(409);
+      expect(response.json()).toEqual({ code: 'cpf_unavailable' });
+      expect(await owner.db.select().from(tenants).where(eq(tenants.ibgeCode, code))).toEqual([]);
+      const email = (payload.admin as Record<string, string>).email;
+      expect(
+        await owner.db
+          .select()
+          .from(users)
+          .where(sql`lower(${users.email}) = ${email}`),
+      ).toEqual([]);
+    },
+  );
+
+  it('admin CPF of a staff account is 409 staff_account_not_allowed and nothing is created', async () => {
+    const staffId = await fx.newStaff('admin');
+    const code = await addMunicipality('Cidade da Equipe');
+    const cpf = nextCpf();
+    const email = `equipe.${randomUUID()}@aloc.dev`;
+    const [member] = await owner.db
+      .insert(users)
+      .values({ name: 'Pessoa da Equipe', cpf, email, platformRole: 'support' })
+      .returning();
+    const payload = body(code);
+    Object.assign(payload.admin as Record<string, string>, { cpf, email });
+    const response = await create(staffId, payload);
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toEqual({ code: 'staff_account_not_allowed' });
+    expect(await owner.db.select().from(tenants).where(eq(tenants.ibgeCode, code))).toEqual([]);
+    expect(
+      await owner.db.select().from(memberships).where(eq(memberships.userId, member!.id)),
+    ).toEqual([]);
+  });
+
   it('unknown municipality is 422 municipality_not_found', async () => {
     const staffId = await fx.newStaff('admin');
     const response = await create(staffId, body('1000001'));

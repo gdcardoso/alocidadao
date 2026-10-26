@@ -144,6 +144,13 @@ describe('NewTenantPage', () => {
       ),
     ).toBeInTheDocument();
 
+    create.mockRejectedValueOnce(new ApiError(409, { code: 'staff_account_not_allowed' }));
+    await user.click(submit);
+    expect(
+      await screen.findByText('Esta pessoa é da equipe Alô Cidadão. Use outro CPF.'),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText('CPF')).toHaveAttribute('aria-invalid', 'true');
+
     create.mockRejectedValueOnce(new ApiError(409, { code: 'tenant_exists' }));
     await user.click(submit);
     expect(

@@ -7,7 +7,7 @@ import {
   type MunicipalityOption,
 } from '@alocidadao/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { FilePenLine, Map, Tags, UserCog } from 'lucide-react';
+import { FilePenLine, Map as MapIcon, Tags, UserCog } from 'lucide-react';
 import { useId, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router';
 import { api } from '../../api';
@@ -86,6 +86,8 @@ export function NewTenantPage() {
         });
       } else if (code === 'email_in_use') {
         setErrors({ email: 'Este e-mail já é de outra pessoa.' });
+      } else if (code === 'staff_account_not_allowed') {
+        setErrors({ cpf: 'Esta pessoa é da equipe Alô Cidadão. Use outro CPF.' });
       } else if (code === 'cpf_unavailable') {
         setErrors({
           cpf: 'Este CPF está numa conta bloqueada. Fale com o suporte do Alô Cidadão.',
@@ -118,7 +120,6 @@ export function NewTenantPage() {
     if (!cpf) found.cpf = REQUIRED_TEXT;
     if (!email.trim()) found.email = REQUIRED_TEXT;
     if (!startsOn) found.startsOn = REQUIRED_TEXT;
-    if (!displayName.trim()) found.name ??= undefined;
     const parsed = tenantCreateBodySchema.safeParse({
       ibgeCode: municipality?.ibgeCode ?? '',
       displayName,
@@ -185,7 +186,7 @@ export function NewTenantPage() {
         <div className={styles.column}>
           <section className={styles.card}>
             <h2 className={styles.cardTitle}>
-              <Map size={18} aria-hidden />
+              <MapIcon size={18} aria-hidden />
               Município
             </h2>
             <MunicipalitySearch
@@ -198,7 +199,7 @@ export function NewTenantPage() {
             {municipality ? (
               <div className={styles.notice}>
                 <div className={styles.preview} aria-hidden>
-                  <Map size={20} />
+                  <MapIcon size={20} />
                 </div>
                 <div>
                   <p className={styles.noticeTitle}>Limite do município importado do IBGE</p>

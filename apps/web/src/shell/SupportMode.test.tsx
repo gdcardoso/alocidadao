@@ -18,6 +18,7 @@ vi.mock('../api', () => ({
     panelOccurrences: vi.fn(),
     backofficeContext: vi.fn(),
     backofficeTenant: vi.fn(),
+    backofficeTenants: vi.fn(),
     backofficeEnterSupport: vi.fn(),
     backofficeLeaveSupport: vi.fn(),
   },
@@ -178,5 +179,43 @@ describe('support mode', () => {
     renderApp('/mapa', stored);
     await waitFor(() => expect(api.panelContext).toHaveBeenCalledWith(own));
     expect(screen.queryByText(/como equipe Alô Cidadão/)).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['/mapa', []],
+    ['/', []],
+    ['/triagem', []],
+    ['/entrar', []],
+    [
+      '/mapa',
+      [{ tenantId, tenantName: 'Prefeitura de Santos', role: 'tenant_admin', status: 'active' }],
+    ],
+  ])(
+    'staff without support tenant opening the panel goes to the backoffice (%s)',
+    async (path, panelTenants) => {
+      vi.mocked(api.me).mockResolvedValue({ panelTenants, platformRole: 'admin' } as never);
+      vi.mocked(api.backofficeTenants).mockResolvedValue({ items: [] } as never);
+      renderApp(path);
+      expect(await screen.findByRole('link', { name: 'Auditoria' })).toBeInTheDocument();
+      expect(screen.queryByText('Seu acesso ao painel não está ativo')).not.toBeInTheDocument();
+      expect(api.panelContext).not.toHaveBeenCalled();
+    },
+  );
+
+  it('opening the backoffice with a stored support tenant leaves support and clears it', async () => {
+    vi.mocked(api.backofficeLeaveSupport).mockRejectedValue(new Error('rede'));
+    renderApp(`/backoffice/prefeituras/${tenantId}`, stored);
+    expect(
+      await screen.findByRole('heading', { name: 'Prefeitura de Santos' }),
+    ).toBeInTheDocument();
+    expect(api.backofficeLeaveSupport).toHaveBeenCalledWith(tenantId);
+    expect(api.backofficeLeaveSupport).toHaveBeenCalledTimes(1);
+    expect(sessionStorage.getItem('ac_support_tenant')).toBeNull();
+  });
+
+  it('opening the backoffice without a support tenant does not call leave', async () => {
+    renderApp(`/backoffice/prefeituras/${tenantId}`);
+    await screen.findByRole('heading', { name: 'Prefeitura de Santos' });
+    expect(api.backofficeLeaveSupport).not.toHaveBeenCalled();
   });
 });

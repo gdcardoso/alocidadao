@@ -483,6 +483,8 @@ GRANT EXECUTE ON FUNCTION platform_tenant_detail(uuid) TO app_user;
 -- nome, CPF e e-mail. A conta que já existe mantém nome e e-mail; sem e-mail, recebe o digitado.
 -- Devolve o e-mail final: a API compara com o digitado para responder email_mismatch. E-mail de
 -- outra conta cai em users_email_lower_idx e CPF de conta congelada em users_cpf_unique (23505).
+-- Conta da equipe interna (platform_role) não vira admin de prefeitura: check_violation
+-- 'staff_account_not_allowed'.
 
 CREATE FUNCTION platform_find_or_create_tenant_admin(p_name text, p_cpf text, p_email text)
   RETURNS TABLE (id uuid, email text)
@@ -492,16 +494,20 @@ CREATE FUNCTION platform_find_or_create_tenant_admin(p_name text, p_cpf text, p_
   DECLARE
     v_id uuid;
     v_email text;
+    v_platform_role text;
   BEGIN
     IF NOT app_is_platform_admin() THEN
       RAISE EXCEPTION 'platform_find_or_create_tenant_admin: só o admin da plataforma'
         USING ERRCODE = 'insufficient_privilege';
     END IF;
 
-    SELECT u.id, u.email INTO v_id, v_email
+    SELECT u.id, u.email, u.platform_role INTO v_id, v_email, v_platform_role
     FROM users u
     WHERE u.cpf = p_cpf AND u.account_status = 'active' AND u.deleted_at IS NULL
     FOR UPDATE;
+    IF v_platform_role IS NOT NULL THEN
+      RAISE EXCEPTION 'staff_account_not_allowed' USING ERRCODE = 'check_violation';
+    END IF;
     IF v_id IS NULL THEN
       INSERT INTO users (name, cpf, email) VALUES (p_name, p_cpf, p_email)
       RETURNING users.id, users.email INTO v_id, v_email;

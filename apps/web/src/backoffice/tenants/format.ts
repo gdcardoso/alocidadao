@@ -4,10 +4,15 @@ export function formatCount(value: number): string {
   return numberFormat.format(value);
 }
 
-/** `4,2 dias`; sem dado, `—`. */
+const daysFormat = new Intl.NumberFormat('pt-BR', {
+  minimumFractionDigits: 1,
+  maximumFractionDigits: 1,
+});
+
+/** Sempre com uma casa decimal e `dias`: `4,2 dias`, `4,0 dias`, `1,0 dias`; sem dado, `—`. */
 export function formatDays(value: number | null): string {
   if (value === null) return '—';
-  return `${numberFormat.format(value)} ${value === 1 ? 'dia' : 'dias'}`;
+  return `${daysFormat.format(value)} dias`;
 }
 
 /** Nome do mês anterior ao de `now`, em minúsculas, no horário de Brasília. */

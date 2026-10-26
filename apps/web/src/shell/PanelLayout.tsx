@@ -1,7 +1,7 @@
 import { ApiError } from '@alocidadao/api-client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Outlet, useNavigate } from 'react-router';
+import { Navigate, Outlet, useNavigate } from 'react-router';
 import { api } from '../api';
 import { NETWORK_ERROR_MESSAGE, UNEXPECTED_ERROR_MESSAGE } from '../auth/login-errors';
 import { useSession } from '../session/SessionProvider';
@@ -87,7 +87,14 @@ export function PanelLayout() {
     queryFn: () => session.withAuth(() => api.me()),
     enabled: !support,
   });
-  const tenantId = support ? support.tenantId : meQuery.data?.panelTenants[0]?.tenantId;
+  // Equipe interna sem modo suporte (nova aba, favorito, `/`): o caminho dela é o backoffice,
+  // mesmo que também tenha vínculo com alguma prefeitura.
+  const staffOutsideSupport = !support && !!meQuery.data?.platformRole;
+  const tenantId = support
+    ? support.tenantId
+    : staffOutsideSupport
+      ? undefined
+      : meQuery.data?.panelTenants[0]?.tenantId;
 
   const contextQuery = useQuery({
     queryKey: ['panel', 'context', tenantId],
@@ -125,6 +132,9 @@ export function PanelLayout() {
     void navigate(`/backoffice/prefeituras/${support.tenantId}`, { replace: true });
   }
 
+  if (staffOutsideSupport) {
+    return <Navigate to="/backoffice/prefeituras" replace />;
+  }
   const withoutTenant = !support && meQuery.isSuccess && tenantId === undefined;
   if (noAccess || withoutTenant) return <NoAccessPage />;
 

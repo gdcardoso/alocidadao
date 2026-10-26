@@ -1,0 +1,33 @@
+/* Tokens do design system (docs/design-system.md), com os mesmos nomes do Pencil. */
+:root {
+  /* Marca */
+  --primary: #0057b8;
+  --brand-green: #009e60;
+  --brand-yellow: #f2c300;
+  --brand-green-on-blue: #3ddc97;
+  --on-brand-green: #ffffff;
+  --on-brand-yellow: #0f172a;
+
+  /* Interface */
+  --bg: #f5f7fa;
+  --surface: #ffffff;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-placeholder: #64748b;
+  --border: #e2e8f0;
+  --border-input: #7c8798;
+  --primary-strong: #003f87;
+  --primary-soft: #e6effa;
+  --on-primary: #ffffff;
+  --success: #007a4a;
+  --success-soft: #e6f5ee;
+  --warning: #b45309;
+  --warning-soft: #fef3c7;
+  --warning-strong: #78350f;
+  --danger: #b91c1c;
+  --danger-soft: #fee2e2;
+
+  /* Tipografia */
+  --font-heading: 'Lexend', system-ui, sans-serif;
+  --font-body: 'Source Sans 3', system-ui, sans-serif;
+}

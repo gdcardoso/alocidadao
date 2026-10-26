@@ -1,33 +1,30 @@
-import { REQUEST_STATUS_LABELS, REQUEST_STATUSES, type HealthResponse } from '@alocidadao/shared';
-import { useEffect, useState } from 'react';
-import { api } from './api';
+import { Navigate, Route, Routes } from 'react-router';
+import { LoginPage } from './auth/LoginPage';
+import { RequireSession } from './session/RequireSession';
+import { useSession } from './session/SessionProvider';
 
-type ApiState = { kind: 'loading' } | { kind: 'ok'; health: HealthResponse } | { kind: 'error' };
+/** Página provisória do mapa: as Tasks 8 e 9 trocam pelo shell e pela W1. */
+function MapPlaceholder() {
+  const { session } = useSession();
+  return (
+    <main style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <h1>Mapa de ocorrências</h1>
+      <p>Esta tela chega na próxima etapa do painel.</p>
+      <button type="button" onClick={() => void session.signOut()} style={{ alignSelf: 'start' }}>
+        Sair
+      </button>
+    </main>
+  );
+}
 
 export default function App() {
-  const [apiState, setApiState] = useState<ApiState>({ kind: 'loading' });
-
-  useEffect(() => {
-    api
-      .health()
-      .then((health) => setApiState({ kind: 'ok', health }))
-      .catch(() => setApiState({ kind: 'error' }));
-  }, []);
-
   return (
-    <main className="page">
-      <h1>Alô Cidadão — Painel</h1>
-      <p>
-        API: {apiState.kind === 'loading' && 'verificando…'}
-        {apiState.kind === 'ok' && `online (${apiState.health.service})`}
-        {apiState.kind === 'error' && 'indisponível'}
-      </p>
-      <h2>Status de solicitação</h2>
-      <ul>
-        {REQUEST_STATUSES.map((status) => (
-          <li key={status}>{REQUEST_STATUS_LABELS[status]}</li>
-        ))}
-      </ul>
-    </main>
+    <Routes>
+      <Route path="/entrar" element={<LoginPage />} />
+      <Route element={<RequireSession />}>
+        <Route path="/mapa" element={<MapPlaceholder />} />
+      </Route>
+      <Route path="*" element={<Navigate to="/mapa" replace />} />
+    </Routes>
   );
 }

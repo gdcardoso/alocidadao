@@ -3,6 +3,7 @@ import type {
   AgentCreateBody,
   AgentRow,
   AgentUpdateBody,
+  DepartmentRow,
   DepartmentsResponse,
   GeoPoint,
   TeamCreateBody,
@@ -18,7 +19,7 @@ import {
   TEAM_NAME_CONSTRAINT,
   violatedConstraint,
 } from '../db-errors.js';
-import { run } from './actions.js';
+import { Refusal, run, runOrRefuse } from './actions.js';
 import type { PanelIdentity } from './member.js';
 import { sqlList } from './occurrences.js';
 
@@ -38,26 +39,8 @@ export type TeamsResult<T> = { ok: T } | { error: TeamsError };
 
 const fail = (error: TeamsError) => ({ error }) as const;
 
-/** Desfaz a transação com a recusa (o `withContext` só dá rollback com exceção). */
-class Refusal extends Error {
-  constructor(readonly refusal: TeamsError) {
-    super(refusal.code);
-  }
-}
-
-/** Roda na transação; uma `Refusal` desfaz tudo e vira o erro da API. */
-async function runOrRefuse<T>(
-  db: Database,
-  identity: PanelIdentity,
-  fn: (tx: Transaction) => Promise<T>,
-): Promise<TeamsResult<T>> {
-  try {
-    return { ok: await run(db, identity, fn) };
-  } catch (error) {
-    if (error instanceof Refusal) return fail(error.refusal);
-    throw error;
-  }
-}
+const runTeams = <T>(db: Database, identity: PanelIdentity, fn: (tx: Transaction) => Promise<T>) =>
+  runOrRefuse<TeamsError, T>(db, identity, fn);
 
 const inScope = (identity: PanelIdentity, departmentId: string) =>
   identity.departmentIds === null || identity.departmentIds.includes(departmentId);
@@ -142,7 +125,7 @@ export async function createTeam(
 ): Promise<TeamsResult<TeamSummary>> {
   if (!inScope(identity, body.departmentId)) return fail(DEPARTMENT_NOT_ELIGIBLE);
   try {
-    return await runOrRefuse(db, identity, async (tx) => {
+    return await runTeams(db, identity, async (tx) => {
       const departments = await tx.execute<{ id: string }>(
         sql`SELECT id FROM departments WHERE tenant_id = ${identity.tenantId} AND id = ${body.departmentId}`,
       );
@@ -179,7 +162,7 @@ export async function updateTeam(
   body: TeamUpdateBody,
 ): Promise<TeamsResult<TeamSummary>> {
   try {
-    return await runOrRefuse(db, identity, async (tx) => {
+    return await runTeams(db, identity, async (tx) => {
       if ((await queryTeams(tx, identity, teamId)).length === 0) throw new Refusal(TEAM_NOT_FOUND);
       await tx
         .update(teams)
@@ -255,7 +238,7 @@ export async function addAgent(
   body: AgentCreateBody,
 ): Promise<TeamsResult<AgentRow>> {
   try {
-    return await runOrRefuse(db, identity, async (tx) => {
+    return await runTeams(db, identity, async (tx) => {
       if ((await queryTeams(tx, identity, teamId)).length === 0) throw new Refusal(TEAM_NOT_FOUND);
 
       const found = await tx.execute<{ id: string }>(
@@ -333,7 +316,7 @@ export async function updateAgent(
   body: AgentUpdateBody,
 ): Promise<TeamsResult<AgentRow>> {
   try {
-    return await runOrRefuse(db, identity, async (tx) => {
+    return await runTeams(db, identity, async (tx) => {
       const [agent] = await queryAgents(tx, identity, { userId });
       if (!agent) throw new Refusal(AGENT_NOT_FOUND);
 
@@ -381,40 +364,48 @@ export async function updateAgent(
 
 // ── Setores ──
 
+type DepartmentQueryRow = {
+  id: string;
+  name: string;
+  category_count: number;
+  team_count: number;
+  manager_count: number;
+};
+
+/** Setores no alcance, com as contagens; `departmentId` limita a um só. */
+export async function queryDepartments(
+  tx: Transaction,
+  identity: PanelIdentity,
+  departmentId?: string,
+): Promise<DepartmentRow[]> {
+  const result = await tx.execute<DepartmentQueryRow>(sql`
+    SELECT d.id, d.name,
+      (SELECT count(*) FROM categories c
+        WHERE c.tenant_id = d.tenant_id AND c.department_id = d.id)::int AS category_count,
+      (SELECT count(*) FROM teams t
+        WHERE t.tenant_id = d.tenant_id AND t.department_id = d.id)::int AS team_count,
+      (SELECT count(*) FROM department_managers dm
+        JOIN memberships m ON m.tenant_id = dm.tenant_id AND m.user_id = dm.user_id
+          AND m.role = 'manager' AND m.status = 'active'
+        WHERE dm.department_id = d.id)::int AS manager_count
+    FROM departments d
+    WHERE d.tenant_id = ${identity.tenantId}
+      AND ${departmentId ? sql`d.id = ${departmentId}` : sql`true`}
+      AND ${scopeSql(identity, sql`d.id`)}
+    ORDER BY d.name, d.id
+  `);
+  return result.rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    categoryCount: Number(row.category_count),
+    teamCount: Number(row.team_count),
+    managerCount: Number(row.manager_count),
+  }));
+}
+
 export async function loadDepartments(
   db: Database,
   identity: PanelIdentity,
 ): Promise<DepartmentsResponse> {
-  const result = await run(db, identity, (tx) =>
-    tx.execute<{
-      id: string;
-      name: string;
-      category_count: number;
-      team_count: number;
-      manager_count: number;
-    }>(sql`
-      SELECT d.id, d.name,
-        (SELECT count(*) FROM categories c
-          WHERE c.tenant_id = d.tenant_id AND c.department_id = d.id)::int AS category_count,
-        (SELECT count(*) FROM teams t
-          WHERE t.tenant_id = d.tenant_id AND t.department_id = d.id)::int AS team_count,
-        (SELECT count(*) FROM department_managers dm
-          JOIN memberships m ON m.tenant_id = dm.tenant_id AND m.user_id = dm.user_id
-            AND m.role = 'manager' AND m.status = 'active'
-          WHERE dm.department_id = d.id)::int AS manager_count
-      FROM departments d
-      WHERE d.tenant_id = ${identity.tenantId}
-        AND ${scopeSql(identity, sql`d.id`)}
-      ORDER BY d.name, d.id
-    `),
-  );
-  return {
-    items: result.rows.map((row) => ({
-      id: row.id,
-      name: row.name,
-      categoryCount: Number(row.category_count),
-      teamCount: Number(row.team_count),
-      managerCount: Number(row.manager_count),
-    })),
-  };
+  return { items: await run(db, identity, (tx) => queryDepartments(tx, identity)) };
 }

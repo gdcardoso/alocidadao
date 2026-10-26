@@ -28,3 +28,9 @@ export function isPgError(error: unknown, code: string, message?: string): boole
     item?.code === code && (message === undefined || item.message?.includes(message) === true);
   return matches(e) || matches(e.cause);
 }
+
+/** Restrições do painel de administração (e-mail e CPF da conta, nomes de categoria e setor). */
+export const USER_EMAIL_CONSTRAINT = 'users_email_lower_idx';
+export const USER_CPF_CONSTRAINT = 'users_cpf_unique';
+export const CATEGORY_NAME_CONSTRAINT = 'categories_tenant_id_name_unique';
+export const DEPARTMENT_NAME_CONSTRAINT = 'departments_tenant_id_name_unique';

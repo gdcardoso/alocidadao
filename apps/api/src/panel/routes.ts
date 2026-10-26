@@ -53,6 +53,7 @@ import {
   splitOccurrence,
   type ActionError,
 } from './actions.js';
+import { registerAdminRoutes } from './admin.js';
 import { loadPanelContext, loadPanelCounts } from './context.js';
 import { loadInProgress, loadRequestList } from './lists.js';
 import { requirePanelMember } from './member.js';
@@ -641,4 +642,6 @@ export function registerPanelRoutes(instance: FastifyInstance, deps: PanelDeps) 
       return loadDepartments(db, identity);
     },
   );
+
+  registerAdminRoutes(instance, { db });
 }

@@ -69,3 +69,21 @@ export async function requirePanelMember(
 export function departmentScope({ departmentIds }: PanelIdentity): SQL | undefined {
   return departmentIds === null ? undefined : inArray(categories.departmentId, departmentIds);
 }
+
+/**
+ * Como requirePanelMember, mas só o admin da prefeitura passa: o gestor recebe 403 `admin_only`
+ * antes de qualquer leitura do que ele pediu.
+ */
+export async function requirePanelAdmin(
+  db: Database,
+  request: FastifyRequest,
+  reply: FastifyReply,
+): Promise<PanelIdentity | undefined> {
+  const identity = await requirePanelMember(db, request, reply);
+  if (!identity) return undefined;
+  if (identity.role !== 'tenant_admin') {
+    void reply.code(403).send({ code: 'admin_only' });
+    return undefined;
+  }
+  return identity;
+}

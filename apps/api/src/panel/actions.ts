@@ -65,6 +65,27 @@ export function run<T>(db: Database, identity: PanelIdentity, fn: (tx: Transacti
   return withContext(db, { tenantId, userId }, fn);
 }
 
+/** Desfaz a transação com a recusa (o `withContext` só dá rollback com exceção). */
+export class Refusal<E extends { code: string }> extends Error {
+  constructor(readonly refusal: E) {
+    super(refusal.code);
+  }
+}
+
+/** Roda na transação; uma `Refusal` desfaz tudo e vira o erro da API. */
+export async function runOrRefuse<E extends { code: string }, T>(
+  db: Database,
+  identity: PanelIdentity,
+  fn: (tx: Transaction) => Promise<T>,
+): Promise<{ ok: T } | { error: E }> {
+  try {
+    return { ok: await run(db, identity, fn) };
+  } catch (error) {
+    if (error instanceof Refusal) return { error: (error as Refusal<E>).refusal };
+    throw error;
+  }
+}
+
 /** Trava a ocorrência no alcance (inclusive a juntada, que responde 409 e não 404). */
 export const lockOccurrence = (tx: Transaction, identity: PanelIdentity, id: string) =>
   findScopedOccurrence(tx, identity, id, { lock: true, includeMerged: true });

@@ -17,6 +17,8 @@ interface MenuItem {
   to: string;
   label: string;
   icon: LucideIcon;
+  /** Só o admin da prefeitura vê o item. */
+  adminOnly?: boolean;
   counter?: { key: CounterKey; tone: 'primary' | 'warning' | 'danger' };
 }
 
@@ -62,7 +64,7 @@ export const MENU_GROUPS: MenuGroup[] = [
     heading: 'Configurar',
     items: [
       { to: '/equipes', label: 'Equipes e agentes', icon: Users },
-      { to: '/categorias', label: 'Categorias', icon: Tags },
+      { to: '/categorias', label: 'Categorias', icon: Tags, adminOnly: true },
     ],
   },
 ];

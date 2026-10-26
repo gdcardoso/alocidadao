@@ -13,7 +13,13 @@ import { SessionProvider } from '../session/SessionProvider';
 import { Dialog } from '../ui/Dialog';
 
 vi.mock('../api', () => ({
-  api: { me: vi.fn(), panelContext: vi.fn(), panelCounts: vi.fn(), panelOccurrences: vi.fn() },
+  api: {
+    me: vi.fn(),
+    panelContext: vi.fn(),
+    panelCounts: vi.fn(),
+    panelOccurrences: vi.fn(),
+    panelTeamsList: vi.fn(),
+  },
 }));
 // O MapLibre precisa de WebGL, que o jsdom não tem.
 vi.mock('../map/OccurrenceMap', () => ({ OccurrenceMap: () => null }));
@@ -146,15 +152,32 @@ describe('no access', () => {
   });
 });
 
-describe('coming soon pages', () => {
-  it.each([['/categorias', 'Categorias']])(
-    'coming soon pages show the menu title and the notice (%s)',
-    async (path, title) => {
-      await renderApp(path);
-      expect(await screen.findByRole('heading', { name: title })).toBeInTheDocument();
-      expect(screen.getByText('Esta tela chega na próxima etapa do painel.')).toBeInTheDocument();
-    },
-  );
+describe('menu by role', () => {
+  it('menu hides Categorias for the manager and /categorias redirects to the map', async () => {
+    await renderApp('/categorias');
+    const nav = await screen.findByRole('navigation');
+    expect(within(nav).getByRole('link', { name: 'Equipes e agentes' })).toBeInTheDocument();
+    expect(within(nav).queryByRole('link', { name: 'Categorias' })).not.toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: /Mapa/ })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+  });
+
+  it('manager is sent from the managers tab back to the teams', async () => {
+    vi.mocked(api.panelTeamsList).mockResolvedValue({ items: [] });
+    await renderApp('/equipes/gestores');
+    expect(
+      await screen.findByText('Nenhuma equipe cadastrada. Crie a primeira em "Nova equipe".'),
+    ).toBeInTheDocument();
+  });
+
+  it('menu shows Categorias for the admin', async () => {
+    panelContext.mockResolvedValue(context({ role: 'tenant_admin', departments: [] }));
+    await renderApp();
+    const nav = await screen.findByRole('navigation');
+    expect(await within(nav).findByRole('link', { name: 'Categorias' })).toBeInTheDocument();
+  });
 });
 
 function DialogHarness() {

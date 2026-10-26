@@ -1,0 +1,123 @@
+.page {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.area {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.list {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding: 24px;
+  overflow: auto;
+}
+
+.state {
+  color: var(--text-secondary);
+  font-size: 15px;
+}
+
+.cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.name {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.off {
+  color: var(--text-secondary);
+}
+
+.editor {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  width: 400px;
+  border-left: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.editorHeader {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.editorTitle {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-heading);
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.editorBody {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 18px;
+  padding: 24px;
+  overflow: auto;
+}
+
+.editorFooter {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+}
+
+.withUnit {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.unit {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  pointer-events: none;
+}
+
+.iconRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.iconRow select {
+  flex: 1;
+}

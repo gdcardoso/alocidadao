@@ -26,24 +26,26 @@ export function Sidebar({ context, counts, onSignOut }: SidebarProps) {
         {MENU_GROUPS.map((group, index) => (
           <div key={group.heading ?? index} className={styles.group}>
             {group.heading ? <p className={styles.heading}>{group.heading}</p> : null}
-            {group.items.map((item) => {
-              const count = item.counter ? counts?.[item.counter.key] : undefined;
-              return (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  className={({ isActive }) => `${styles.item} ${isActive ? styles.active : ''}`}
-                >
-                  <item.icon size={20} className={styles.itemIcon} />
-                  <span className={styles.itemLabel}>{item.label}</span>
-                  {item.counter && count ? (
-                    <span className={`${styles.counter} ${styles[item.counter.tone]}`}>
-                      {count}
-                    </span>
-                  ) : null}
-                </NavLink>
-              );
-            })}
+            {group.items
+              .filter((item) => !item.adminOnly || context.role === 'tenant_admin')
+              .map((item) => {
+                const count = item.counter ? counts?.[item.counter.key] : undefined;
+                return (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    className={({ isActive }) => `${styles.item} ${isActive ? styles.active : ''}`}
+                  >
+                    <item.icon size={20} className={styles.itemIcon} />
+                    <span className={styles.itemLabel}>{item.label}</span>
+                    {item.counter && count ? (
+                      <span className={`${styles.counter} ${styles[item.counter.tone]}`}>
+                        {count}
+                      </span>
+                    ) : null}
+                  </NavLink>
+                );
+              })}
           </div>
         ))}
       </nav>

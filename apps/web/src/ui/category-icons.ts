@@ -1,3 +1,4 @@
+import { CATEGORY_ICON_OPTIONS } from '@alocidadao/shared';
 import {
   CircleEllipsis,
   Construction,
@@ -11,13 +12,8 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 
-/**
- * Ícones das categorias, pelo nome em kebab-case guardado na categoria. Mapa explícito, só
- * com os ícones do seed, para o pacote não levar os ~1500 ícones do lucide (o `icons` e o
- * `DynamicIcon` os carregam todos). Categoria nova com outro ícone: acrescentar aqui; até lá,
- * cai em `circle-ellipsis`.
- */
-const CATEGORY_ICONS: Record<string, LucideIcon> = {
+/** Componente de cada chave de `CATEGORY_ICON_OPTIONS`; o `Record` obriga a cobrir todas. */
+const COMPONENTS: Record<string, LucideIcon> = {
   construction: Construction,
   lightbulb: Lightbulb,
   'trash-2': Trash2,
@@ -28,6 +24,15 @@ const CATEGORY_ICONS: Record<string, LucideIcon> = {
   'paw-print': PawPrint,
   'circle-ellipsis': CircleEllipsis,
 };
+
+/**
+ * Ícones das categorias, pelo nome em kebab-case guardado na categoria. As chaves vêm de
+ * `CATEGORY_ICON_OPTIONS` (fonte única); o mapa explícito de componentes evita levar os ~1500
+ * ícones do lucide. Chave sem componente ou desconhecida cai em `circle-ellipsis`.
+ */
+const CATEGORY_ICONS: Record<string, LucideIcon> = Object.fromEntries(
+  CATEGORY_ICON_OPTIONS.map((option) => [option.key, COMPONENTS[option.key] ?? CircleEllipsis]),
+);
 
 export function categoryIconFor(name: string): LucideIcon {
   return CATEGORY_ICONS[name] ?? CircleEllipsis;

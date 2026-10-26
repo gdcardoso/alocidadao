@@ -1,3 +1,4 @@
+import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
 import rateLimit, { type RateLimitPluginOptions } from '@fastify/rate-limit';
 import type { Database } from '@alocidadao/db';
@@ -19,6 +20,7 @@ import { registerDevWorkOrders } from './dev/work-orders.js';
 import type { EmailSender } from './messaging/email.js';
 import { createLogSmsSender, type SmsSender } from './messaging/sms.js';
 import { registerMeRoutes } from './me/routes.js';
+import { registerPanelRoutes } from './panel/routes.js';
 import type { Storage } from './storage/s3.js';
 
 export interface AuthOptions {
@@ -46,7 +48,7 @@ export interface AppOptions {
   /** Registra as rotas /dev/*; nunca em produção. */
   devRoutes?: boolean;
   /**
-   * Login sem senha. As rotas /auth/*, /me* e /citizen/* só existem com `auth` e `database`;
+   * Login sem senha. As rotas /auth/*, /me*, /panel/* e /citizen/* só existem com `auth` e `database`;
    * as /agent/*, só com `auth`.
    */
   auth?: AuthOptions;
@@ -114,6 +116,8 @@ export async function buildApp({
         max: auth.rateLimit?.max ?? 20,
         timeWindow: auth.rateLimit?.timeWindowMs ?? 60_000,
       });
+      // Cookie do token de renovação do painel.
+      await scope.register(cookie);
       registerAppAuthRoutes(scope, deps);
       registerPanelAuthRoutes(scope, deps);
     });
@@ -127,6 +131,10 @@ export async function buildApp({
           timeWindowMs: auth.phoneChangeRateLimit?.timeWindowMs ?? 60 * 60_000,
         },
       });
+    });
+    // Painel da prefeitura: escopo próprio, sem limite por IP.
+    await app.register(async (scope) => {
+      registerPanelRoutes(scope, { db: database });
     });
     // Cidadão: escopo próprio, sem o limite por IP do /auth/*.
     await app.register(async (scope) => {

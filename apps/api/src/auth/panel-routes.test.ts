@@ -1,15 +1,24 @@
 import { randomInt, randomUUID } from 'node:crypto';
-import { createDatabase, schema } from '@alocidadao/db';
-import { maskEmail, type PanelChallengeResponse, type SessionResponse } from '@alocidadao/shared';
+import { createDatabase, schema, withContext } from '@alocidadao/db';
+import {
+  maskEmail,
+  type PanelChallengeResponse,
+  type PanelRefreshResponse,
+  type PanelSessionResponse,
+} from '@alocidadao/shared';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp } from '../app.js';
 import type { EmailSender } from '../messaging/email.js';
 import type { SmsSender } from '../messaging/sms.js';
 import { API_TEST_APP_URL, API_TEST_OWNER_URL } from '../test/urls.js';
+import { PANEL_REFRESH_COOKIE } from './panel-routes.js';
+import { startSession } from './session.js';
 import { verifyAccessToken } from './tokens.js';
 
-const { users, memberships, tenants } = schema;
+const { users, memberships, tenants, sessions } = schema;
+
+const CSRF = { 'x-requested-with': 'alocidadao-panel' };
 
 const owner = createDatabase(API_TEST_OWNER_URL);
 const appDb = createDatabase(API_TEST_APP_URL);
@@ -82,12 +91,42 @@ function panelVerify(challengeId: string, code = '123456') {
   return app.inject({ method: 'POST', url: '/auth/panel/verify', payload: { challengeId, code } });
 }
 
-async function signInPanel(cpf: string) {
+async function signInPanelWithCookie(cpf: string) {
   const start = await panelStart(cpf);
   expect(start.statusCode).toBe(200);
   const verify = await panelVerify(start.json<PanelChallengeResponse>().challengeId);
   expect(verify.statusCode).toBe(200);
-  return verify.json<SessionResponse>().session;
+  const cookie = verify.cookies.find((c) => c.name === PANEL_REFRESH_COOKIE);
+  return { session: verify.json<PanelSessionResponse>().session, cookie: cookie!.value };
+}
+
+async function signInPanel(cpf: string) {
+  return (await signInPanelWithCookie(cpf)).session;
+}
+
+function panelPost(
+  url: '/auth/panel/refresh' | '/auth/panel/logout',
+  { cookie, csrf = true }: { cookie?: string; csrf?: boolean } = {},
+) {
+  return app.inject({
+    method: 'POST',
+    url,
+    headers: csrf ? CSRF : {},
+    cookies: cookie === undefined ? {} : { [PANEL_REFRESH_COOKIE]: cookie },
+  });
+}
+
+/** Gestor novo, com vínculo ativo, pronto para entrar no painel. */
+async function newManagerCpf() {
+  const cpf = newCpf();
+  const userId = await createUser({ cpf, email: `gestor.${cpf}@exemplo.com` });
+  await addMembership(userId, 'manager');
+  return { cpf, userId };
+}
+
+/** O cookie gravado na resposta, ou undefined. */
+function refreshCookie(res: Awaited<ReturnType<typeof app.inject>>) {
+  return res.cookies.find((c) => c.name === PANEL_REFRESH_COOKIE);
 }
 
 beforeAll(async () => {
@@ -139,7 +178,7 @@ describe('panel auth routes', () => {
 
     const verify = await panelVerify(body.challengeId);
     expect(verify.statusCode).toBe(200);
-    const { session } = verify.json<SessionResponse>();
+    const { session } = verify.json<PanelSessionResponse>();
     expect(await verifyAccessToken(secret, session.accessToken)).toMatchObject({
       userId,
       audience: 'panel',
@@ -231,5 +270,115 @@ describe('panel auth routes', () => {
     });
     expect(res.statusCode).toBe(401);
     expect(res.json()).toEqual({ code: 'unauthorized' });
+  });
+
+  it('verify sets the refresh cookie and returns only the access token', async () => {
+    const { cpf, userId } = await newManagerCpf();
+    const start = await panelStart(cpf);
+    const verify = await panelVerify(start.json<PanelChallengeResponse>().challengeId);
+    expect(verify.statusCode).toBe(200);
+    const body = verify.json<PanelSessionResponse>();
+    expect(Object.keys(body.session).toSorted()).toEqual(['accessExpiresInSeconds', 'accessToken']);
+    expect(await verifyAccessToken(secret, body.session.accessToken)).toMatchObject({
+      userId,
+      audience: 'panel',
+    });
+
+    const cookie = refreshCookie(verify);
+    expect(cookie).toMatchObject({
+      httpOnly: true,
+      sameSite: 'Strict',
+      path: '/auth/panel',
+      maxAge: 43200,
+    });
+    expect(cookie!.secure).toBeFalsy();
+    expect(cookie!.value.length).toBeGreaterThan(20);
+    expect(verify.body).not.toContain(cookie!.value);
+  });
+
+  it('refresh reads the cookie and rotates nothing else', async () => {
+    const { cpf, userId } = await newManagerCpf();
+    const { cookie } = await signInPanelWithCookie(cpf);
+
+    const first = await panelPost('/auth/panel/refresh', { cookie });
+    expect(first.statusCode).toBe(200);
+    const body = first.json<PanelRefreshResponse>();
+    expect(Object.keys(body).toSorted()).toEqual(['accessExpiresInSeconds', 'accessToken']);
+    expect(await verifyAccessToken(secret, body.accessToken)).toMatchObject({
+      userId,
+      audience: 'panel',
+    });
+    // O cookie é regravado com o mesmo token (o prazo recomeça), sem rotação.
+    expect(refreshCookie(first)).toMatchObject({
+      value: cookie,
+      httpOnly: true,
+      sameSite: 'Strict',
+      path: '/auth/panel',
+      maxAge: 43200,
+    });
+
+    const second = await panelPost('/auth/panel/refresh', { cookie });
+    expect(second.statusCode).toBe(200);
+
+    const missing = await panelPost('/auth/panel/refresh');
+    expect(missing.statusCode).toBe(401);
+    expect(missing.json()).toEqual({ code: 'session_expired' });
+  });
+
+  it('refresh without the csrf header is 403', async () => {
+    const { cpf } = await newManagerCpf();
+    const { cookie } = await signInPanelWithCookie(cpf);
+    for (const url of ['/auth/panel/refresh', '/auth/panel/logout'] as const) {
+      const res = await panelPost(url, { cookie, csrf: false });
+      expect(res.statusCode).toBe(403);
+      expect(res.json()).toEqual({ code: 'csrf_required' });
+    }
+    // O cookie continua valendo.
+    expect((await panelPost('/auth/panel/refresh', { cookie })).statusCode).toBe(200);
+  });
+
+  it('refresh with an app session token is 401', async () => {
+    const userId = await createUser({ email: 'app.no.painel@exemplo.com' });
+    const appSession = await withContext(appDb.db, { userId }, (tx) =>
+      startSession(tx, { secret, userId, audience: 'app' }),
+    );
+    const res = await panelPost('/auth/panel/refresh', { cookie: appSession.refreshToken });
+    expect(res.statusCode).toBe(401);
+    expect(res.json()).toEqual({ code: 'session_expired' });
+    const cleared = refreshCookie(res);
+    expect(cleared).toMatchObject({ value: '', path: '/auth/panel' });
+
+    // A sessão do app segue valendo no /auth/refresh.
+    const appRefresh = await app.inject({
+      method: 'POST',
+      url: '/auth/refresh',
+      payload: { refreshToken: appSession.refreshToken },
+    });
+    expect(appRefresh.statusCode).toBe(200);
+  });
+
+  it('logout revokes and clears the cookie', async () => {
+    const { cpf, userId } = await newManagerCpf();
+    const { cookie } = await signInPanelWithCookie(cpf);
+
+    const out = await panelPost('/auth/panel/logout', { cookie });
+    expect(out.statusCode).toBe(204);
+    expect(refreshCookie(out)).toMatchObject({ value: '', path: '/auth/panel' });
+
+    const rows = await owner.db
+      .select({ revokedAt: sessions.revokedAt })
+      .from(sessions)
+      .where(eq(sessions.userId, userId));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.revokedAt).not.toBeNull();
+
+    const refresh = await panelPost('/auth/panel/refresh', { cookie });
+    expect(refresh.statusCode).toBe(401);
+    expect(refresh.json()).toEqual({ code: 'session_expired' });
+    expect(refreshCookie(refresh)).toMatchObject({ value: '', path: '/auth/panel' });
+
+    // Sem cookie, sair também responde 204.
+    const again = await panelPost('/auth/panel/logout');
+    expect(again.statusCode).toBe(204);
   });
 });

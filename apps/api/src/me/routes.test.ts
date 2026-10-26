@@ -126,13 +126,39 @@ describe('me routes', () => {
       platformRole: null,
       agentTenants: [{ tenantId: activeTenant, tenantName: 'Prefeitura Ativa' }],
       panelTenants: [
-        { tenantId: panelTenant, tenantName: 'Prefeitura Gestão', role: 'tenant_admin' },
+        {
+          tenantId: panelTenant,
+          tenantName: 'Prefeitura Gestão',
+          role: 'tenant_admin',
+          status: 'active',
+        },
       ],
     });
 
     const anonymous = await app.inject({ method: 'GET', url: '/me' });
     expect(anonymous.statusCode).toBe(401);
     expect(anonymous.json()).toEqual({ code: 'unauthorized' });
+  });
+
+  it('me hides suspended tenants from panelTenants', async () => {
+    const user = await createUser({ name: 'Gestora Suspensa', email: 'suspensa@exemplo.com' });
+    const onboarding = await createTenant('Prefeitura Implantando', 'onboarding');
+    const suspended = await createTenant('Prefeitura Suspensa', 'suspended');
+    await owner.db.insert(memberships).values([
+      { tenantId: onboarding, userId: user.id, role: 'manager', status: 'active' },
+      { tenantId: suspended, userId: user.id, role: 'tenant_admin', status: 'active' },
+    ]);
+
+    const res = await getMe(await signIn(user.phone));
+    expect(res.statusCode).toBe(200);
+    expect(res.json<MeResponse>().panelTenants).toEqual([
+      {
+        tenantId: onboarding,
+        tenantName: 'Prefeitura Implantando',
+        role: 'manager',
+        status: 'onboarding',
+      },
+    ]);
   });
 
   it('PATCH me updates name and clears email', async () => {

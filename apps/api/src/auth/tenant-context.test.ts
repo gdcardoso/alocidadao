@@ -61,6 +61,13 @@ beforeAll(async () => {
     if (!member) return reply;
     return member;
   });
+  app.get('/probe-panel', { preHandler: requireAuth(['app']) }, async (request, reply) => {
+    const member = await requireTenantMember(appDb.db, request, reply, ['field_agent'], {
+      tenantStatuses: ['onboarding', 'active'],
+    });
+    if (!member) return reply;
+    return member;
+  });
   await app.ready();
 });
 
@@ -81,6 +88,22 @@ describe('requireTenantMember', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ userId, tenantId });
+  });
+
+  it('onboarding tenant is refused by default and allowed with tenantStatuses', async () => {
+    const userId = await createUser();
+    const tenantId = await createTenant('onboarding');
+    await link(tenantId, userId);
+    const headers = { ...(await appAuthHeader(appDb.db, userId)), 'x-tenant-id': tenantId };
+    expect((await call(headers)).statusCode).toBe(403);
+    const res = await app.inject({ method: 'GET', url: '/probe-panel', headers });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ userId, tenantId });
+
+    await owner.db.update(tenants).set({ status: 'suspended' }).where(eq(tenants.id, tenantId));
+    const suspended = await app.inject({ method: 'GET', url: '/probe-panel', headers });
+    expect(suspended.statusCode).toBe(403);
+    expect(suspended.json()).toEqual({ code: 'not_a_member' });
   });
 
   it('missing header is 400', async () => {

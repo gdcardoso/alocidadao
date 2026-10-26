@@ -75,8 +75,11 @@ async function loadMe(tx: Transaction, userId: string): Promise<MeResponse> {
   const agentTenants = links
     .filter((l) => l.role === 'field_agent' && l.tenantStatus === 'active')
     .map(({ tenantId, tenantName }) => ({ tenantId, tenantName }));
-  const panelTenants = links.flatMap(({ tenantId, tenantName, role }) =>
-    role === 'manager' || role === 'tenant_admin' ? [{ tenantId, tenantName, role }] : [],
+  // O painel aceita a prefeitura em implantação ou ativa; a suspensa não aparece.
+  const panelTenants = links.flatMap(({ tenantId, tenantName, tenantStatus: status, role }) =>
+    (role === 'manager' || role === 'tenant_admin') && status !== 'suspended'
+      ? [{ tenantId, tenantName, role, status }]
+      : [],
   );
   return { ...user!, agentTenants, panelTenants };
 }

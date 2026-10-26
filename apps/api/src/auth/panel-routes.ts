@@ -1,24 +1,65 @@
-import { consumeCode, findUserByCpf, withContext } from '@alocidadao/db';
+import { consumeCode, findUserByCpf, schema, sessionForRefresh, withContext } from '@alocidadao/db';
 import {
+  ACCESS_TOKEN_TTL_SECONDS,
   CODE_RESEND_SECONDS,
   CODE_TTL_SECONDS,
   apiErrorSchema,
   maskEmail,
   panelChallengeResponseSchema,
+  panelRefreshResponseSchema,
+  panelSessionResponseSchema,
   panelStartBodySchema,
   panelVerifyBodySchema,
-  sessionResponseSchema,
 } from '@alocidadao/shared';
-import type { FastifyInstance } from 'fastify';
+import { and, eq, isNull, sql } from 'drizzle-orm';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
+import { z } from 'zod';
 import { codeEmail } from '../messaging/email.js';
 import { codeError, type AuthDeps } from './app-routes.js';
 import { hashCode, issueChallenge } from './codes.js';
-import { startSession } from './session.js';
+import { PANEL_IDLE_TIMEOUT_SECONDS, startSession } from './session.js';
+import { hashRefreshToken, signAccessToken } from './tokens.js';
+
+const { sessions } = schema;
+
+/** Cookie com o token de renovação do painel; o navegador guarda o token de acesso só na memória. */
+export const PANEL_REFRESH_COOKIE = 'ac_panel_refresh';
+
+/** Cabeçalho exigido na renovação e na saída do painel (proteção contra CSRF). */
+export const PANEL_CSRF_HEADER = 'x-requested-with';
+export const PANEL_CSRF_VALUE = 'alocidadao-panel';
+
+const PANEL_COOKIE_PATH = '/auth/panel';
+
+function setRefreshCookie(reply: FastifyReply, token: string) {
+  void reply.setCookie(PANEL_REFRESH_COOKIE, token, {
+    httpOnly: true,
+    sameSite: 'strict',
+    path: PANEL_COOKIE_PATH,
+    maxAge: PANEL_IDLE_TIMEOUT_SECONDS,
+    secure: process.env.NODE_ENV === 'production',
+  });
+}
+
+function clearRefreshCookie(reply: FastifyReply) {
+  void reply.clearCookie(PANEL_REFRESH_COOKIE, {
+    httpOnly: true,
+    sameSite: 'strict',
+    path: PANEL_COOKIE_PATH,
+    secure: process.env.NODE_ENV === 'production',
+  });
+}
+
+const hasCsrfHeader = (request: FastifyRequest) =>
+  request.headers[PANEL_CSRF_HEADER] === PANEL_CSRF_VALUE;
 
 /**
  * Login do painel: CPF e código enviado ao e-mail da conta. Só entra quem tem e-mail e
  * papel interno ou vínculo ativo de gestor ou administrador da prefeitura.
+ * O token de renovação fica no cookie `ac_panel_refresh` (HttpOnly, só em /auth/panel); a
+ * renovação e a saída leem o cookie e exigem `x-requested-with: alocidadao-panel`.
+ * Exige o @fastify/cookie registrado no escopo.
  */
 export function registerPanelAuthRoutes(instance: FastifyInstance, deps: AuthDeps) {
   const app = instance.withTypeProvider<ZodTypeProvider>();
@@ -71,7 +112,7 @@ export function registerPanelAuthRoutes(instance: FastifyInstance, deps: AuthDep
     {
       schema: {
         body: panelVerifyBodySchema,
-        response: { 200: sessionResponseSchema, 400: apiErrorSchema },
+        response: { 200: panelSessionResponseSchema, 400: apiErrorSchema },
       },
     },
     async (request, reply) => {
@@ -89,7 +130,62 @@ export function registerPanelAuthRoutes(instance: FastifyInstance, deps: AuthDep
       const session = await withContext(db, { userId: user.id }, (tx) =>
         startSession(tx, { secret, userId: user.id, audience: 'panel' }),
       );
-      return { session };
+      // O token de renovação vai só no cookie; o corpo leva o token de acesso.
+      setRefreshCookie(reply, session.refreshToken);
+      return {
+        session: {
+          accessToken: session.accessToken,
+          accessExpiresInSeconds: session.accessExpiresInSeconds,
+        },
+      };
+    },
+  );
+
+  app.post(
+    '/auth/panel/refresh',
+    {
+      schema: {
+        response: { 200: panelRefreshResponseSchema, 401: apiErrorSchema, 403: apiErrorSchema },
+      },
+    },
+    async (request, reply) => {
+      if (!hasCsrfHeader(request)) return reply.code(403).send({ code: 'csrf_required' });
+      const token = request.cookies[PANEL_REFRESH_COOKIE];
+      const found = token ? await sessionForRefresh(db, hashRefreshToken(token)) : null;
+      // Sessão do app não renova o painel.
+      if (!token || !found || found.audience !== 'panel') {
+        clearRefreshCookie(reply);
+        return reply.code(401).send({ code: 'session_expired' });
+      }
+      const accessToken = await signAccessToken(secret, {
+        userId: found.userId,
+        sessionId: found.sessionId,
+        audience: 'panel',
+      });
+      // Mesmo token, prazo do cookie renovado junto com o da sessão.
+      setRefreshCookie(reply, token);
+      return { accessToken, accessExpiresInSeconds: ACCESS_TOKEN_TTL_SECONDS };
+    },
+  );
+
+  app.post(
+    '/auth/panel/logout',
+    { schema: { response: { 204: z.null(), 403: apiErrorSchema } } },
+    async (request, reply) => {
+      if (!hasCsrfHeader(request)) return reply.code(403).send({ code: 'csrf_required' });
+      const token = request.cookies[PANEL_REFRESH_COOKIE];
+      // A sessão só é achada pelo token (sem o token de acesso); vencida ou revogada, nada a fazer.
+      const found = token ? await sessionForRefresh(db, hashRefreshToken(token)) : null;
+      if (found?.audience === 'panel') {
+        await withContext(db, { userId: found.userId }, (tx) =>
+          tx
+            .update(sessions)
+            .set({ revokedAt: sql`now()` })
+            .where(and(eq(sessions.id, found.sessionId), isNull(sessions.revokedAt))),
+        );
+      }
+      clearRefreshCookie(reply);
+      return reply.code(204).send(null);
     },
   );
 }

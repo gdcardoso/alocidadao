@@ -1,6 +1,7 @@
 import { Navigate, Outlet, Route, Routes } from 'react-router';
 import { BackofficeLayout } from './backoffice/BackofficeLayout';
 import { ComingSoon } from './backoffice/ComingSoon';
+import { TenantsPage } from './backoffice/tenants/TenantsPage';
 import { LoginPage } from './auth/LoginPage';
 import { CategoriesPage } from './categories/CategoriesPage';
 import { DepartmentsPage } from './categories/DepartmentsPage';
@@ -48,7 +49,7 @@ export default function App() {
       <Route element={<RequireSession />}>
         <Route path="/backoffice" element={<BackofficeLayout />}>
           <Route index element={<Navigate to="/backoffice/prefeituras" replace />} />
-          <Route path="prefeituras" element={<ComingSoon title="Prefeituras" />} />
+          <Route path="prefeituras" element={<TenantsPage />} />
           <Route path="prefeituras/nova" element={<ComingSoon title="Nova prefeitura" />} />
           <Route path="prefeituras/:id" element={<ComingSoon title="Prefeitura" />} />
           <Route path="interesse" element={<ComingSoon title="Interesse por cidade" />} />

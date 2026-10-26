@@ -1,0 +1,28 @@
+.card {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.label,
+.help {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.value {
+  color: var(--text-primary);
+  font-family: var(--font-display, inherit);
+  font-size: 26px;
+  font-weight: 600;
+}
+
+.warning .value {
+  color: var(--warning);
+}

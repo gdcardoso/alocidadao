@@ -36,3 +36,6 @@ export const USER_EMAIL_CONSTRAINT = 'users_email_lower_idx';
 export const USER_CPF_CONSTRAINT = 'users_cpf_unique';
 export const CATEGORY_NAME_CONSTRAINT = 'categories_tenant_id_name_unique';
 export const DEPARTMENT_NAME_CONSTRAINT = 'departments_tenant_id_name_unique';
+
+/** Um município só tem uma prefeitura (`tenants.ibge_code`). */
+export const TENANT_IBGE_CONSTRAINT = 'tenants_ibge_code_unique';

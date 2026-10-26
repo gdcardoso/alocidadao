@@ -6,6 +6,7 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { requireAuth } from '../auth/plugin.js';
 import { recordStaffAudit } from '../panel/audit.js';
+import { registerCreateTenantRoutes } from './create-tenant.js';
 import { requirePlatformStaff } from './staff.js';
 import { registerTenantRoutes } from './tenants.js';
 
@@ -79,6 +80,7 @@ export function registerBackofficeRoutes(instance: FastifyInstance, { db }: Back
     );
 
   registerTenantRoutes(instance, { db, preHandler });
+  registerCreateTenantRoutes(instance, { db, preHandler });
 
   supportRoute('enter', 'support.enter');
   supportRoute('leave', 'support.leave');

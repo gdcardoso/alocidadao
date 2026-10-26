@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { requireAuth } from '../auth/plugin.js';
 import { recordStaffAudit } from '../panel/audit.js';
 import { requirePlatformStaff } from './staff.js';
+import { registerTenantRoutes } from './tenants.js';
 
 const { tenants, users } = schema;
 
@@ -76,6 +77,8 @@ export function registerBackofficeRoutes(instance: FastifyInstance, { db }: Back
         return reply.code(204).send(null);
       },
     );
+
+  registerTenantRoutes(instance, { db, preHandler });
 
   supportRoute('enter', 'support.enter');
   supportRoute('leave', 'support.leave');

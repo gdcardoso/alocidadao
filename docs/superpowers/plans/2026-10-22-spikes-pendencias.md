@@ -72,12 +72,12 @@ Os demais itens deste plano continuam em aberto e passaram para o Plano 4 (Labor
 - Troca de e-mail de quem tem acesso ao painel é feita pelo admin (hoje `PATCH /me` recusa com `email_managed_by_admin`).
 - A máscara do e-mail usa a caixa original, enquanto o envio usa minúsculas.
 - CPF com espaço ou `/` é recusado (só `.` e `-` são removidos); `PanelStartBody` é o tipo de saída (o cliente precisa de `z.input`).
-- Categorias na ordem do Pencil: falta um campo de ordenação na categoria (hoje a grade da Nova solicitação vem em ordem alfabética).
-- Fotos da contestação aparecem como "Sua foto · abertura" no detalhe e na galeria: o `PhotoView` não diz a origem da foto; falta decidir no Pencil uma legenda para fotos da contestação.
+- ~~Categorias na ordem do Pencil~~: decidido em 26/10 manter a ordem alfabética.
+- Fotos da contestação aparecem como "Sua foto · abertura" no detalhe e na galeria: o `PhotoView` não diz a origem da foto. Decidido em 26/10: legenda "Sua foto · contestação".
 
 - Ajuste pedido: o painel grava o evento para `rework_requested` no formato `reworkDetailsSchema` (mensagem em `comment`; `{ reasons, discardedPhotoIds }` em `details`) e usa `POST /dev/work-orders/:id/manager` como referência.
 - Revisão (W3): mostrar a distância da conclusão ao local da ocorrência (`details.distanceM` do evento de conclusão).
-- Textos do app do agente criados sem Pencil para confirmar: 'Foto do cidadão'; 'Esta atividade não está mais com você' / 'Ela foi concluída, cancelada ou passada para outra equipe.' / 'Voltar para minhas atividades'; 'Não foi possível carregar a atividade' / 'Confira sua internet e tente de novo.'; 'Não foi possível iniciar. Tente de novo.'; 'Não foi possível enviar. Tente de novo.'; 'O gestor revisa as fotos e o relato.'; pílula 'Cidadão' (fundo surface com borda).
+- Textos do app do agente criados sem Pencil (confirmados pelo usuário em 26/10): 'Foto do cidadão'; 'Esta atividade não está mais com você' / 'Ela foi concluída, cancelada ou passada para outra equipe.' / 'Voltar para minhas atividades'; 'Não foi possível carregar a atividade' / 'Confira sua internet e tente de novo.'; 'Não foi possível iniciar. Tente de novo.'; 'Não foi possível enviar. Tente de novo.'; 'O gestor revisa as fotos e o relato.'; pílula 'Cidadão' (fundo surface com borda).
 
 ## Plano 6 — Backoffice
 

@@ -351,6 +351,8 @@ export const teams = pgTable(
   },
   (t) => [
     unique().on(t.tenantId, t.id),
+    // Nome único na prefeitura, sem diferenciar maiúsculas (W6: "team_name_taken").
+    uniqueIndex('teams_tenant_name_idx').on(t.tenantId, sql`lower(${t.name})`),
     foreignKey({
       columns: [t.tenantId, t.departmentId],
       foreignColumns: [departments.tenantId, departments.id],

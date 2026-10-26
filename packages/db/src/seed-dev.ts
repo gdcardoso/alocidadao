@@ -18,7 +18,8 @@ Cria (ou completa) a prefeitura de demonstração. Pode rodar quantas vezes quis
 
   --reset   Volta a demo ao começo: cancela as atividades ativas da demo (as que o agente
             iniciou, concluiu ou relatou impedimento) e cria outras, atribuídas de novo.
-            Recria a triagem de exemplo que foi tratada no painel e recusa as demais
+            Recria a fila do painel (duas em revisão e uma impedida, com as esperas do
+            desenho). Recria a triagem de exemplo que foi tratada no painel e recusa as demais
             ocorrências abertas da prefeitura demo (sobras de junções, separações,
             atribuições e relatos de teste), para o mapa e a triagem voltarem ao desenho.
             Também vale SEED_RESET=1.

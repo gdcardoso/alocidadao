@@ -314,7 +314,7 @@ describe('equipe interna', () => {
     expect(rows.map((r) => r.id)).toContain(citizenId);
   });
 
-  it('auditoria: só a equipe interna grava, a prefeitura lê, ninguém altera', async () => {
+  it('auditoria: só a equipe interna grava, ninguém altera', async () => {
     const event = (staffUserId: string) => ({
       tenantId: tenantA,
       staffUserId,
@@ -341,10 +341,17 @@ describe('equipe interna', () => {
       tx.insert(staffAuditEvents).values(event(supportId)),
     );
 
-    const readByTenant = await withContext(app.db, { tenantId: tenantA, userId: citizenId }, (tx) =>
+    // A equipe interna lê na prefeitura do contexto; o cidadão não lê.
+    const readBySupport = await withContext(app.db, support, (tx) =>
       tx.select().from(staffAuditEvents),
     );
-    expect(readByTenant.map((e) => e.staffUserId)).toEqual([supportId]);
+    expect(readBySupport.map((e) => e.staffUserId)).toEqual([supportId]);
+    const readByCitizen = await withContext(
+      app.db,
+      { tenantId: tenantA, userId: citizenId },
+      (tx) => tx.select().from(staffAuditEvents),
+    );
+    expect(readByCitizen).toHaveLength(0);
 
     const readByOther = await withContext(app.db, { tenantId: tenantB }, (tx) =>
       tx.select().from(staffAuditEvents),
@@ -359,6 +366,58 @@ describe('equipe interna', () => {
     );
     expect(updateError).toMatch(/permission denied/);
     expect(deleteError).toMatch(/permission denied/);
+  });
+
+  describe('leitura da auditoria pela prefeitura', () => {
+    let auditTenant: string;
+
+    /** Prefeitura com um evento de auditoria do suporte e uma pessoa com `role` nela. */
+    async function readAs(
+      role: 'field_agent' | 'manager' | 'tenant_admin',
+      phone: string,
+      status: 'active' | 'inactive' = 'active',
+    ) {
+      const userId = await createUser(owner.db, { name: `Pessoa ${role}`, phone });
+      await owner.db.insert(memberships).values({ tenantId: auditTenant, userId, role, status });
+      return withContext(app.db, { tenantId: auditTenant, userId }, (tx) =>
+        tx.select().from(staffAuditEvents),
+      );
+    }
+
+    beforeAll(async () => {
+      auditTenant = await createTenant(owner.db, 'Plataforma Auditoria', '0000105');
+      await owner.db.insert(staffAuditEvents).values({
+        tenantId: auditTenant,
+        staffUserId: supportId,
+        action: 'request.view',
+        targetType: 'request',
+      });
+    });
+
+    it('agente da prefeitura não lê a auditoria', async () => {
+      expect(await readAs('field_agent', '+5511940000051')).toHaveLength(0);
+      // Gestor desativado também não.
+      expect(await readAs('manager', '+5511940000052', 'inactive')).toHaveLength(0);
+    });
+
+    it('gestor da prefeitura lê a auditoria', async () => {
+      for (const [role, phone] of [
+        ['manager', '+5511940000053'],
+        ['tenant_admin', '+5511940000054'],
+      ] as const) {
+        const rows = await readAs(role, phone);
+        expect(rows.map((e) => e.staffUserId)).toEqual([supportId]);
+      }
+      // Gestor de outra prefeitura não lê a desta, mesmo com ela no contexto.
+      const outsider = await createUser(owner.db, { name: 'Gestor de A', phone: '+5511940000055' });
+      await owner.db
+        .insert(memberships)
+        .values({ tenantId: tenantA, userId: outsider, role: 'manager' });
+      const rows = await withContext(app.db, { tenantId: auditTenant, userId: outsider }, (tx) =>
+        tx.select().from(staffAuditEvents),
+      );
+      expect(rows).toHaveLength(0);
+    });
   });
 });
 

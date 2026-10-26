@@ -5,6 +5,8 @@ import { findUserByCpf } from './auth.js';
 import { createDatabase, geoPoint, withContext } from './client.js';
 import { findMergeSuggestions } from './geo.js';
 import {
+  DEMO_IMPEDIMENT_DESCRIPTION,
+  DEMO_REVIEW_DESCRIPTIONS,
   RESET_REJECTION_REASON,
   TENANT_ADMIN_CPF,
   TENANT_ADMIN_EMAIL,
@@ -16,6 +18,7 @@ import {
   memberships,
   occurrenceSeparations,
   occurrences,
+  photos,
   requests,
   statusEvents,
   teams,
@@ -533,12 +536,13 @@ describe('dados de demonstração do painel', () => {
       .where(eq(workOrders.id, assigned!.id));
     expect(cancelled!.status).toBe('cancelled');
 
-    // Em atendimento só ficam as 4 atividades da demo, uma vez cada, mesmo após dois resets.
+    // Em atendimento só ficam as 4 atividades do agente e as 3 da fila do painel, uma vez cada,
+    // mesmo após dois resets.
     const inProgress = await owner.db
       .select({ id: occurrences.id })
       .from(occurrences)
       .where(and(eq(occurrences.tenantId, tenantId), eq(occurrences.status, 'in_progress')));
-    expect(inProgress).toHaveLength(4);
+    expect(inProgress).toHaveLength(7);
     const active = await owner.db
       .select({ id: workOrders.id })
       .from(workOrders)
@@ -548,11 +552,128 @@ describe('dados de demonstração do painel', () => {
           inArray(workOrders.status, [...ACTIVE_WORK_ORDER_STATUSES]),
         ),
       );
-    expect(active.map((order) => order.id).toSorted()).toEqual(second.workOrderIds.toSorted());
+    expect(active.map((order) => order.id).toSorted()).toEqual(
+      [...second.workOrderIds, ...second.panelWorkOrderIds].toSorted(),
+    );
     expect(second.workOrderIds).not.toEqual(first.workOrderIds);
     // Sem reset, nada muda.
     expect(await seedDev(owner.db)).toEqual(second);
     expect(await triageRows(tenantId)).toHaveLength(before.length);
+  });
+});
+
+describe('fila de revisão e de impedimentos da demo', () => {
+  /** A atividade ativa da ocorrência cujo relato tem esta descrição; uma só, mesmo após resets. */
+  async function activeOrderOf(tenantId: string, description: string) {
+    const rows = await owner.db
+      .selectDistinct({ order: workOrders })
+      .from(workOrders)
+      .innerJoin(requests, eq(requests.occurrenceId, workOrders.occurrenceId))
+      .where(
+        and(
+          eq(workOrders.tenantId, tenantId),
+          eq(requests.description, description),
+          inArray(workOrders.status, [...ACTIVE_WORK_ORDER_STATUSES]),
+        ),
+      );
+    expect(rows).toHaveLength(1);
+    return rows[0]!.order;
+  }
+
+  async function checkFixtures(seeded: Awaited<ReturnType<typeof seedDev>>) {
+    const { tenantId, teamId, agentId } = seeded;
+    const fixtures = [
+      {
+        description: DEMO_REVIEW_DESCRIPTIONS[0],
+        status: 'awaiting_review',
+        waitH: 30,
+        details: { distanceM: 8 },
+      },
+      {
+        description: DEMO_REVIEW_DESCRIPTIONS[1],
+        status: 'awaiting_review',
+        waitH: 3,
+        details: { distanceM: 250 },
+      },
+      {
+        description: DEMO_IMPEDIMENT_DESCRIPTION,
+        status: 'impeded',
+        waitH: 3,
+        details: { reason: 'missing_material' },
+      },
+    ] as const;
+    const ids: string[] = [];
+    for (const fixture of fixtures) {
+      const order = await activeOrderOf(tenantId, fixture.description);
+      ids.push(order.id);
+      expect(order).toMatchObject({ teamId, status: fixture.status });
+      if (fixture.status === 'awaiting_review') {
+        expect(order.agentNote).toBeTruthy();
+        expect(order.completedAt).toBeInstanceOf(Date);
+      } else {
+        expect(order.impedimentReason).toBe('missing_material');
+      }
+
+      const [occurrence] = await owner.db
+        .select({ status: occurrences.status })
+        .from(occurrences)
+        .where(eq(occurrences.id, order.occurrenceId));
+      expect(occurrence!.status).toBe('in_progress');
+      const reports = await owner.db
+        .select({ status: requests.status })
+        .from(requests)
+        .where(eq(requests.occurrenceId, order.occurrenceId));
+      expect(reports.length).toBeGreaterThanOrEqual(1);
+      expect(reports.length).toBeLessThanOrEqual(2);
+      for (const report of reports) expect(report.status).toBe('in_progress');
+
+      // Sem foto: o endereço das fotos no navegador é pendência do Plano 8.
+      expect(
+        await owner.db.select().from(photos).where(eq(photos.workOrderId, order.id)),
+      ).toHaveLength(0);
+
+      // O evento mais recente da atividade é o do agente, com a distância ou o motivo.
+      const [last] = await owner.db
+        .select()
+        .from(statusEvents)
+        .where(eq(statusEvents.workOrderId, order.id))
+        .orderBy(desc(statusEvents.createdAt))
+        .limit(1);
+      expect(last).toMatchObject({
+        fromStatus: 'in_execution',
+        toStatus: fixture.status,
+        actorUserId: agentId,
+      });
+      expect(last!.details).toMatchObject(fixture.details);
+      expect(last!.comment).toBeTruthy();
+      const waitH = (Date.now() - last!.createdAt.getTime()) / 3_600_000;
+      expect(waitH).toBeGreaterThan(fixture.waitH - 0.2);
+      expect(waitH).toBeLessThan(fixture.waitH + 0.2);
+    }
+    expect(seeded.panelWorkOrderIds).toEqual(ids);
+  }
+
+  it('seed cria duas atividades em revisão e uma impedida', async () => {
+    const first = await seedDev(owner.db);
+    const second = await seedDev(owner.db);
+    expect(second).toEqual(first);
+    await checkFixtures(first);
+
+    // O reset recria as três (as esperas voltam ao desenho) e não as recusa.
+    const reset = await seedDev(owner.db, { reset: true });
+    for (const id of first.panelWorkOrderIds) expect(reset.panelWorkOrderIds).not.toContain(id);
+    await checkFixtures(reset);
+    expect(await seedDev(owner.db)).toEqual(reset);
+
+    // A que o gestor já decidiu volta na próxima execução.
+    await owner.db
+      .update(workOrders)
+      .set({ status: 'completed' })
+      .where(eq(workOrders.id, reset.panelWorkOrderIds[0]!));
+    const after = await seedDev(owner.db);
+    expect(after.panelWorkOrderIds[0]).not.toBe(reset.panelWorkOrderIds[0]);
+    expect(after.panelWorkOrderIds.slice(1)).toEqual(reset.panelWorkOrderIds.slice(1));
+    await checkFixtures(after);
   });
 });
 

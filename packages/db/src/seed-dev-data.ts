@@ -1,8 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import {
   ACTIVE_WORK_ORDER_STATUSES,
+  type DeviceLocation,
   type GeoPoint,
   type IconGroup,
+  type ImpedimentReason,
   type ReworkDetails,
 } from '@alocidadao/shared';
 import { and, asc, count, desc, eq, inArray, notInArray, sql } from 'drizzle-orm';
@@ -175,6 +177,77 @@ const DEMO_WORK_ORDERS: DemoWorkOrder[] = [
   },
 ];
 
+/** Descrições do primeiro relato das duas atividades aguardando revisão (há 30 h e há 3 h). */
+export const DEMO_REVIEW_DESCRIPTIONS = [
+  'Buraco tapado pela metade na saída da garagem',
+  'Asfalto afundado em frente à padaria',
+] as const;
+
+/** Descrição do primeiro relato da atividade impedida. */
+export const DEMO_IMPEDIMENT_DESCRIPTION = 'Cratera na faixa de ônibus, carros furando o pneu';
+
+interface DemoQueueItem {
+  /** Descrição do primeiro relato; é por ela que a segunda execução reencontra a atividade. */
+  description: string;
+  address: string;
+  /** Deslocamento fixo em graus, longe das outras atividades da demo (raio de 15 m do tipo). */
+  dLat: number;
+  dLng: number;
+  /** Onde a atividade está na fila do painel. */
+  status: 'awaiting_review' | 'impeded';
+  /** Há quantas horas o agente concluiu ou relatou o impedimento: a espera na fila. */
+  waitHours: number;
+  /** Distância do agente até o local no evento do agente (`details.distanceM`). */
+  distanceM: number;
+  managerInstructions: string;
+  /** Relato da conclusão (vai para `agent_note`) ou detalhes do impedimento. */
+  agentComment: string;
+  impedimentReason?: ImpedimentReason;
+  /** Relatos de outros cidadãos na mesma ocorrência, um por cidadão de EXTRA_CITIZENS. */
+  extraReports?: string[];
+}
+
+// A fila de revisão e de impedimentos do painel (W3 e W4), todas da Equipe Obras – Centro.
+const DEMO_QUEUE: DemoQueueItem[] = [
+  {
+    description: DEMO_REVIEW_DESCRIPTIONS[0],
+    address: 'Rua Bela Cintra, 210',
+    dLat: -0.0005,
+    dLng: -0.001,
+    status: 'awaiting_review',
+    waitHours: 30,
+    distanceM: 8,
+    managerInstructions: 'Fechar o buraco inteiro e deixar a saída da garagem liberada.',
+    agentComment:
+      'Buraco fechado com massa asfáltica e compactado com placa vibratória. A saída da garagem ficou liberada.',
+    extraReports: ['O carro bate o fundo toda vez que sai da garagem'],
+  },
+  {
+    description: DEMO_REVIEW_DESCRIPTIONS[1],
+    address: 'Rua da Consolação, 2300',
+    dLat: 0.0015,
+    dLng: -0.0015,
+    status: 'awaiting_review',
+    waitHours: 3,
+    distanceM: 250,
+    managerInstructions: 'Avaliar se o afundamento é só no asfalto ou se há vazamento embaixo.',
+    agentComment: 'Asfalto recomposto no trecho afundado. Não havia vazamento embaixo.',
+  },
+  {
+    description: DEMO_IMPEDIMENT_DESCRIPTION,
+    address: 'Av. Rebouças, 1100',
+    dLat: -0.002,
+    dLng: -0.0005,
+    status: 'impeded',
+    waitHours: 3,
+    distanceM: 12,
+    managerInstructions: 'Isolar a faixa de ônibus antes de começar. Avisar a SPTrans.',
+    agentComment:
+      'A cratera tem mais de 1 m de largura. A massa asfáltica do caminhão não dá para fechar; precisa de uma carga inteira.',
+    impedimentReason: 'missing_material',
+  },
+];
+
 export interface SeedDevOptions {
   /**
    * Volta a demo ao começo: cancela as atividades ativas da demo (com o evento, como o gestor
@@ -190,6 +263,8 @@ export interface SeedDevResult {
   managerId: string;
   platformAdminId: string;
   workOrderIds: string[];
+  /** A fila do painel, na ordem de DEMO_QUEUE: duas em revisão (30 h e 3 h) e uma impedida. */
+  panelWorkOrderIds: string[];
 }
 
 /** Prefeitura, equipe e pessoas da demo, antes do gestor e das atividades. */
@@ -453,6 +528,156 @@ async function createDemoWorkOrder(
     await tx.update(workOrders).set({ updatedAt: reworkAt }).where(eq(workOrders.id, order!.id));
   }
   return order!;
+}
+
+/**
+ * Garante as atividades da fila do painel (DEMO_QUEUE), cada uma na sua ocorrência em
+ * atendimento, e devolve os ids na ordem da lista. Idempotente: reencontra cada uma pela
+ * descrição do relato do cidadão demo enquanto ela continua no status da fila; a que o gestor já
+ * decidiu é criada de novo. Com `reset`, cancela as que estão ativas e cria outras, com as
+ * esperas do desenho (o reset recusa a ocorrência antiga, que fica fora do `keep`).
+ */
+async function seedDemoQueue(
+  tx: Transaction,
+  ids: DemoIds,
+  { reset = false }: SeedDevOptions,
+): Promise<string[]> {
+  const extraCitizenIds: string[] = [];
+  for (const citizen of EXTRA_CITIZENS) {
+    extraCitizenIds.push(await ensureCitizen(tx, ids.tenantId, citizen));
+  }
+  const now = Date.now();
+  const workOrderIds: string[] = [];
+  for (const [index, item] of DEMO_QUEUE.entries()) {
+    const [request] = await tx
+      .select({ occurrenceId: requests.occurrenceId })
+      .from(requests)
+      .where(
+        and(
+          eq(requests.tenantId, ids.tenantId),
+          eq(requests.citizenId, ids.citizenId),
+          eq(requests.description, item.description),
+        ),
+      )
+      .orderBy(desc(requests.createdAt))
+      .limit(1);
+    const [found] = request
+      ? await tx
+          .select({ id: workOrders.id, status: workOrders.status })
+          .from(workOrders)
+          .where(eq(workOrders.occurrenceId, request.occurrenceId))
+          .orderBy(desc(workOrders.createdAt))
+          .limit(1)
+      : [];
+    if (found && found.status === item.status && !reset) {
+      workOrderIds.push(found.id);
+      continue;
+    }
+    if (found && reset && ACTIVE_WORK_ORDER_STATUSES.includes(found.status)) {
+      await cancelDemoWorkOrder(tx, ids, found.id);
+    }
+    workOrderIds.push(await createDemoQueueOrder(tx, ids, item, extraCitizenIds, now, index));
+  }
+  return workOrderIds;
+}
+
+/**
+ * Cria a ocorrência, os relatos e a atividade de `item`, com o histórico: atribuída pelo gestor,
+ * iniciada e concluída (ou impedida) pelo agente. As datas são retroativas, para a espera na fila
+ * ser a do desenho.
+ */
+async function createDemoQueueOrder(
+  tx: Transaction,
+  ids: DemoIds,
+  item: DemoQueueItem,
+  extraCitizenIds: string[],
+  now: number,
+  index: number,
+): Promise<string> {
+  const { tenantId, teamId, categoryId, citizenId } = ids;
+  // O índice desempata as que esperam desde a mesma hora.
+  const agentAt = new Date(now - item.waitHours * HOUR_MS + index * 1000);
+  const startedAt = new Date(agentAt.getTime() - HOUR_MS);
+  const assignedAt = new Date(agentAt.getTime() - 4 * HOUR_MS);
+  const reportedAt = new Date(assignedAt.getTime() - HOUR_MS);
+  const site: GeoPoint = { lat: CENTER.lat + item.dLat, lng: CENTER.lng + item.dLng };
+  const point = geoPoint(site);
+
+  const [occurrence] = await tx
+    .insert(occurrences)
+    .values({ tenantId, categoryId, location: point, status: 'in_progress', createdAt: reportedAt })
+    .returning({ id: occurrences.id });
+  const occurrenceId = occurrence!.id;
+  const reports = [item.description, ...(item.extraReports ?? [])];
+  for (const [reportIndex, description] of reports.entries()) {
+    // Poucos metros ao lado do primeiro relato, dentro do raio de agrupamento do tipo.
+    const reportPoint = geoPoint({
+      lat: site.lat + reportIndex * 0.00002,
+      lng: site.lng - reportIndex * 0.00002,
+    });
+    await tx.insert(requests).values({
+      tenantId,
+      citizenId: reportIndex === 0 ? citizenId : extraCitizenIds[reportIndex - 1]!,
+      categoryId,
+      occurrenceId,
+      status: 'in_progress',
+      description,
+      address: reportIndex === 0 ? item.address : null,
+      location: reportPoint,
+      gpsLocation: reportPoint,
+      createdAt: new Date(reportedAt.getTime() + reportIndex * 15 * 60 * 1000),
+    });
+  }
+
+  const isReview = item.status === 'awaiting_review';
+  const [order] = await tx
+    .insert(workOrders)
+    .values({
+      tenantId,
+      occurrenceId,
+      teamId,
+      status: item.status,
+      dueAt: new Date(now + 2 * DAY_MS),
+      managerInstructions: item.managerInstructions,
+      agentNote: isReview ? item.agentComment : null,
+      completedAt: isReview ? agentAt : null,
+      impedimentReason: item.impedimentReason ?? null,
+      createdAt: assignedAt,
+      updatedAt: agentAt,
+    })
+    .returning({ id: workOrders.id });
+
+  // O agente estava a `distanceM` metros ao norte do local (1 grau de latitude ≈ 111,2 km).
+  const location: DeviceLocation = {
+    lat: site.lat + item.distanceM / 111_195,
+    lng: site.lng,
+    accuracyM: 10,
+  };
+  const event = { tenantId, occurrenceId, workOrderId: order!.id };
+  await tx.insert(statusEvents).values([
+    { ...event, toStatus: 'assigned', actorUserId: ids.managerId, createdAt: assignedAt },
+    {
+      ...event,
+      fromStatus: 'assigned',
+      toStatus: 'in_execution',
+      actorUserId: ids.agentId,
+      createdAt: startedAt,
+    },
+    {
+      ...event,
+      fromStatus: 'in_execution',
+      toStatus: item.status,
+      actorUserId: ids.agentId,
+      comment: item.agentComment,
+      details: {
+        ...(item.impedimentReason ? { reason: item.impedimentReason } : {}),
+        location,
+        distanceM: item.distanceM,
+      },
+      createdAt: agentAt,
+    },
+  ]);
+  return order!.id;
 }
 
 /** Cidadão demo extra (pelo e-mail), com vínculo de cidadão na prefeitura. Idempotente. */
@@ -814,8 +1039,9 @@ async function retireStrayOccurrences(
  * Idempotente: reencontra o que já existe e só cria o que falta; se uma migração apagou os dados
  * operacionais, recria as atividades. Com `reset`, cancela as atividades ativas da demo e cria
  * outras, recria a triagem de exemplo que foi tratada e recusa as demais ocorrências abertas da
- * prefeitura demo (retireStrayOccurrences). Exige a conexão do dono do banco (superusuário): ele cria a prefeitura e os usuários, que são
- * globais, e não passa pelo RLS.
+ * prefeitura demo (retireStrayOccurrences). Cria também a fila de revisão e de impedimentos do
+ * painel (DEMO_QUEUE), que o reset recria e não recusa. Exige a conexão do dono do banco
+ * (superusuário): ele cria a prefeitura e os usuários, que são globais, e não passa pelo RLS.
  */
 export async function seedDev(db: Database, options: SeedDevOptions = {}): Promise<SeedDevResult> {
   return db.transaction(async (tx) => {
@@ -825,12 +1051,13 @@ export async function seedDev(db: Database, options: SeedDevOptions = {}): Promi
     await seedMunicipalities(tx);
     const staff = await seedStaff(tx, base.tenantId);
     const workOrderIds = await seedDemoWorkOrders(tx, { ...base, ...staff }, options);
+    const panelWorkOrderIds = await seedDemoQueue(tx, { ...base, ...staff }, options);
     const triageIds = await seedDemoTriage(tx, base, options);
     if (options.reset) {
       const demoOrders = await tx
         .select({ occurrenceId: workOrders.occurrenceId })
         .from(workOrders)
-        .where(inArray(workOrders.id, workOrderIds));
+        .where(inArray(workOrders.id, [...workOrderIds, ...panelWorkOrderIds]));
       const keep = [...demoOrders.map((order) => order.occurrenceId), ...triageIds];
       await retireStrayOccurrences(tx, { tenantId: base.tenantId, ...staff }, keep);
     }
@@ -840,6 +1067,7 @@ export async function seedDev(db: Database, options: SeedDevOptions = {}): Promi
       agentId: base.agentId,
       ...staff,
       workOrderIds,
+      panelWorkOrderIds,
     };
   });
 }

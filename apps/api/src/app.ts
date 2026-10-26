@@ -134,7 +134,7 @@ export async function buildApp({
     });
     // Painel da prefeitura: escopo próprio, sem limite por IP.
     await app.register(async (scope) => {
-      registerPanelRoutes(scope, { db: database });
+      registerPanelRoutes(scope, { db: database, storage });
     });
     // Cidadão: escopo próprio, sem o limite por IP do /auth/*.
     await app.register(async (scope) => {

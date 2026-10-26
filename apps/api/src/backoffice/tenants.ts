@@ -12,7 +12,7 @@ import { and, desc, eq, sql } from 'drizzle-orm';
 import type { FastifyInstance, preHandlerHookHandler } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
-import { recordStaffAudit } from '../panel/audit.js';
+import { insertStaffAudit } from '../panel/audit.js';
 import { requirePlatformStaff } from './staff.js';
 
 const { tenants, tenantContracts, staffAuditEvents, users, categories, teams } = schema;
@@ -286,17 +286,18 @@ export function registerTenantRoutes(
           if (!category || !team) return 'not_ready' as const;
         }
         await tx.update(tenants).set({ status: transition.to }).where(eq(tenants.id, tenantId));
+        // Na mesma transação: a mudança e a auditoria valem juntas ou nenhuma vale.
+        await insertStaffAudit(
+          tx,
+          { ...staff, tenantId },
+          { action: transition.audit, targetType: 'tenant', targetId: tenantId },
+        );
         return 'ok' as const;
       });
 
       if (outcome === 'not_found') return reply.code(404).send({ code: 'tenant_not_found' });
       if (outcome === 'conflict') return reply.code(409).send({ code: 'tenant_status_conflict' });
       if (outcome === 'not_ready') return reply.code(422).send({ code: 'tenant_not_ready' });
-      await recordStaffAudit(
-        db,
-        { ...staff, tenantId },
-        { action: transition.audit, targetType: 'tenant', targetId: tenantId },
-      );
       return { status: transition.to };
     },
   );

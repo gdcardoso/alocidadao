@@ -300,4 +300,34 @@ describe('prefeituras do backoffice', () => {
     const back = await app.inject({ method: 'GET', url, headers });
     expect(back.json()).toMatchObject({ status: 'served' });
   });
+
+  it('status change and its audit row are atomic', async () => {
+    const adminId = await fx.newStaff('admin');
+    const tenantId = await fx.createTenant('active');
+    const fn = `fail_audit_${tenantId.replaceAll('-', '')}`;
+    // Gatilho que recusa a auditoria só desta prefeitura.
+    await owner.db.execute(
+      sql.raw(`create function ${fn}() returns trigger language plpgsql as $$
+        begin
+          if new.tenant_id = '${tenantId}' then raise exception 'audit_failed'; end if;
+          return new;
+        end $$`),
+    );
+    await owner.db.execute(
+      sql.raw(`create trigger ${fn} before insert on staff_audit_events
+        for each row execute function ${fn}()`),
+    );
+    try {
+      const response = await setStatus(tenantId, adminId, 'suspend');
+      expect(response.statusCode).toBe(500);
+      const [row] = await owner.db.select().from(tenants).where(eq(tenants.id, tenantId));
+      expect(row!.status).toBe('active');
+    } finally {
+      await owner.db.execute(sql.raw(`drop trigger ${fn} on staff_audit_events`));
+      await owner.db.execute(sql.raw(`drop function ${fn}()`));
+    }
+    // Sem a falha, a mesma chamada vale (e não dá 409).
+    expect((await setStatus(tenantId, adminId, 'suspend')).statusCode).toBe(200);
+    expect(await auditOf(tenantId)).toHaveLength(1);
+  });
 });

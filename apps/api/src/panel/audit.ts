@@ -1,4 +1,4 @@
-import { schema, withContext, type Database } from '@alocidadao/db';
+import { schema, withContext, type Database, type Transaction } from '@alocidadao/db';
 import type { PlatformRole, StaffAuditAction } from '@alocidadao/shared';
 import type { FastifyInstance } from 'fastify';
 
@@ -60,31 +60,43 @@ export function auditTarget(
   return { targetType: null, targetId: null };
 }
 
+type AuditContext = { tenantId: string; userId: string; platformRole: PlatformRole };
+type AuditEvent = {
+  action: StaffAuditAction;
+  targetType: string | null;
+  targetId: string | null;
+  details?: { route: string } | null;
+};
+
 /**
- * Grava um evento de `staff_audit_events` numa transação própria, no contexto de quem é da equipe
+ * Insere um evento de `staff_audit_events` na transação dada, que já deve ter o contexto da equipe
  * (a política de inserção exige o papel interno, a própria conta e a prefeitura do contexto).
+ */
+export async function insertStaffAudit(
+  tx: Transaction,
+  context: AuditContext,
+  event: AuditEvent,
+): Promise<void> {
+  await tx.insert(staffAuditEvents).values({
+    tenantId: context.tenantId,
+    staffUserId: context.userId,
+    action: event.action,
+    targetType: event.targetType,
+    targetId: event.targetId,
+    details: event.details ?? null,
+  });
+}
+
+/**
+ * Grava um evento de `staff_audit_events` numa transação própria, no contexto de quem é da equipe.
  * `details` nunca leva dado pessoal: a gestão da prefeitura lê esta tabela.
  */
 export async function recordStaffAudit(
   db: Database,
-  context: { tenantId: string; userId: string; platformRole: PlatformRole },
-  event: {
-    action: StaffAuditAction;
-    targetType: string | null;
-    targetId: string | null;
-    details?: { route: string } | null;
-  },
+  context: AuditContext,
+  event: AuditEvent,
 ): Promise<void> {
-  await withContext(db, context, (tx) =>
-    tx.insert(staffAuditEvents).values({
-      tenantId: context.tenantId,
-      staffUserId: context.userId,
-      action: event.action,
-      targetType: event.targetType,
-      targetId: event.targetId,
-      details: event.details ?? null,
-    }),
-  );
+  await withContext(db, context, (tx) => insertStaffAudit(tx, context, event));
 }
 
 /**

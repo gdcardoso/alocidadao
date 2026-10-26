@@ -25,6 +25,12 @@ O código de verificação de desenvolvimento é o valor de `AUTH_DEV_FIXED_CODE
 
 O admin interno (`11144477735`) não tem vínculo com prefeitura e cai na página "Seu acesso ao painel não está ativo" até o Plano 6.
 
+## Testar a revisão, os impedimentos e o cadastro
+
+O `--reset` do seed deixa duas atividades aguardando revisão (uma há 30 h, a 8 m do local; outra há 3 h, a 250 m) e um impedimento (falta de material), sem foto. Para ver a W3 e a W4, entre como Carlos Demo (gestor) ou Rita Demo (admin) e abra "Aguardando revisão" e "Impedimentos". O mesmo `--reset` desfaz o que a passada fez (publicar, devolver, reatribuir, reagendar).
+
+Para a revisão com fotos, o agente conclui uma atividade no app, no emulador `AloCidadao_API36` (`~/Library/Android/sdk/emulator/emulator -avd AloCidadao_API36`, login `+5511900000001`, `S3_PUBLIC_ENDPOINT` do emulador): iniciar, tirar as fotos e concluir leva a atividade a "Aguardando revisão" com as fotos pendentes. Para um impedimento novo, o agente registra o impedimento da atividade no app. As fotos só abrem no navegador com `S3_PUBLIC_ENDPOINT` em `http://localhost:9000`. Só o admin vê `Categorias` e a aba `Gestores`; o gestor recebe 403 `admin_only` nessas rotas.
+
 ## Observações de desenvolvimento
 
 - As miniaturas das fotos usam `S3_PUBLIC_ENDPOINT` da API. O exemplo aponta para o emulador Android (`http://10.0.2.2:9000`); para ver as fotos no navegador, use `http://localhost:9000` (e volte ao do emulador para testar o app).

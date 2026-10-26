@@ -14,3 +14,4 @@ export * from './panel.js';
 export * from './panel-work.js';
 export * from './panel-admin.js';
 export * from './phone.js';
+export * from './backoffice.js';

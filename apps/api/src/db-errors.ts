@@ -16,6 +16,8 @@ export function violatedConstraint(error: unknown): string | undefined {
 /** Restrições únicas traduzidas em erros da API (nomes dos índices da W6). */
 export const PHONE_ACTIVE_CONSTRAINT = 'users_phone_active_idx';
 export const TEAM_NAME_CONSTRAINT = 'teams_tenant_name_idx';
+/** Um agente em uma equipe só por prefeitura. */
+export const TEAM_MEMBER_CONSTRAINT = 'team_members_tenant_user_idx';
 
 /** Erro do Postgres com este SQLSTATE e, se dada, esta mensagem (no erro ou no `cause`). */
 export function isPgError(error: unknown, code: string, message?: string): boolean {

@@ -1,7 +1,7 @@
 import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDatabase, withContext, type DbContext } from './client.js';
-import { departments, memberships, teams, tenants, users } from './schema.js';
+import { departments, memberships, teamMembers, teams, tenants, users } from './schema.js';
 import { TEST_APP_URL, TEST_OWNER_URL } from './test/urls.js';
 
 // Cadastro de agentes e gestores pelo painel: funções SECURITY DEFINER (o RLS de users não deixa
@@ -254,6 +254,24 @@ describe('cadastro de agentes pelo painel', () => {
     });
   });
 
+  it('troca de número recusada para quem tem acesso ao painel ou é da equipe interna', async () => {
+    // Os dois têm celular, nunca entraram e são agentes desta prefeitura.
+    const staff = await createUser({ name: 'Suporte', phone: newPhone(), platformRole: 'support' });
+    await link(tenantA, staff, 'field_agent', 'invited');
+    const managerHere = await createUser({ name: 'Gestor agente', phone: newPhone() });
+    await link(tenantA, managerHere, 'field_agent', 'invited');
+    await link(tenantA, managerHere, 'manager', 'inactive');
+
+    for (const id of [staff, managerHere]) {
+      const before = (await userRow(id)).phone;
+      expect(await pgError(changeAgentPhone(asManager(), id, newPhone()))).toMatchObject({
+        code: '23514',
+        message: 'phone_change_not_allowed',
+      });
+      expect((await userRow(id)).phone).toBe(before);
+    }
+  });
+
   it('troca de número para um número em uso cai no índice único', async () => {
     const target = await findOrCreateAgent(asManager(), 'Ana Souza', newPhone());
     await link(tenantA, target, 'field_agent', 'invited');
@@ -404,5 +422,24 @@ describe('equipes', () => {
       .values({ tenantId: tenantB, name: 'Obras' })
       .returning();
     await newTeam(tenantB, departmentB!.id, 'Equipe Vila Nova');
+  });
+
+  it('agente em duas equipes da mesma prefeitura é recusado', async () => {
+    const [first, second] = await owner.db
+      .insert(teams)
+      .values([
+        { tenantId: tenantA, departmentId: departmentA, name: 'Equipe Uma' },
+        { tenantId: tenantA, departmentId: departmentA, name: 'Equipe Duas' },
+      ])
+      .returning();
+    await owner.db
+      .insert(teamMembers)
+      .values({ tenantId: tenantA, teamId: first!.id, userId: agentId });
+    const twice = await pgError(
+      owner.db
+        .insert(teamMembers)
+        .values({ tenantId: tenantA, teamId: second!.id, userId: agentId }),
+    );
+    expect(twice).toMatchObject({ code: '23505', constraint: 'team_members_tenant_user_idx' });
   });
 });

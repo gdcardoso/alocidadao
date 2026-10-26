@@ -109,7 +109,22 @@ describe('CategoriesPage', () => {
         'Relatos desta categoria a até 20 m são sugeridos como a mesma ocorrência.',
       ),
     ).toBeInTheDocument();
+    await user.type(within(panel).getByLabelText('Nome no app'), 'Semáforo');
+    await user.selectOptions(within(panel).getByLabelText('Setor responsável'), 'Obras');
+    await user.selectOptions(within(panel).getByLabelText('Ícone'), 'Lâmpada');
     const radius = within(panel).getByLabelText('Raio de agrupamento');
+    const saveButton = within(panel).getByRole('button', { name: 'Salvar' });
+    // Vazio: a ajuda fica sem o número e não dá para salvar.
+    await user.clear(radius);
+    expect(
+      within(panel).getByText(
+        'Relatos desta categoria dentro do raio são sugeridos como a mesma ocorrência.',
+      ),
+    ).toBeInTheDocument();
+    expect(saveButton).toBeDisabled();
+    // Só metros inteiros.
+    await user.type(radius, '20.5');
+    expect(saveButton).toBeDisabled();
     await user.clear(radius);
     await user.type(radius, '35');
     expect(
@@ -117,9 +132,6 @@ describe('CategoriesPage', () => {
         'Relatos desta categoria a até 35 m são sugeridos como a mesma ocorrência.',
       ),
     ).toBeInTheDocument();
-    await user.type(within(panel).getByLabelText('Nome no app'), 'Semáforo');
-    await user.selectOptions(within(panel).getByLabelText('Setor responsável'), 'Obras');
-    await user.selectOptions(within(panel).getByLabelText('Ícone'), 'Lâmpada');
     await user.click(within(panel).getByRole('button', { name: 'Salvar' }));
     expect(createCategory).toHaveBeenCalledWith(tenantId, {
       name: 'Semáforo',

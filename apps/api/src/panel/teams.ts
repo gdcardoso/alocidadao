@@ -16,6 +16,7 @@ import {
   isPgError,
   isUniqueViolation,
   PHONE_ACTIVE_CONSTRAINT,
+  TEAM_MEMBER_CONSTRAINT,
   TEAM_NAME_CONSTRAINT,
   violatedConstraint,
 } from '../db-errors.js';
@@ -32,7 +33,7 @@ type TeamsError =
       code:
         'team_name_taken' | 'agent_already_in_team' | 'phone_change_not_allowed' | 'phone_in_use';
     }
-  | { status: 409; code: 'agent_in_other_team'; teamName: string }
+  | { status: 409; code: 'agent_in_other_team'; teamName?: string }
   | { status: 422; code: 'department_not_eligible' | 'team_not_eligible' };
 
 export type TeamsResult<T> = { ok: T } | { error: TeamsError };
@@ -287,6 +288,10 @@ export async function addAgent(
   } catch (error) {
     if (isUniqueViolation(error) && violatedConstraint(error) === PHONE_ACTIVE_CONSTRAINT) {
       return fail({ status: 409, code: 'phone_in_use' });
+    }
+    // Outro pedido pôs o agente em outra equipe entre a conferência e a inclusão.
+    if (isUniqueViolation(error) && violatedConstraint(error) === TEAM_MEMBER_CONSTRAINT) {
+      return fail({ status: 409, code: 'agent_in_other_team' });
     }
     throw error;
   }

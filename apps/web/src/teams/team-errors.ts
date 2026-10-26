@@ -1,13 +1,6 @@
 import { ApiError } from '@alocidadao/api-client';
 import { NETWORK_ERROR_MESSAGE, UNEXPECTED_ERROR_MESSAGE } from '../auth/login-errors';
 
-/** Código do corpo de um `ApiError`, ou undefined. */
-export function apiErrorCode(error: unknown): string | undefined {
-  if (!(error instanceof ApiError)) return undefined;
-  const body = error.body as { code?: unknown } | null;
-  return typeof body?.code === 'string' ? body.code : undefined;
-}
-
 /** Campo extra de texto do corpo de um `ApiError` (ex.: `teamName`). */
 export function apiErrorField(error: unknown, key: string): string | undefined {
   if (!(error instanceof ApiError)) return undefined;

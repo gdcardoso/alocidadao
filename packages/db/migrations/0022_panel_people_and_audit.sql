@@ -103,8 +103,9 @@ GRANT EXECUTE ON FUNCTION panel_find_or_create_manager_user(text, text, text) TO
 -- ── Troca do celular de um agente que nunca entrou ──
 -- Quem já entrou no app troca o número no Perfil (account_change_phone): assim o gestor nunca
 -- muda o login de quem já usa o app, nem o de um cidadão. Também recusa quem tem vínculo em outra
--- prefeitura: o login é global e a troca mexeria no acesso dela. Número de outra conta ativa cai
--- em users_phone_active_idx (23505).
+-- prefeitura (o login é global e a troca mexeria no acesso dela), a equipe interna da plataforma e
+-- quem é gestor ou admin de qualquer prefeitura, em qualquer situação. Número de outra conta ativa
+-- cai em users_phone_active_idx (23505).
 
 CREATE FUNCTION panel_change_agent_phone(p_user_id uuid, p_phone text)
   RETURNS void
@@ -113,10 +114,11 @@ CREATE FUNCTION panel_change_agent_phone(p_user_id uuid, p_phone text)
   AS $$
   DECLARE
     v_last_active timestamptz;
+    v_platform_role platform_role;
   BEGIN
     PERFORM panel_require_manager('panel_change_agent_phone', false);
 
-    SELECT u.last_active_at INTO v_last_active
+    SELECT u.last_active_at, u.platform_role INTO v_last_active, v_platform_role
     FROM users u
     WHERE u.id = p_user_id
       AND u.account_status = 'active'
@@ -132,9 +134,10 @@ CREATE FUNCTION panel_change_agent_phone(p_user_id uuid, p_phone text)
       RAISE EXCEPTION 'panel_change_agent_phone: agente inexistente nesta prefeitura'
         USING ERRCODE = 'no_data_found';
     END IF;
-    IF v_last_active IS NOT NULL OR EXISTS (
+    IF v_last_active IS NOT NULL OR v_platform_role IS NOT NULL OR EXISTS (
       SELECT 1 FROM memberships m
-      WHERE m.user_id = p_user_id AND m.tenant_id <> app_current_tenant()
+      WHERE m.user_id = p_user_id
+        AND (m.tenant_id <> app_current_tenant() OR m.role IN ('manager', 'tenant_admin'))
     ) THEN
       RAISE EXCEPTION 'phone_change_not_allowed'
         USING ERRCODE = 'check_violation';

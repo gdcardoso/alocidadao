@@ -108,6 +108,12 @@ describe('category bodies', () => {
       false,
     );
     expect(categoryCreateBodySchema.safeParse({ ...base, clusterRadiusM: 500 }).success).toBe(true);
+    expect(categoryCreateBodySchema.safeParse({ ...base, clusterRadiusM: 20.5 }).success).toBe(
+      false,
+    );
+    expect(categoryCreateBodySchema.safeParse({ ...base, defaultDeadlineDays: 7.5 }).success).toBe(
+      false,
+    );
     expect(categoryCreateBodySchema.safeParse({ ...base, defaultDeadlineDays: 366 }).success).toBe(
       false,
     );

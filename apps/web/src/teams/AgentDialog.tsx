@@ -14,7 +14,8 @@ import { usePanel } from '../shell/use-panel';
 import { Button } from '../ui/Button';
 import { Dialog } from '../ui/Dialog';
 import { useToast } from '../ui/Toast';
-import { apiErrorCode, apiErrorField, generalErrorMessage } from './team-errors';
+import { errorCode } from '../occurrence/use-occurrence-actions';
+import { apiErrorField, generalErrorMessage } from './team-errors';
 import { teamsKey } from './team-keys';
 import styles from './Teams.module.css';
 
@@ -99,10 +100,14 @@ export function AddAgentDialog({ team, onClose }: AddAgentDialogProps) {
       onClose();
     },
     onError: (error) => {
-      const code = apiErrorCode(error);
+      const code = errorCode(error);
       if (code === 'agent_in_other_team') {
-        const teamName = apiErrorField(error, 'teamName') ?? 'informada';
-        setPhoneError(`Este celular já é de um agente da equipe ${teamName}.`);
+        const teamName = apiErrorField(error, 'teamName');
+        setPhoneError(
+          teamName
+            ? `Este celular já é de um agente da equipe ${teamName}.`
+            : 'Este celular já é de um agente de outra equipe.',
+        );
       } else if (code === 'agent_already_in_team') {
         setPhoneError('Este agente já está nesta equipe.');
       } else {
@@ -193,11 +198,13 @@ export function ChangePhoneDialog({ agent, onClose }: ChangePhoneDialogProps) {
       onClose();
     },
     onError: (error) => {
-      const code = apiErrorCode(error);
+      const code = errorCode(error);
       if (code === 'phone_in_use') {
         setPhoneError('Este número já é de outra conta.');
       } else if (code === 'phone_change_not_allowed') {
-        setGeneralError('O agente já entrou no app. Ele troca o número no Perfil.');
+        setGeneralError(
+          'Não dá para trocar o número deste agente pelo painel. Ele troca no Perfil do app.',
+        );
         void refresh();
       } else {
         setGeneralError(generalErrorMessage(error));
@@ -273,7 +280,7 @@ export function MoveAgentDialog({ agent, teams, onClose }: MoveAgentDialogProps)
     },
     onError: (failure) => {
       setError(
-        apiErrorCode(failure) === 'team_not_eligible'
+        errorCode(failure) === 'team_not_eligible'
           ? 'Esta equipe não está disponível para você.'
           : generalErrorMessage(failure),
       );

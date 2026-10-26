@@ -19,7 +19,8 @@ import { api } from '../api';
 import { departmentsKey } from '../managers/managers-keys';
 import { useSession } from '../session/SessionProvider';
 import { usePanel } from '../shell/use-panel';
-import { apiErrorCode, generalErrorMessage } from '../teams/team-errors';
+import { errorCode } from '../occurrence/use-occurrence-actions';
+import { generalErrorMessage } from '../teams/team-errors';
 import { Button } from '../ui/Button';
 import { CategorySquare } from '../ui/CategorySquare';
 import fields from '../ui/Field.module.css';
@@ -68,6 +69,7 @@ export function CategoryEditor({ category, onClose }: CategoryEditorProps) {
     deadlineNumber >= 1 &&
     deadlineNumber <= DEADLINE_DAYS_MAX &&
     radius !== '' &&
+    Number.isInteger(radiusNumber) &&
     radiusNumber >= 1 &&
     radiusNumber <= CLUSTER_RADIUS_MAX_M;
 
@@ -106,7 +108,7 @@ export function CategoryEditor({ category, onClose }: CategoryEditorProps) {
       onClose();
     },
     onError: (error) => {
-      if (apiErrorCode(error) === 'category_name_taken') {
+      if (errorCode(error) === 'category_name_taken') {
         setNameError('Já existe uma categoria com este nome.');
       } else {
         setGeneralError(generalErrorMessage(error));
@@ -219,6 +221,7 @@ export function CategoryEditor({ category, onClose }: CategoryEditorProps) {
               type="number"
               min={1}
               max={DEADLINE_DAYS_MAX}
+              step={1}
               className={fields.input}
               value={deadline}
               aria-describedby={`${ids}-deadline-help`}
@@ -243,6 +246,7 @@ export function CategoryEditor({ category, onClose }: CategoryEditorProps) {
               type="number"
               min={1}
               max={CLUSTER_RADIUS_MAX_M}
+              step={1}
               className={fields.input}
               value={radius}
               aria-describedby={`${ids}-radius-help`}
@@ -253,7 +257,9 @@ export function CategoryEditor({ category, onClose }: CategoryEditorProps) {
             </span>
           </div>
           <p id={`${ids}-radius-help`} className={fields.hint}>
-            {`Relatos desta categoria a até ${radius} m são sugeridos como a mesma ocorrência.`}
+            {radius === ''
+              ? 'Relatos desta categoria dentro do raio são sugeridos como a mesma ocorrência.'
+              : `Relatos desta categoria a até ${radius} m são sugeridos como a mesma ocorrência.`}
           </p>
         </div>
       </div>

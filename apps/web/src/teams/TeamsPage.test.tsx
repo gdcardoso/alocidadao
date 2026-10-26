@@ -239,6 +239,8 @@ describe('TeamsPage', () => {
     addAgent.mockRejectedValueOnce(
       new ApiError(409, { code: 'agent_in_other_team', teamName: 'Obras · Zona Norte' }),
     );
+    // Sem o nome da equipe (o índice único pegou uma inclusão simultânea).
+    addAgent.mockRejectedValueOnce(new ApiError(409, { code: 'agent_in_other_team' }));
     addAgent.mockResolvedValueOnce(agent({ name: 'Ana Souza' }));
     const user = renderPage();
     await user.click(await screen.findByRole('button', { name: 'Adicionar agente' }));
@@ -255,6 +257,10 @@ describe('TeamsPage', () => {
       await within(dialog).findByText(
         'Este celular já é de um agente da equipe Obras · Zona Norte.',
       ),
+    ).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Adicionar' }));
+    expect(
+      await within(dialog).findByText('Este celular já é de um agente de outra equipe.'),
     ).toBeInTheDocument();
     await user.click(within(dialog).getByRole('button', { name: 'Adicionar' }));
     expect(await screen.findByText('Ana Souza adicionado à equipe.')).toBeInTheDocument();
@@ -277,6 +283,22 @@ describe('TeamsPage', () => {
       phone: '+5511977776666',
     });
     expect(await screen.findByText('Número trocado.')).toBeInTheDocument();
+  });
+
+  it('change phone refused by the database shows the profile notice', async () => {
+    updateAgent.mockRejectedValue(new ApiError(409, { code: 'phone_change_not_allowed' }));
+    const user = renderPage();
+    await screen.findByText('Marcos Lima');
+    await user.click(screen.getByRole('button', { name: 'Ações de Marcos Lima' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Trocar número' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Trocar número' });
+    await user.type(within(dialog).getByLabelText('Novo celular'), '11977776666');
+    await user.click(within(dialog).getByRole('button', { name: 'Salvar' }));
+    expect(
+      await within(dialog).findByText(
+        'Não dá para trocar o número deste agente pelo painel. Ele troca no Perfil do app.',
+      ),
+    ).toBeInTheDocument();
   });
 
   it('move agent offers the other teams', async () => {

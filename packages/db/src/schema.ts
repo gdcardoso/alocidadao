@@ -372,6 +372,8 @@ export const teamMembers = pgTable(
   (t) => [
     primaryKey({ columns: [t.teamId, t.userId] }),
     foreignKey({ columns: [t.tenantId, t.teamId], foreignColumns: [teams.tenantId, teams.id] }),
+    // Um agente fica em uma equipe só por prefeitura.
+    uniqueIndex('team_members_tenant_user_idx').on(t.tenantId, t.userId),
   ],
 );
 

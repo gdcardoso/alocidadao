@@ -167,7 +167,7 @@ export const categoryCreateBodySchema = z.object({
   iconGroup: iconGroupSchema,
   departmentId: z.uuid(),
   defaultDeadlineDays: z.number().int().min(1).max(DEADLINE_DAYS_MAX),
-  clusterRadiusM: z.number().min(1).max(CLUSTER_RADIUS_MAX_M),
+  clusterRadiusM: z.number().int().min(1).max(CLUSTER_RADIUS_MAX_M),
   active: z.boolean(),
 });
 export type CategoryCreateBody = z.infer<typeof categoryCreateBodySchema>;

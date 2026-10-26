@@ -15,7 +15,8 @@ import { Dialog } from '../ui/Dialog';
 import { useToast } from '../ui/Toast';
 import { BasePicker } from './BasePicker';
 import { teamsKey } from './team-keys';
-import { apiErrorCode, generalErrorMessage } from './team-errors';
+import { errorCode } from '../occurrence/use-occurrence-actions';
+import { generalErrorMessage } from './team-errors';
 import styles from './Teams.module.css';
 
 export interface TeamDialogProps {
@@ -66,7 +67,7 @@ export function TeamDialog({ team, onClose, onSaved }: TeamDialogProps) {
       onSaved(saved);
     },
     onError: (error) => {
-      const code = apiErrorCode(error);
+      const code = errorCode(error);
       if (code === 'team_name_taken') {
         setNameError('Já existe uma equipe com este nome.');
       } else if (code === 'department_not_eligible') {

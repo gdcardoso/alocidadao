@@ -11,7 +11,8 @@ import { useId, useState } from 'react';
 import { api } from '../api';
 import { useSession } from '../session/SessionProvider';
 import { usePanel } from '../shell/use-panel';
-import { apiErrorCode, apiErrorField, generalErrorMessage } from '../teams/team-errors';
+import { errorCode } from '../occurrence/use-occurrence-actions';
+import { apiErrorField, generalErrorMessage } from '../teams/team-errors';
 import { Button } from '../ui/Button';
 import { Dialog } from '../ui/Dialog';
 import fields from '../ui/Field.module.css';
@@ -92,7 +93,7 @@ export function ManagerDialog({ manager, onClose }: ManagerDialogProps) {
       setCpfError(null);
       setEmailError(null);
       setGeneralError(null);
-      const code = apiErrorCode(error);
+      const code = errorCode(error);
       if (code === 'email_mismatch') {
         setEmailError(
           `Este CPF já tem outro e-mail cadastrado: ${apiErrorField(error, 'maskedEmail') ?? ''}.`,

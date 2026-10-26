@@ -5,7 +5,8 @@ import { api } from '../api';
 import { departmentsKey } from '../managers/managers-keys';
 import { useSession } from '../session/SessionProvider';
 import { usePanel } from '../shell/use-panel';
-import { apiErrorCode, generalErrorMessage } from '../teams/team-errors';
+import { errorCode } from '../occurrence/use-occurrence-actions';
+import { generalErrorMessage } from '../teams/team-errors';
 import { Button } from '../ui/Button';
 import { Dialog } from '../ui/Dialog';
 import fields from '../ui/Field.module.css';
@@ -48,7 +49,7 @@ export function DepartmentDialog({ department, onClose }: DepartmentDialogProps)
       onClose();
     },
     onError: (error) => {
-      if (apiErrorCode(error) === 'department_name_taken') {
+      if (errorCode(error) === 'department_name_taken') {
         setNameError('Já existe um setor com este nome.');
       } else {
         setGeneralError(generalErrorMessage(error));

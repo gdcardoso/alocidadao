@@ -40,8 +40,8 @@ type CreateRefusal =
 const REFUSE_TENANT_EXISTS = { status: 409, code: 'tenant_exists' } as const;
 
 /** Sem a extensão `unaccent` no banco: minúsculas e sem acento por `translate`, dos dois lados. */
-const ACCENTED = 'áàâãäéèêëíìîïóòôõöúùûüçñ';
-const PLAIN = 'aaaaaeeeeiiiiooooouuuucn';
+const ACCENTED = 'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ';
+const PLAIN = 'aaaaaeeeeiiiiooooouuuucnaaaaaeeeeiiiiooooouuuucn';
 
 const foldJs = (text: string) =>
   text

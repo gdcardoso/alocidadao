@@ -101,6 +101,15 @@ describe('municipality search', () => {
     ]);
   });
 
+  it('municipality search finds capital accented names from plain text', async () => {
+    const staffId = await fx.newStaff('support');
+    const code = await addMunicipality('Águas Testadas');
+    const response = await call('GET', '/backoffice/municipalities?q=aguas%20testadas', staffId);
+    expect(response.json().items).toEqual([
+      { ibgeCode: code, name: 'Águas Testadas', state: 'PR', taken: false },
+    ]);
+  });
+
   it('municipality search by code prefix', async () => {
     const staffId = await fx.newStaff('admin');
     const code = await addMunicipality('Prefixo Unico', '7654321');
@@ -220,6 +229,18 @@ describe('nova prefeitura', () => {
     const again = await create(staffId, body(code));
     expect(again.statusCode).toBe(409);
     expect(again.json()).toEqual({ code: 'tenant_exists' });
+  });
+
+  it('admin email of another account is 409 email_in_use', async () => {
+    const staffId = await fx.newStaff('admin');
+    const code = await addMunicipality('Cidade Email');
+    const email = `outra.${randomUUID()}@exemplo.com`;
+    await owner.db.insert(users).values({ name: 'Outra Pessoa', cpf: nextCpf(), email });
+    const payload = body(code);
+    (payload.admin as Record<string, string>).email = email;
+    const response = await create(staffId, payload);
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toEqual({ code: 'email_in_use' });
   });
 
   it('unknown municipality is 422 municipality_not_found', async () => {

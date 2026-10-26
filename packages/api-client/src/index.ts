@@ -1,4 +1,18 @@
 import {
+  backofficeContextSchema,
+  municipalitySearchResponseSchema,
+  tenantCreateResponseSchema,
+  tenantDetailSchema,
+  tenantListResponseSchema,
+  tenantSummarySchema,
+  type BackofficeContext,
+  type MunicipalitySearchResponse,
+  type TenantCreateBody,
+  type TenantCreateResponse,
+  type TenantDetail,
+  type TenantListResponse,
+  type TenantStatus,
+  type TenantStatusBody,
   agentWorkOrderCardSchema,
   agentRowSchema,
   agentsResponseSchema,
@@ -281,6 +295,10 @@ export function createApiClient({
     `/panel/work-orders/${encodeURIComponent(id)}/${action}`;
   const panelHeaders = { 'x-requested-with': 'alocidadao-panel' };
 
+  const tenantPath = (id: string, action?: string) =>
+    `/backoffice/tenants/${encodeURIComponent(id)}${action ? `/${action}` : ''}`;
+  const tenantStatusResponseSchema = tenantSummarySchema.pick({ status: true });
+
   return {
     health: async (): Promise<HealthResponse> =>
       healthResponseSchema.parse(await request('/health')),
@@ -427,6 +445,45 @@ export function createApiClient({
         { method: 'POST', headers: panelHeaders, signal: options?.signal ?? null },
         'none',
       );
+    },
+
+    // Backoffice: token do painel, sem `x-tenant-id` (as rotas não pertencem a uma prefeitura).
+    backofficeContext: async (options?: RequestOptions): Promise<BackofficeContext> =>
+      backofficeContextSchema.parse(await send('GET', '/backoffice/context', undefined, options)),
+
+    backofficeTenants: async (options?: RequestOptions): Promise<TenantListResponse> =>
+      tenantListResponseSchema.parse(await send('GET', '/backoffice/tenants', undefined, options)),
+
+    backofficeTenant: async (id: string, options?: RequestOptions): Promise<TenantDetail> =>
+      tenantDetailSchema.parse(await send('GET', tenantPath(id), undefined, options)),
+
+    backofficeSetTenantStatus: async (
+      id: string,
+      body: TenantStatusBody,
+      options?: RequestOptions,
+    ): Promise<{ status: TenantStatus }> =>
+      tenantStatusResponseSchema.parse(await send('POST', tenantPath(id, 'status'), body, options)),
+
+    backofficeMunicipalities: async (
+      q: string,
+      options?: RequestOptions,
+    ): Promise<MunicipalitySearchResponse> =>
+      municipalitySearchResponseSchema.parse(
+        await send('GET', `/backoffice/municipalities${panelQuery({ q })}`, undefined, options),
+      ),
+
+    backofficeCreateTenant: async (
+      body: TenantCreateBody,
+      options?: RequestOptions,
+    ): Promise<TenantCreateResponse> =>
+      tenantCreateResponseSchema.parse(await send('POST', '/backoffice/tenants', body, options)),
+
+    backofficeEnterSupport: async (id: string, options?: RequestOptions): Promise<void> => {
+      await send('POST', tenantPath(id, 'support/enter'), undefined, options);
+    },
+
+    backofficeLeaveSupport: async (id: string, options?: RequestOptions): Promise<void> => {
+      await send('POST', tenantPath(id, 'support/leave'), undefined, options);
     },
 
     panelContext: async (tenantId: string, options?: RequestOptions): Promise<PanelContext> =>

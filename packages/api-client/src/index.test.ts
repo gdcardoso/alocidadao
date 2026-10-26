@@ -384,3 +384,88 @@ describe('panel calls', () => {
     expect(calls[0]?.init?.method).toBe('PATCH');
   });
 });
+
+describe('backoffice calls', () => {
+  const NEW_TENANT_ID = '7c1d2e3f-4a5b-4c6d-8e7f-901234567890';
+  const body = {
+    ibgeCode: '3550308',
+    displayName: 'Prefeitura de Exemplo',
+    centralPhone: null,
+    admin: { name: 'Maria Souza', cpf: '52998224725', email: 'maria@exemplo.com' },
+    contract: {
+      plan: 'essential' as const,
+      includedPanelUsers: 5,
+      startsOn: '2026-11-01',
+      endsOn: null,
+    },
+    copyDefaultCatalog: true,
+  };
+
+  const recorder = (response: () => Response) => {
+    const calls: { url: string; init?: RequestInit }[] = [];
+    const fakeFetch: typeof fetch = async (input, init) => {
+      calls.push({ url: String(input), init });
+      return response();
+    };
+    return { calls, fakeFetch };
+  };
+
+  it('backofficeCreateTenant posts the body and surfaces email_mismatch with maskedEmail', async () => {
+    const created = recorder(() => Response.json({ id: NEW_TENANT_ID }, { status: 201 }));
+    const api = createApiClient({
+      baseUrl: 'http://api',
+      fetch: created.fakeFetch,
+      getToken: () => 't',
+    });
+    await expect(api.backofficeCreateTenant(body)).resolves.toEqual({ id: NEW_TENANT_ID });
+    expect(created.calls[0]?.url).toBe('http://api/backoffice/tenants');
+    expect(created.calls[0]?.init?.method).toBe('POST');
+    expect(JSON.parse(String(created.calls[0]?.init?.body))).toEqual(body);
+
+    const mismatch = recorder(() =>
+      Response.json({ code: 'email_mismatch', maskedEmail: 'm•••@exemplo.com' }, { status: 409 }),
+    );
+    const failing = createApiClient({ baseUrl: 'http://api', fetch: mismatch.fakeFetch });
+    const error = await failing.backofficeCreateTenant(body).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).status).toBe(409);
+    expect((error as ApiError).body).toEqual({
+      code: 'email_mismatch',
+      maskedEmail: 'm•••@exemplo.com',
+    });
+  });
+
+  it('backoffice calls send no tenant header', async () => {
+    const { calls, fakeFetch } = recorder(() => new Response(null, { status: 204 }));
+    const api = createApiClient({ baseUrl: 'http://api', fetch: fakeFetch, getToken: () => 't' });
+    await api.backofficeEnterSupport(NEW_TENANT_ID);
+    await api.backofficeLeaveSupport(NEW_TENANT_ID);
+    expect(calls.map((c) => c.url)).toEqual([
+      `http://api/backoffice/tenants/${NEW_TENANT_ID}/support/enter`,
+      `http://api/backoffice/tenants/${NEW_TENANT_ID}/support/leave`,
+    ]);
+    for (const call of calls) {
+      const headers = new Headers(call.init?.headers);
+      expect(call.init?.method).toBe('POST');
+      expect(headers.get('x-tenant-id')).toBeNull();
+      expect(headers.get('Authorization')).toBe('Bearer t');
+    }
+  });
+
+  it('backofficeSetTenantStatus and backofficeMunicipalities use the expected routes', async () => {
+    const status = recorder(() => Response.json({ status: 'suspended' }));
+    const api = createApiClient({ baseUrl: 'http://api', fetch: status.fakeFetch });
+    await expect(
+      api.backofficeSetTenantStatus(NEW_TENANT_ID, { action: 'suspend' }),
+    ).resolves.toEqual({
+      status: 'suspended',
+    });
+    expect(status.calls[0]?.url).toBe(`http://api/backoffice/tenants/${NEW_TENANT_ID}/status`);
+    expect(JSON.parse(String(status.calls[0]?.init?.body))).toEqual({ action: 'suspend' });
+
+    const search = recorder(() => Response.json({ items: [] }));
+    const searchApi = createApiClient({ baseUrl: 'http://api', fetch: search.fakeFetch });
+    await searchApi.backofficeMunicipalities('São Paulo');
+    expect(search.calls[0]?.url).toBe('http://api/backoffice/municipalities?q=S%C3%A3o+Paulo');
+  });
+});

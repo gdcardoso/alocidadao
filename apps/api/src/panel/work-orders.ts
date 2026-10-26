@@ -1,6 +1,8 @@
 import { schema, withContext, type Database, type Transaction } from '@alocidadao/db';
 import {
+  IMPEDIMENT_REASONS,
   QUEUE_LIMIT,
+  type ImpedimentDetail,
   type ImpedimentReason,
   type ReviewDetail,
   type WorkOrderHeader,
@@ -110,6 +112,10 @@ export async function findScopedWorkOrder(
 
 export type ScopedWorkOrder = NonNullable<Awaited<ReturnType<typeof findScopedWorkOrder>>>;
 
+/** O motivo vem de texto livre no banco: o que não for um motivo conhecido vira null. */
+export const parseImpedimentReason = (value: string | null): ImpedimentReason | null =>
+  IMPEDIMENT_REASONS.find((reason) => reason === value) ?? null;
+
 /** Fila de atividades no status (revisão ou impedimento): a que espera há mais tempo primeiro. */
 export async function loadWorkQueue(
   db: Database,
@@ -157,8 +163,7 @@ export async function loadWorkQueue(
         ...row,
         statusSince: row.statusSince.toISOString(),
         // O motivo só existe na fila de impedimentos.
-        impedimentReason:
-          status === 'impeded' ? (row.impedimentReason as ImpedimentReason | null) : null,
+        impedimentReason: status === 'impeded' ? parseImpedimentReason(row.impedimentReason) : null,
       })),
     };
   });
@@ -272,5 +277,47 @@ export async function loadReviewDetail(
     citizenPhotos: storage
       ? await Promise.all(citizenKeys.map(async (key) => ({ url: await sign(key) })))
       : [],
+  };
+}
+
+/**
+ * Detalhe do impedimento: cabeçalho, motivo, relato (o comentário do evento de impedimento) e
+ * a foto de impedimento mais recente. undefined quando a atividade não existe, está fora do
+ * alcance ou não está `impeded`. Sem `storage`, `photoUrl` é null.
+ */
+export async function loadImpedimentDetail(
+  db: Database,
+  identity: PanelIdentity,
+  id: string,
+  storage?: Storage,
+): Promise<ImpedimentDetail | undefined> {
+  const { tenantId, userId } = identity;
+  const loaded = await withContext(db, { tenantId, userId }, async (tx) => {
+    const order = await findScopedWorkOrder(tx, identity, id);
+    if (!order || order.status !== 'impeded') return undefined;
+    const header = await loadWorkOrderHeader(tx, order);
+    const [event] = await tx
+      .select({ comment: statusEvents.comment })
+      .from(statusEvents)
+      .where(and(eq(statusEvents.workOrderId, order.id), eq(statusEvents.toStatus, 'impeded')))
+      .orderBy(desc(statusEvents.createdAt), desc(statusEvents.id))
+      .limit(1);
+    const [photo] = await tx
+      .select({ storageKey: photos.storageKey })
+      .from(photos)
+      .where(and(eq(photos.workOrderId, order.id), eq(photos.purpose, 'impediment')))
+      .orderBy(desc(photos.createdAt), desc(photos.id))
+      .limit(1);
+    return { order, header, note: event?.comment ?? null, photoKey: photo?.storageKey };
+  });
+  if (!loaded) return undefined;
+  return {
+    ...loaded.header,
+    reason: parseImpedimentReason(loaded.order.impedimentReason),
+    note: loaded.note,
+    photoUrl:
+      storage && loaded.photoKey
+        ? await storage.presignGet(loaded.photoKey, PHOTO_URL_SECONDS)
+        : null,
   };
 }

@@ -2,6 +2,7 @@ import { schema, type Database, type Transaction } from '@alocidadao/db';
 import {
   applyWorkOrderAction,
   type PublishBody,
+  type ReassignBody,
   type RescheduleBody,
   type ReworkBody,
   type ReworkDetails,
@@ -11,6 +12,7 @@ import {
 import { and, eq, inArray } from 'drizzle-orm';
 import {
   dueAtFor,
+  findEligibleTeam,
   lockOccurrence,
   moveOccurrence,
   moveRequests,
@@ -216,5 +218,55 @@ export function rescheduleWorkOrder(
       dueAt: dueAtFor(body.dueDate),
       comment: `Reagendada para ${shortDate(body.dueDate)}`,
     });
+  });
+}
+
+/**
+ * Reatribui a atividade impedida: ela é cancelada (com o nome da equipe nova no comentário) e
+ * nasce outra, `assigned`, para a equipe nova. A ocorrência e as solicitações não mudam. Trava
+ * a ocorrência antes da atividade (a mesma ordem da recusa).
+ */
+export function reassignWorkOrder(
+  db: Database,
+  identity: PanelIdentity,
+  id: string,
+  body: ReassignBody,
+): Promise<Result<WorkOrderResult>> {
+  return run(db, identity, async (tx) => {
+    const seen = await findScopedWorkOrder(tx, identity, id);
+    if (!seen) return NOT_FOUND;
+    const occurrence = await lockOccurrence(tx, identity, seen.occurrenceId);
+    const order = await findScopedWorkOrder(tx, identity, id, { lock: true });
+    if (!order || !occurrence) return NOT_FOUND;
+    if (order.status !== 'impeded') return unavailable(order);
+
+    if (body.teamId === order.teamId) return unprocessable('same_team');
+    const team = await findEligibleTeam(tx, identity, body.teamId, order.category.departmentId);
+    if (!team) return unprocessable('team_not_eligible');
+    if (body.dueDate < todayInSaoPaulo()) return unprocessable('due_date_in_past');
+
+    const moved = await moveWorkOrder(tx, identity, order, 'cancel', {
+      comment: `Reatribuída a ${team.name}`,
+    });
+    if (!moved) return unavailable(order);
+    const [created] = await tx
+      .insert(workOrders)
+      .values({
+        tenantId: identity.tenantId,
+        occurrenceId: order.occurrenceId,
+        teamId: team.id,
+        status: 'assigned',
+        dueAt: dueAtFor(body.dueDate),
+        managerInstructions: body.instructions,
+      })
+      .returning({ id: workOrders.id });
+    await tx.insert(statusEvents).values({
+      tenantId: identity.tenantId,
+      occurrenceId: order.occurrenceId,
+      workOrderId: created!.id,
+      toStatus: 'assigned',
+      actorUserId: identity.userId,
+    });
+    return { ok: { workOrderId: created!.id, status: 'assigned' as const } };
   });
 }

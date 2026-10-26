@@ -12,7 +12,10 @@ import {
   panelContextSchema,
   panelCountsSchema,
   panelSearchResponseSchema,
+  impedimentDetailSchema,
   publishBodySchema,
+  reassignBodySchema,
+  rescheduleBodySchema,
   rejectBodySchema,
   reviewDetailSchema,
   reworkBodySchema,
@@ -46,8 +49,13 @@ import {
   searchOccurrences,
 } from './occurrences.js';
 import { loadTriage } from './triage.js';
-import { publishWorkOrder, requestRework } from './work-order-actions.js';
-import { loadReviewDetail, loadWorkQueue } from './work-orders.js';
+import {
+  publishWorkOrder,
+  reassignWorkOrder,
+  requestRework,
+  rescheduleWorkOrder,
+} from './work-order-actions.js';
+import { loadImpedimentDetail, loadReviewDetail, loadWorkQueue } from './work-orders.js';
 
 export interface PanelDeps {
   /** Banco como app_user (RLS). */
@@ -371,6 +379,75 @@ export function registerPanelRoutes(instance: FastifyInstance, deps: PanelDeps) 
       const identity = await requirePanelMember(db, request, reply);
       if (!identity) return reply;
       const result = await requestRework(db, identity, request.params.id, request.body);
+      if ('error' in result) return sendActionError(reply, result);
+      return result.ok;
+    },
+  );
+
+  app.get(
+    '/panel/impediments',
+    {
+      preHandler: panelAuth,
+      schema: { response: { 200: workQueueResponseSchema, ...panelErrors } },
+    },
+    async (request, reply) => {
+      const identity = await requirePanelMember(db, request, reply);
+      if (!identity) return reply;
+      return loadWorkQueue(db, identity, 'impeded');
+    },
+  );
+
+  app.get(
+    '/panel/impediments/:id',
+    {
+      preHandler: panelAuth,
+      schema: {
+        params: idParamsSchema,
+        response: { 200: impedimentDetailSchema, ...panelErrors, 404: apiErrorSchema },
+      },
+    },
+    async (request, reply) => {
+      const identity = await requirePanelMember(db, request, reply);
+      if (!identity) return reply;
+      const detail = await loadImpedimentDetail(db, identity, request.params.id, storage);
+      if (!detail) return reply.code(404).send({ code: 'work_order_not_found' });
+      return detail;
+    },
+  );
+
+  app.post(
+    '/panel/work-orders/:id/reassign',
+    {
+      preHandler: panelAuth,
+      schema: {
+        params: idParamsSchema,
+        body: reassignBodySchema,
+        response: { 200: workOrderResultSchema, ...actionErrors },
+      },
+    },
+    async (request, reply) => {
+      const identity = await requirePanelMember(db, request, reply);
+      if (!identity) return reply;
+      const result = await reassignWorkOrder(db, identity, request.params.id, request.body);
+      if ('error' in result) return sendActionError(reply, result);
+      return result.ok;
+    },
+  );
+
+  app.post(
+    '/panel/work-orders/:id/reschedule',
+    {
+      preHandler: panelAuth,
+      schema: {
+        params: idParamsSchema,
+        body: rescheduleBodySchema,
+        response: { 200: workOrderResultSchema, ...actionErrors },
+      },
+    },
+    async (request, reply) => {
+      const identity = await requirePanelMember(db, request, reply);
+      if (!identity) return reply;
+      const result = await rescheduleWorkOrder(db, identity, request.params.id, request.body);
       if ('error' in result) return sendActionError(reply, result);
       return result.ok;
     },

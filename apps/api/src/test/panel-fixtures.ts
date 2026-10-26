@@ -432,6 +432,66 @@ export function panelFixtures(owner: Database) {
     return { occurrenceId, requestId: request.id, workOrderId, agentId, photoIds, reportKey };
   }
 
+  /**
+   * Atividade impedida: ocorrência em atendimento com uma solicitação em atendimento, agente com
+   * evento de impedimento há `hoursAgo` horas (motivo, relato e foto `impediment`).
+   */
+  async function seedImpediment(
+    seed: { tenantId: string; citizenId: string; potholeId: string },
+    input: {
+      teamId: string;
+      at: GeoPoint;
+      hoursAgo?: number;
+      reason?: string;
+      note?: string;
+      withPhoto?: boolean;
+      address?: string;
+    },
+  ) {
+    const { tenantId } = seed;
+    const occurrenceId = await addOccurrence(tenantId, {
+      categoryId: seed.potholeId,
+      at: input.at,
+      status: 'in_progress',
+    });
+    const request = await addRequest(tenantId, {
+      occurrenceId,
+      categoryId: seed.potholeId,
+      citizenId: seed.citizenId,
+      at: input.at,
+      address: input.address ?? 'Rua do Impedimento, 20',
+      status: 'in_progress',
+    });
+    const reason = input.reason ?? 'missing_material';
+    const workOrderId = await addWorkOrder(tenantId, {
+      occurrenceId,
+      teamId: input.teamId,
+      status: 'impeded',
+      impedimentReason: reason,
+      managerInstructions: 'Levar o cone.',
+    });
+    const agentId = await addAgent(tenantId, input.teamId, 'active');
+    await owner.update(users).set({ name: 'Agente Impedido' }).where(eq(users.id, agentId));
+    await addWorkOrderEvent(tenantId, {
+      occurrenceId,
+      workOrderId,
+      toStatus: 'impeded',
+      at: new Date(Date.now() - (input.hoursAgo ?? 1) * 3_600_000),
+      actorUserId: agentId,
+      comment: input.note ?? 'Faltou massa asfáltica.',
+      details: { reason, location: input.at, distanceM: 12 },
+    });
+    const photo =
+      input.withPhoto === false
+        ? undefined
+        : await addWorkOrderPhoto(tenantId, {
+            workOrderId,
+            uploadedBy: agentId,
+            purpose: 'impediment',
+          });
+    return { occurrenceId, requestId: request.id, workOrderId, agentId, photoId: photo?.id };
+  }
+
   async function separate(tenantId: string, a: string, b: string) {
     const [low, high] = a < b ? [a, b] : [b, a];
     await withContext(owner, { tenantId }, (tx) =>
@@ -461,6 +521,7 @@ export function panelFixtures(owner: Database) {
     addWorkOrderPhoto,
     addContestPhoto,
     seedReview,
+    seedImpediment,
     separate,
   };
 }

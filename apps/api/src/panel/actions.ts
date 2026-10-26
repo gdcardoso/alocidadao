@@ -41,6 +41,7 @@ export type ActionError = {
         code:
           | 'photo_not_found'
           | 'team_not_eligible'
+          | 'same_team'
           | 'due_date_in_past'
           | 'category_mismatch'
           | 'same_occurrence'
@@ -156,6 +157,26 @@ export async function moveRequests(
   }
 }
 
+/** Equipe da prefeitura que pertence ao setor da categoria; undefined se não for elegível. */
+export async function findEligibleTeam(
+  tx: Transaction,
+  identity: PanelIdentity,
+  teamId: string,
+  departmentId: string,
+) {
+  const [team] = await tx
+    .select({ id: teams.id, name: teams.name })
+    .from(teams)
+    .where(
+      and(
+        eq(teams.tenantId, identity.tenantId),
+        eq(teams.id, teamId),
+        eq(teams.departmentId, departmentId),
+      ),
+    );
+  return team;
+}
+
 /**
  * Atribui a ocorrência em triagem a uma equipe do setor da categoria: cria a atividade e leva
  * a ocorrência e as solicitações abertas para "em atendimento".
@@ -176,16 +197,12 @@ export function assignOccurrence(
       return UNAVAILABLE;
     }
 
-    const [team] = await tx
-      .select({ id: teams.id })
-      .from(teams)
-      .where(
-        and(
-          eq(teams.tenantId, identity.tenantId),
-          eq(teams.id, body.teamId),
-          eq(teams.departmentId, occurrence.category.departmentId),
-        ),
-      );
+    const team = await findEligibleTeam(
+      tx,
+      identity,
+      body.teamId,
+      occurrence.category.departmentId,
+    );
     if (!team) return unprocessable('team_not_eligible');
     if (body.dueDate < todayInSaoPaulo()) return unprocessable('due_date_in_past');
 

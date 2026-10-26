@@ -113,18 +113,42 @@ Feito no 5b (`2026-10-26-painel-5b.md`). O que sobrou foi para os Planos 6 e 7; 
   - Atribuir: 'Nenhuma equipe do setor {setor}. Cadastre uma em Equipes e agentes.'; '(hoje)', '(1 dia)', '(N dias)'; 'Atribuída a {equipe}.'; meta no singular ('1 agente', '1 atividade aberta').
   - Triagem: 'Nenhuma solicitação nova. Tudo em dia.'; subtítulo no singular '1 solicitação nova aguardando análise · mais antigas primeiro'; '+1 parecida'.
 
-## Plano 6 — Backoffice
+## Plano 6a — Backoffice (primeira parte)
 
+Feito no 6a (`2026-10-26-backoffice-6a.md`): entrada da equipe interna, P1 Prefeituras, P2 Nova prefeitura, P3 Visão geral com ativar, suspender e reativar, e P4 modo suporte com auditoria. O que sobrou está no Plano 6b.
+
+- [x] Ao criar uma prefeitura, usar `municipalities` (nome, UF e contorno do IBGE) em vez de digitar os dados.
+- [x] Exigir e-mail e CPF do admin da prefeitura (e do gestor, ver Plano 5b).
+- [x] Auditoria (`staff_audit_events`): nunca gravar dado pessoal em `details`; o modo suporte grava só `{ route }`. (veio do Plano 5b)
+- [x] `app.platform_role` nunca para token do app (só depois de `requirePlatformStaff` ou `requirePanelMember`).
+
+- Textos do backoffice criados sem Pencil no 6a, para o usuário confirmar (decisões do `2026-10-26-backoffice-6a.md`; os do Pencil não entram aqui):
+  - Validação do formulário da P2: 'Preencha este campo.'; 'Informe o nome (2 a 80 caracteres).'; 'Informe o nome (2 a 120 caracteres).'; 'CPF inválido.'; 'E-mail inválido.'; 'Informe de 1 a 10000.'; 'Não foi possível buscar os municípios.'; 'Confira os dados e tente de novo.'.
+  - Placeholders da P2: 'Nome ou código do município'; 'Nome completo'; '000.000.000-00'; 'nome@prefeitura.gov.br'.
+  - Erros da P2 vindos da API: 'Município não encontrado. Busque de novo.'; 'Este município já tem prefeitura cadastrada.'; 'Este CPF já tem outro e-mail cadastrado: {maskedEmail}.'; 'Este e-mail já é de outra pessoa.'; 'Este CPF está numa conta bloqueada. Fale com o suporte do Alô Cidadão.'; 'O fim da vigência não pode ser antes do início.'.
+  - P3: 'A situação da prefeitura mudou. Atualizamos a tela.'; 'Antes de ativar, cadastre ao menos uma categoria ativa e uma equipe.'; 'Reative a prefeitura para entrar no painel.'; diálogos 'Ativar {nome}?' / 'Ela passa a aparecer para os cidadãos do município, que poderão registrar solicitações.' e 'Suspender {nome}?' / 'Os cidadãos deixam de conseguir registrar solicitações no município, e gestores e agentes perdem o acesso. As solicitações abertas ficam como estão.' (botões 'Cancelar', 'Ativar', 'Suspender'); avisos 'Prefeitura criada. Ela está em implantação.', 'Prefeitura ativada.', 'Prefeitura suspensa.', 'Prefeitura reativada.'.
+  - Vazios e erros de carga: 'Nenhuma prefeitura cadastrada.'; 'Nenhuma ação da equipe Alô Cidadão ainda.'; 'Não foi possível carregar as prefeituras.'; 'Não foi possível carregar a prefeitura.'.
+  - Apoios e indicadores: '{n} prefeituras · {a} ativas, {i} em implantação' (e singulares, ', {s} suspensas'); '+{i} em implantação'; '+12% sobre setembro' / '-5% sobre setembro' / 'sem comparação com setembro'; '{n} aguardando revisão há +1 dia', '{n} impedimentos parados', 'Sem categorias configuradas'; '{n} abertas há +3 dias' / 'nenhuma aberta há +3 dias'; '{n} há mais de 1 dia' / 'nenhuma há mais de 1 dia'; '{a} ativos · {c} convidados'; '{g} · {m} admins'; '{n} ativas'; '{u} de {incluídos} incluídos'; 'desde {início}'; 'cliente desde {data}'; '{nome} · {quando}' nas últimas ações.
+  - Menu e páginas provisórias: 'Esta tela chega na próxima etapa do backoffice.' (Interesse por cidade, Equipe Alô Cidadão e Auditoria); botão 'Sair' do menu escuro (faltava no Pencil).
+  - Rótulos da auditoria (`STAFF_AUDIT_ACTION_LABELS`, como 'Entrou no painel (suporte)', 'Criou a prefeitura', 'Publicou um atendimento') e 'Fez uma alteração' para ação sem rótulo.
+- Para decidir na revisão do 6a:
+  - A média do tempo até a conclusão conta cada evento `awaiting_confirmation` dos últimos 30 dias; solicitação republicada depois de contestação conta duas vezes.
+  - `POST /panel/teams/:id/agents` é auditado com `target_type` `team` (o agente novo não está na URL).
+  - Quem é da equipe interna e também gestor de uma prefeitura segue o caminho da equipe no painel, e as ações dele aparecem como suporte.
+  - Sair do modo suporte ignora falha da chamada `support/leave` (nunca prender a equipe numa prefeitura); a linha `support.leave` pode faltar na auditoria nesse caso.
+  - A busca de município tira acento com `lower()` + `translate()` (sem a extensão `unaccent`), só dos acentos da tabela.
+
+## Plano 6b — Backoffice (segunda parte)
+
+- Telas que o menu já mostra como provisórias: Interesse por cidade (`city_interest` e `municipality_leads`), Equipe Alô Cidadão e Auditoria; abas da P3 além de Visão geral.
 - `municipality_leads.updated_by` não é forçado a `app_current_user()` e `updated_at` não muda no `UPDATE`.
-- Exigir e-mail e CPF para gestor e admin (regra da API, ver Plano 5).
 - Correções de conta pelo suporte, com função própria e auditoria.
 - Excluir conta ainda não apaga `city_interest` nem tira `platform_role` da conta excluída.
 - Sessões revogadas de conta excluída guardam `installation_id`.
-- Ao criar uma prefeitura, usar `municipalities` (nome, UF e contorno do IBGE) em vez de digitar os dados.
-- Auditoria (`staff_audit_events`): nunca gravar dado pessoal em `details` (regra anotada na migração `0022`). (veio do Plano 5b)
 - Trocar o e-mail de um gestor que também tem acesso a outro painel, de quem tem `platform_role` ou de um admin: o painel recusa com `email_change_not_allowed` porque o código de login vai para `users.email`, global entre prefeituras; o suporte faz a troca. (veio do Plano 5b)
 - Cadastrar como gestor quem está numa conta bloqueada que guarda o CPF: o painel responde 409 `cpf_unavailable` e o suporte resolve. (veio do Plano 5b)
 - Trocar o celular de um agente que também tem vínculo em outra prefeitura (`phone_change_not_allowed`): nenhuma das duas prefeituras consegue; o suporte faz a troca. (veio do Plano 5b)
+- Achados da passada no navegador do 6a (ver "Resultado no navegador" do plano): o painel em modo suporte recarrega o detalhe da revisão publicada e recebe 404 (erro no console, sem efeito na tela); o aviso 'Prefeitura criada…' não foi capturado em tela.
 
 ## Plano 7 — Notificações
 

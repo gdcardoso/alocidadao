@@ -23,7 +23,16 @@ O código de verificação de desenvolvimento é o valor de `AUTH_DEV_FIXED_CODE
 | Gestor (Carlos Demo, setor Obras) | `52998224725` | Só as ocorrências das categorias de Obras                        |
 | Admin da prefeitura (Rita Demo)   | `39053344705` | Tudo, inclusive Lixo e entulho e Poda de árvore (Limpeza Urbana) |
 
-O admin interno (`11144477735`) não tem vínculo com prefeitura e cai na página "Seu acesso ao painel não está ativo" até o Plano 6.
+A equipe interna entra pelo mesmo login e vai para `/backoffice/prefeituras`:
+
+| Quem                                 | CPF           | O que faz                                                                                                           |
+| ------------------------------------ | ------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Admin da plataforma (Admin Demo)     | `11144477735` | Vê as prefeituras, cria (`Nova prefeitura`), ativa, suspende e reativa, e entra no painel de qualquer uma           |
+| Suporte da plataforma (Suporte Demo) | `86288366757` | Vê as prefeituras e entra no painel pelo modo suporte; não cria, ativa, suspende nem reativa (API 403 `admin_only`) |
+
+Quem entra em `/backoffice/*` sem papel interno volta para `/mapa`. No backoffice, `Entrar no painel da prefeitura` (ou `Gerenciar`) abre o painel na prefeitura escolhida com a faixa do modo suporte; ela fica em `sessionStorage` (`ac_support_tenant`) e `Sair da prefeitura` volta ao detalhe. Cada chamada que altera dados nesse modo fica em `staff_audit_events` e aparece em "Últimas ações da equipe Alô Cidadão".
+
+Para subir o web contra uma API em outra porta, use `API_PROXY_TARGET` (por exemplo `API_PROXY_TARGET=http://localhost:3334 pnpm --filter @alocidadao/web dev`, com a API iniciada com `PORT=3334`).
 
 ## Testar a revisão, os impedimentos e o cadastro
 

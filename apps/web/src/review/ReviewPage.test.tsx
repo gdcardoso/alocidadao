@@ -140,7 +140,9 @@ describe('ReviewPage', () => {
   it('review queue opens the first item and marks late waits in warning', async () => {
     renderPage();
     await screen.findByRole('heading', { name: 'Buraco na via · Rua das Flores, 120' });
-    expect(screen.getByTestId('location')).toHaveTextContent(`atividade=${holeId}`);
+    await waitFor(() =>
+      expect(screen.getByTestId('location')).toHaveTextContent(`atividade=${holeId}`),
+    );
     expect(screen.getByText('há 1 dia')).toHaveAttribute('data-late', 'true');
     expect(screen.getByText('há 3 h')).toHaveAttribute('data-late', 'false');
     // Sem endereço, a meta começa no setor.

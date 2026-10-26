@@ -61,7 +61,7 @@ export function TenantsPage() {
     {
       key: 'status',
       header: 'Status',
-      width: 140,
+      width: 120,
       render: (row) => <TenantStatusBadge status={row.status} />,
     },
     {
@@ -86,7 +86,7 @@ export function TenantsPage() {
     {
       key: 'alert',
       header: 'Alertas',
-      width: 210,
+      width: 250,
       render: (row) => {
         const alert = tenantAlert(row);
         if (!alert) return <span className={styles.none}>—</span>;
@@ -102,7 +102,7 @@ export function TenantsPage() {
     {
       key: 'actions',
       header: '',
-      width: 70,
+      width: 104,
       render: (row) => (
         <button
           type="button"

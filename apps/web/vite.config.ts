@@ -8,7 +8,7 @@ export default defineConfig({
     // `/api` vai para a API local na mesma origem, para o cookie de renovação valer.
     proxy: {
       '/api': {
-        target: 'http://localhost:3333',
+        target: process.env.API_PROXY_TARGET ?? 'http://localhost:3333',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
         // A API grava o cookie de renovação com `Path=/auth/panel`; pelo proxy, o navegador

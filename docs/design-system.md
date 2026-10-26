@@ -164,6 +164,10 @@ Telas em `docs/superpowers/specs/2026-10-26-telas-painel-pencil.md`; no painel, 
 - **Abas** (W6 e W7): texto 15, aba ativa com `primary` e linha de 2 embaixo; uma página com duas abas mantém o título e o subtítulo.
 - **Mapa da base** (diálogo da equipe): mapa 512x220 com o estilo do mapa principal; clique marca o ponto e `Remover ponto` limpa; abre no ponto atual ou no limite da prefeitura.
 - **Selos de situação**: `Ativo` (`success-soft`, `circle-check`), `Convidado` (`border`, `mail`), `Desativado` (`border`, `circle-off`, texto `text-secondary`); papel `Admin` (fundo `text-primary`, texto branco) e `Gestor` (fundo `bg`).
+- **Menu escuro do backoffice** (256, componente `mQMT4` do Pencil): fundo `--sidebar-dark-bg` (o `text-primary`), item ativo `--sidebar-dark-active` `#1E293B`, divisórias `--sidebar-dark-border` `#334155`, texto secundário `--sidebar-dark-muted` `#94A3B8` e ícones `--sidebar-dark-icon` `#CBD5E1`. Itens `Prefeituras`, `Interesse por cidade`, `Equipe Alô Cidadão` e `Auditoria`; embaixo, as iniciais, o nome, o papel (`Admin · Alô Cidadão` ou `Suporte · Alô Cidadão`) e `Sair` (`log-out`, `aria-label` `Sair`).
+- **Cartão de indicador** (`StatCard`, P1 e P3): borda `border`, raio 12, rótulo 13, número Lexend grande e apoio 13 `text-secondary`. Variante de alerta: borda `warning` e apoio em `--warning-strong`.
+- **Faixa do modo suporte**: altura 44, fundo escuro do menu, texto branco 14 (`Você está na {prefeitura} como equipe Alô Cidadão · suas ações ficam registradas na auditoria`) e botão `Sair da prefeitura` à direita; fica acima do painel inteiro, e na caixa do usuário do painel aparece `Equipe Alô Cidadão` sem `Sair`.
+- **Selos de status da prefeitura**: `Ativa` (`success-soft`), `Em implantação` (`primary-soft`) e `Suspensa` (fundo `border`, texto `text-secondary`). Na tabela da P1 a coluna de ação tem 104 de largura, para o `Abrir` não quebrar, e a de alertas 250.
 - **Foco visível**: contorno `primary` 2 em todo elemento focável; todo botão só com ícone tem `aria-label` e todo campo tem `label`.
 
 ## Padrões de interação

@@ -39,6 +39,8 @@ export interface PanelSessionOptions {
 
 /** Renova o token de acesso este tempo antes de ele vencer. */
 const REFRESH_MARGIN_SECONDS = 60;
+/** Depois de uma falha de rede na renovação agendada, tenta de novo neste prazo. */
+const RETRY_DELAY_MS = 30_000;
 
 const isUnauthorized = (error: unknown) => error instanceof ApiError && error.status === 401;
 
@@ -67,14 +69,22 @@ export function createPanelSession({ client, onExpired }: PanelSessionOptions): 
     timer = null;
   }
 
-  function apply(session: AccessSession) {
-    accessToken = session.accessToken;
+  /** Agenda a renovação. Falha de rede tenta de novo em 30 s enquanto a sessão estiver aberta. */
+  function scheduleRefresh(delayMs: number) {
     clearTimer();
-    const delay = Math.max(0, session.accessExpiresInSeconds - REFRESH_MARGIN_SECONDS) * 1000;
     timer = setTimeout(() => {
       timer = null;
-      void refresh();
-    }, delay);
+      refresh().catch(() => {
+        // Um 401 já encerrou a sessão dentro de `refresh`; aqui só chega falha de rede. Se
+        // outra entrada ou renovação já agendou um timer, ele vale.
+        if (state.status === 'signed_in' && timer === null) scheduleRefresh(RETRY_DELAY_MS);
+      });
+    }, delayMs);
+  }
+
+  function apply(session: AccessSession) {
+    accessToken = session.accessToken;
+    scheduleRefresh(Math.max(0, session.accessExpiresInSeconds - REFRESH_MARGIN_SECONDS) * 1000);
     setState({ status: 'signed_in', expiredNotice: false });
   }
 

@@ -83,6 +83,41 @@ describe('createPanelSession', () => {
     expect(session.getAccessToken()).toBe('new');
   });
 
+  it('scheduled refresh retries after a network failure', async () => {
+    vi.useFakeTimers();
+    const panelRefresh = vi
+      .fn<PanelSessionClient['panelRefresh']>()
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValueOnce({ accessToken: 'new', accessExpiresInSeconds: 900 });
+    const session = createPanelSession({ client: fakeClient({ panelRefresh }) });
+    session.signIn({ accessToken: 'old', accessExpiresInSeconds: 900 });
+
+    await vi.advanceTimersByTimeAsync(840_000);
+    expect(panelRefresh).toHaveBeenCalledTimes(1);
+    expect(session.getState().status).toBe('signed_in');
+    expect(session.getAccessToken()).toBe('old');
+
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(panelRefresh).toHaveBeenCalledTimes(2);
+    expect(session.getAccessToken()).toBe('new');
+    expect(session.getState()).toEqual({ status: 'signed_in', expiredNotice: false });
+  });
+
+  it('scheduled refresh with an expired cookie signs out with the notice', async () => {
+    vi.useFakeTimers();
+    const onExpired = vi.fn();
+    const client = fakeClient({ panelRefresh: vi.fn(async () => Promise.reject(expired())) });
+    const session = createPanelSession({ client, onExpired });
+    session.signIn({ accessToken: 'old', accessExpiresInSeconds: 900 });
+
+    await vi.advanceTimersByTimeAsync(840_000);
+    expect(session.getState()).toEqual({ status: 'signed_out', expiredNotice: true });
+    expect(onExpired).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(client.panelRefresh).toHaveBeenCalledTimes(1);
+  });
+
   it('sign out clears the token and calls logout', async () => {
     const client = fakeClient();
     const session = createPanelSession({ client });

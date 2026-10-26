@@ -1,21 +1,37 @@
 import type { Database } from '@alocidadao/db';
 import {
   apiErrorSchema,
+  assignBodySchema,
+  assignResponseSchema,
+  dismissSuggestionBodySchema,
+  mergeBodySchema,
+  mergeResponseSchema,
   occurrenceDetailSchema,
   occurrenceMapQuerySchema,
   occurrenceMapResponseSchema,
   panelContextSchema,
   panelCountsSchema,
   panelSearchResponseSchema,
+  rejectBodySchema,
+  splitBodySchema,
+  splitResponseSchema,
   teamOptionsResponseSchema,
   triageQuerySchema,
   triageResponseSchema,
 } from '@alocidadao/shared';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { requireAuth } from '../auth/plugin.js';
 import type { Storage } from '../storage/s3.js';
+import {
+  assignOccurrence,
+  dismissSuggestion,
+  mergeOccurrences,
+  rejectOccurrence,
+  splitOccurrence,
+  type ActionError,
+} from './actions.js';
 import { loadPanelContext, loadPanelCounts } from './context.js';
 import { requirePanelMember } from './member.js';
 import {
@@ -42,6 +58,17 @@ const panelErrors = {
   401: apiErrorSchema,
   403: apiErrorSchema,
 } as const;
+
+/** Recusas das ações sobre ocorrência. */
+const actionErrors = {
+  ...panelErrors,
+  404: apiErrorSchema,
+  409: apiErrorSchema,
+  422: apiErrorSchema,
+} as const;
+
+const sendActionError = (reply: FastifyReply, { error }: ActionError) =>
+  reply.code(error.status).send({ code: error.code });
 
 /**
  * Rotas do painel da prefeitura (/panel/*). Todas exigem token do painel e vínculo ativo de
@@ -153,6 +180,116 @@ export function registerPanelRoutes(instance: FastifyInstance, deps: PanelDeps) 
       const identity = await requirePanelMember(db, request, reply);
       if (!identity) return reply;
       return loadTriage(db, identity, request.query);
+    },
+  );
+
+  app.post(
+    '/panel/occurrences/:id/assign',
+    {
+      preHandler: panelAuth,
+      schema: {
+        params: occurrenceParamsSchema,
+        body: assignBodySchema,
+        response: { 200: assignResponseSchema, ...actionErrors },
+      },
+    },
+    async (request, reply) => {
+      const identity = await requirePanelMember(db, request, reply);
+      if (!identity) return reply;
+      const result = await assignOccurrence(db, identity, request.params.id, request.body);
+      if ('error' in result) return sendActionError(reply, result);
+      return result.ok;
+    },
+  );
+
+  app.post(
+    '/panel/occurrences/:id/reject',
+    {
+      preHandler: panelAuth,
+      schema: {
+        params: occurrenceParamsSchema,
+        body: rejectBodySchema,
+        response: { 204: z.null(), ...actionErrors },
+      },
+    },
+    async (request, reply) => {
+      const identity = await requirePanelMember(db, request, reply);
+      if (!identity) return reply;
+      const result = await rejectOccurrence(db, identity, request.params.id, request.body.reason);
+      if ('error' in result) return sendActionError(reply, result);
+      return reply.code(204).send(null);
+    },
+  );
+
+  app.post(
+    '/panel/occurrences/:id/merge',
+    {
+      preHandler: panelAuth,
+      schema: {
+        params: occurrenceParamsSchema,
+        body: mergeBodySchema,
+        response: { 200: mergeResponseSchema, ...actionErrors },
+      },
+    },
+    async (request, reply) => {
+      const identity = await requirePanelMember(db, request, reply);
+      if (!identity) return reply;
+      const result = await mergeOccurrences(
+        db,
+        identity,
+        request.params.id,
+        request.body.otherOccurrenceId,
+      );
+      if ('error' in result) return sendActionError(reply, result);
+      return result.ok;
+    },
+  );
+
+  app.post(
+    '/panel/occurrences/:id/dismiss-suggestion',
+    {
+      preHandler: panelAuth,
+      schema: {
+        params: occurrenceParamsSchema,
+        body: dismissSuggestionBodySchema,
+        response: { 204: z.null(), ...panelErrors, 404: apiErrorSchema, 422: apiErrorSchema },
+      },
+    },
+    async (request, reply) => {
+      const identity = await requirePanelMember(db, request, reply);
+      if (!identity) return reply;
+      const result = await dismissSuggestion(
+        db,
+        identity,
+        request.params.id,
+        request.body.otherOccurrenceId,
+      );
+      if ('error' in result) return sendActionError(reply, result);
+      return reply.code(204).send(null);
+    },
+  );
+
+  app.post(
+    '/panel/occurrences/:id/split',
+    {
+      preHandler: panelAuth,
+      schema: {
+        params: occurrenceParamsSchema,
+        body: splitBodySchema,
+        response: { 200: splitResponseSchema, ...actionErrors },
+      },
+    },
+    async (request, reply) => {
+      const identity = await requirePanelMember(db, request, reply);
+      if (!identity) return reply;
+      const result = await splitOccurrence(
+        db,
+        identity,
+        request.params.id,
+        request.body.requestIds,
+      );
+      if ('error' in result) return sendActionError(reply, result);
+      return result.ok;
     },
   );
 }

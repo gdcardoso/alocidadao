@@ -280,6 +280,7 @@ export function panelFixtures(owner: Database) {
       occurrenceId: string;
       teamId: string;
       status: WorkOrderStatus;
+      dueAt?: Date;
       agentNote?: string;
       impedimentReason?: string;
       managerInstructions?: string;

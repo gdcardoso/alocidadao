@@ -205,6 +205,51 @@ describe('GET /panel/occurrences', () => {
 });
 
 describe('GET /panel/search', () => {
+  it('search returns the status and puts open occurrences first', async () => {
+    const seed = await fx.seedPanelTenant();
+    const { tenantId, potholeId } = seed;
+    const adminId = await fx.newAdmin(tenantId);
+    const resolved = await occurrenceWithReports(seed, {
+      categoryId: potholeId,
+      at: CENTER,
+      address: 'Rua Ordem, 1',
+      status: 'completed',
+      createdAt: daysAgo(9),
+    });
+    const working = await occurrenceWithReports(seed, {
+      categoryId: potholeId,
+      at: CENTER,
+      address: 'Rua Ordem, 2',
+      status: 'in_progress',
+      createdAt: daysAgo(5),
+    });
+    const triage = await occurrenceWithReports(seed, {
+      categoryId: potholeId,
+      at: CENTER,
+      address: 'Rua Ordem, 3',
+      createdAt: daysAgo(2),
+    });
+    const res = await get('/panel/search?q=Rua%20Ordem', adminId, tenantId);
+    expect(res.statusCode).toBe(200);
+    const items = panelSearchResponseSchema.parse(res.json()).items;
+    const triageThenWorking = [triage, working].toSorted((a, b) =>
+      a.requests[0]!.protocol.localeCompare(b.requests[0]!.protocol),
+    );
+    expect(items.map((item) => item.occurrenceId)).toEqual([
+      ...triageThenWorking.map((o) => o.id),
+      resolved.id,
+    ]);
+    expect(items.map((item) => item.status)).toEqual(
+      items.map((item) =>
+        item.occurrenceId === resolved.id
+          ? 'completed'
+          : item.occurrenceId === working.id
+            ? 'in_progress'
+            : 'triage',
+      ),
+    );
+  });
+
   it('search by protocol prefix and by address', async () => {
     const seed = await fx.seedPanelTenant();
     const { tenantId, potholeId, lampId, lightsId } = seed;

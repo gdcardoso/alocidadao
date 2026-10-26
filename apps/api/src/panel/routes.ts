@@ -13,6 +13,10 @@ import {
   panelCountsSchema,
   panelSearchResponseSchema,
   impedimentDetailSchema,
+  inProgressQuerySchema,
+  inProgressResponseSchema,
+  requestListQuerySchema,
+  requestListResponseSchema,
   publishBodySchema,
   reassignBodySchema,
   rescheduleBodySchema,
@@ -41,6 +45,7 @@ import {
   type ActionError,
 } from './actions.js';
 import { loadPanelContext, loadPanelCounts } from './context.js';
+import { loadInProgress, loadRequestList } from './lists.js';
 import { requirePanelMember } from './member.js';
 import {
   loadOccurrenceDetail,
@@ -128,6 +133,38 @@ export function registerPanelRoutes(instance: FastifyInstance, deps: PanelDeps) 
       const identity = await requirePanelMember(db, request, reply);
       if (!identity) return reply;
       return loadOccurrenceMap(db, identity, request.query);
+    },
+  );
+
+  app.get(
+    '/panel/in-progress',
+    {
+      preHandler: panelAuth,
+      schema: {
+        querystring: inProgressQuerySchema,
+        response: { 200: inProgressResponseSchema, ...panelErrors },
+      },
+    },
+    async (request, reply) => {
+      const identity = await requirePanelMember(db, request, reply);
+      if (!identity) return reply;
+      return loadInProgress(db, identity, request.query);
+    },
+  );
+
+  app.get(
+    '/panel/requests',
+    {
+      preHandler: panelAuth,
+      schema: {
+        querystring: requestListQuerySchema,
+        response: { 200: requestListResponseSchema, ...panelErrors },
+      },
+    },
+    async (request, reply) => {
+      const identity = await requirePanelMember(db, request, reply);
+      if (!identity) return reply;
+      return loadRequestList(db, identity, request.query);
     },
   );
 

@@ -152,6 +152,18 @@ export async function loadOccurrenceMap(
 const escapeLike = (text: string) => text.replace(/[\\%_]/g, (char) => `\\${char}`);
 
 /**
+ * Regra de texto da busca: com formato de protocolo, pelo começo do protocolo; senão, com pelo
+ * menos 3 caracteres, no endereço da solicitação (`requests`, sem apelido). Undefined quando o
+ * texto é curto demais.
+ */
+export function searchCondition(rawQuery: string): SQL | undefined {
+  const q = rawQuery.trim();
+  if (PROTOCOL_QUERY.test(q)) return sql`${requests.protocol} like ${`${q}%`}`;
+  if (q.length >= SEARCH_MIN_LENGTH) return ilike(requests.address, `%${escapeLike(q)}%`);
+  return undefined;
+}
+
+/**
  * Busca do mapa: com formato de protocolo, pelo começo do protocolo; senão, com pelo menos 3
  * caracteres, no endereço das solicitações. Uma linha por ocorrência (a solicitação mais antiga
  * que casou), só ocorrências não juntadas e no alcance.
@@ -161,11 +173,8 @@ export async function searchOccurrences(
   identity: PanelIdentity,
   rawQuery: string,
 ): Promise<PanelSearchResponse> {
-  const q = rawQuery.trim();
-  let match: SQL;
-  if (PROTOCOL_QUERY.test(q)) match = sql`${requests.protocol} like ${`${q}%`}`;
-  else if (q.length >= SEARCH_MIN_LENGTH) match = ilike(requests.address, `%${escapeLike(q)}%`);
-  else return { items: [] };
+  const match = searchCondition(rawQuery);
+  if (!match) return { items: [] };
 
   const { userId, tenantId } = identity;
   return withContext(db, { tenantId, userId }, async (tx) => {
@@ -196,7 +205,11 @@ export async function searchOccurrences(
     const rows = await tx
       .select()
       .from(matches)
-      .orderBy(asc(matches.protocol))
+      .orderBy(
+        // Em triagem e em atendimento primeiro; dentro de cada grupo, pelo protocolo.
+        sql`(${matches.status} in ('triage', 'in_progress')) desc`,
+        asc(matches.protocol),
+      )
       .limit(PANEL_SEARCH_LIMIT);
     return {
       items: rows.map(({ lat, lng, ...row }) => ({

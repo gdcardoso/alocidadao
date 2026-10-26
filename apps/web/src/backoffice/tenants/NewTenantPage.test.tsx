@@ -151,6 +151,50 @@ describe('NewTenantPage', () => {
     ).toBeInTheDocument();
   });
 
+  it('shows municipality_not_found on the municipality field', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await pickMunicipality(user);
+    await fillRest(user);
+    create.mockRejectedValueOnce(new ApiError(422, { code: 'municipality_not_found' }));
+    await user.click(screen.getByRole('button', { name: 'Criar prefeitura' }));
+    expect(
+      await screen.findByText('Município não encontrado. Busque de novo.'),
+    ).toBeInTheDocument();
+  });
+
+  it('requires the display name', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await pickMunicipality(user);
+    await fillRest(user);
+    await user.clear(screen.getByLabelText('Nome de exibição'));
+    await user.click(screen.getByRole('button', { name: 'Criar prefeitura' }));
+    expect(await screen.findByText('Preencha este campo.')).toBeInTheDocument();
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('the keyboard chooses a municipality and skips taken ones', async () => {
+    const user = userEvent.setup();
+    search.mockResolvedValue({
+      items: [
+        { ibgeCode: '3552403', name: 'Sorocabana', state: 'SP', taken: true },
+        { ibgeCode: '3552205', name: 'Sorocaba', state: 'SP', taken: false },
+      ],
+    });
+    renderPage();
+    const input = await screen.findByRole('combobox', { name: 'Buscar município (IBGE)' });
+    await user.type(input, 'soro');
+    await screen.findByRole('option', { name: /Sorocaba — SP/ });
+    await user.keyboard('{ArrowDown}');
+    expect(input).toHaveAttribute(
+      'aria-activedescendant',
+      screen.getByRole('option', { name: /Sorocaba — SP/ }).id,
+    );
+    await user.keyboard('{Enter}');
+    expect(screen.getByLabelText('Nome de exibição')).toHaveValue('Prefeitura de Sorocaba');
+  });
+
   it('shows the end date error and does not send', async () => {
     const user = userEvent.setup();
     renderPage();

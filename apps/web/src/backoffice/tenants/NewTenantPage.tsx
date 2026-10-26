@@ -25,7 +25,14 @@ import styles from './NewTenantPage.module.css';
 const LIST_PATH = '/backoffice/prefeituras';
 
 type FieldKey =
-  'municipality' | 'name' | 'cpf' | 'email' | 'includedPanelUsers' | 'startsOn' | 'endsOn';
+  | 'displayName'
+  | 'municipality'
+  | 'name'
+  | 'cpf'
+  | 'email'
+  | 'includedPanelUsers'
+  | 'startsOn'
+  | 'endsOn';
 type Errors = Partial<Record<FieldKey, string>>;
 
 const REQUIRED_TEXT = 'Preencha este campo.';
@@ -69,7 +76,9 @@ export function NewTenantPage() {
     },
     onError: (error) => {
       const code = errorCode(error);
-      if (code === 'tenant_exists' || code === 'municipality_not_found') {
+      if (code === 'municipality_not_found') {
+        setErrors({ municipality: 'Município não encontrado. Busque de novo.' });
+      } else if (code === 'tenant_exists') {
         setErrors({ municipality: 'Este município já tem prefeitura cadastrada.' });
       } else if (code === 'email_mismatch') {
         setErrors({
@@ -104,6 +113,7 @@ export function NewTenantPage() {
     setGeneralError(null);
     const found: Errors = {};
     if (!municipality) found.municipality = REQUIRED_TEXT;
+    if (!displayName.trim()) found.displayName = REQUIRED_TEXT;
     if (!name.trim()) found.name = REQUIRED_TEXT;
     if (!cpf) found.cpf = REQUIRED_TEXT;
     if (!email.trim()) found.email = REQUIRED_TEXT;
@@ -122,18 +132,24 @@ export function NewTenantPage() {
       },
       copyDefaultCatalog: copyCatalog,
     });
+    let unmapped = false;
     if (!parsed.success) {
       for (const issue of parsed.error.issues) {
         const path = issue.path.join('.');
-        if (path === 'contract.endsOn') found.endsOn ??= issue.message;
+        if (path === 'displayName') found.displayName ??= 'Informe o nome (2 a 120 caracteres).';
+        else if (path === 'ibgeCode') found.municipality ??= REQUIRED_TEXT;
+        else if (path === 'contract.endsOn') found.endsOn ??= issue.message;
         else if (path === 'admin.name') found.name ??= 'Informe o nome (2 a 80 caracteres).';
         else if (path === 'admin.cpf') found.cpf ??= 'CPF inválido.';
         else if (path === 'admin.email') found.email ??= 'E-mail inválido.';
         else if (path === 'contract.includedPanelUsers')
           found.includedPanelUsers ??= `Informe de 1 a ${INCLUDED_USERS_MAX}.`;
+        else if (path === 'contract.startsOn') found.startsOn ??= REQUIRED_TEXT;
+        else unmapped = true;
       }
     }
     setErrors(found);
+    if (unmapped) setGeneralError('Confira os dados e tente de novo.');
     if (Object.values(found).some(Boolean) || !parsed.success) return;
     create.mutate(parsed.data);
   }
@@ -172,7 +188,12 @@ export function NewTenantPage() {
               <Map size={18} aria-hidden />
               Município
             </h2>
-            <MunicipalitySearch value={municipality} onChange={chooseMunicipality} />
+            <MunicipalitySearch
+              value={municipality}
+              onChange={chooseMunicipality}
+              invalid={errors.municipality !== undefined}
+              describedBy={errors.municipality ? `${ids}-municipality-error` : undefined}
+            />
             {errorText('municipality')}
             {municipality ? (
               <div className={styles.notice}>
@@ -197,8 +218,13 @@ export function NewTenantPage() {
                   className={fields.input}
                   maxLength={120}
                   value={displayName}
-                  onChange={(event) => setDisplayName(event.target.value)}
+                  {...described('displayName')}
+                  onChange={(event) => {
+                    setDisplayName(event.target.value);
+                    clear('displayName');
+                  }}
                 />
+                {errorText('displayName')}
               </div>
               <div className={`${fields.field} ${styles.narrow}`}>
                 <label htmlFor={`${ids}-phone`} className={fields.label}>

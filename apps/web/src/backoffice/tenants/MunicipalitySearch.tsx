@@ -1,5 +1,5 @@
 import type { MunicipalityOption } from '@alocidadao/shared';
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useState, type KeyboardEvent } from 'react';
 import { api } from '../../api';
 import { useSession } from '../../session/SessionProvider';
 import fields from '../../ui/Field.module.css';
@@ -14,16 +14,24 @@ function municipalityLabel(option: MunicipalityOption): string {
 export interface MunicipalitySearchProps {
   value: MunicipalityOption | null;
   onChange: (value: MunicipalityOption | null) => void;
+  invalid?: boolean;
+  describedBy?: string;
 }
 
 /** Busca de município (IBGE) com lista; os que já têm prefeitura ficam desabilitados. */
-export function MunicipalitySearch({ value, onChange }: MunicipalitySearchProps) {
+export function MunicipalitySearch({
+  value,
+  onChange,
+  invalid,
+  describedBy,
+}: MunicipalitySearchProps) {
   const { session } = useSession();
   const ids = useId();
   const [text, setText] = useState(value ? municipalityLabel(value) : '');
   const [items, setItems] = useState<MunicipalityOption[]>([]);
   const [open, setOpen] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [active, setActive] = useState(-1);
 
   useEffect(() => {
     const q = text.trim();
@@ -49,6 +57,43 @@ export function MunicipalitySearch({ value, onChange }: MunicipalitySearchProps)
 
   const showList = open && text.trim().length >= 2 && items.length > 0;
 
+  const optionId = (index: number) => `${ids}-option-${index}`;
+
+  function choose(item: MunicipalityOption) {
+    if (item.taken) return;
+    setText(municipalityLabel(item));
+    setOpen(false);
+    setActive(-1);
+    onChange(item);
+  }
+
+  function move(step: 1 | -1) {
+    if (!showList) return;
+    let index = active;
+    for (let i = 0; i < items.length; i += 1) {
+      index = (index + step + items.length) % items.length;
+      if (!items[index]?.taken) {
+        setActive(index);
+        return;
+      }
+    }
+  }
+
+  function onKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      move(event.key === 'ArrowDown' ? 1 : -1);
+    } else if (event.key === 'Enter' && showList && active >= 0) {
+      event.preventDefault();
+      const item = items[active];
+      if (item) choose(item);
+    } else if (event.key === 'Escape' && showList) {
+      event.preventDefault();
+      setOpen(false);
+      setActive(-1);
+    }
+  }
+
   return (
     <div className={styles.wrap}>
       <label htmlFor={`${ids}-input`} className={fields.label}>
@@ -61,12 +106,18 @@ export function MunicipalitySearch({ value, onChange }: MunicipalitySearchProps)
         aria-expanded={showList}
         aria-controls={`${ids}-list`}
         aria-autocomplete="list"
+        aria-activedescendant={showList && active >= 0 ? optionId(active) : undefined}
+        aria-invalid={invalid}
+        aria-describedby={describedBy}
+        onKeyDown={onKeyDown}
         autoComplete="off"
         placeholder="Nome ou código do município"
         value={text}
         onChange={(event) => {
           setText(event.target.value);
           setOpen(true);
+          setActive(-1);
+          setItems([]);
           if (value) onChange(null);
         }}
       />
@@ -77,19 +128,15 @@ export function MunicipalitySearch({ value, onChange }: MunicipalitySearchProps)
       ) : null}
       <ul id={`${ids}-list`} role="listbox" className={styles.list} hidden={!showList}>
         {showList
-          ? items.map((item) => (
+          ? items.map((item, index) => (
               <li
                 key={item.ibgeCode}
+                id={optionId(index)}
                 role="option"
                 aria-selected={value?.ibgeCode === item.ibgeCode}
                 aria-disabled={item.taken}
-                className={`${styles.option} ${item.taken ? styles.taken : ''}`}
-                onClick={() => {
-                  if (item.taken) return;
-                  setText(municipalityLabel(item));
-                  setOpen(false);
-                  onChange(item);
-                }}
+                className={`${styles.option} ${item.taken ? styles.taken : ''} ${index === active ? styles.active : ''}`}
+                onClick={() => choose(item)}
               >
                 <span>{municipalityLabel(item)}</span>
                 {item.taken ? <span className={styles.badge}>já cadastrado</span> : null}

@@ -12,12 +12,17 @@ import {
   panelContextSchema,
   panelCountsSchema,
   panelSearchResponseSchema,
+  publishBodySchema,
   rejectBodySchema,
+  reviewDetailSchema,
+  reworkBodySchema,
   splitBodySchema,
   splitResponseSchema,
   teamOptionsResponseSchema,
   triageQuerySchema,
   triageResponseSchema,
+  workOrderResultSchema,
+  workQueueResponseSchema,
 } from '@alocidadao/shared';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
@@ -41,6 +46,8 @@ import {
   searchOccurrences,
 } from './occurrences.js';
 import { loadTriage } from './triage.js';
+import { publishWorkOrder, requestRework } from './work-order-actions.js';
+import { loadReviewDetail, loadWorkQueue } from './work-orders.js';
 
 export interface PanelDeps {
   /** Banco como app_user (RLS). */
@@ -50,6 +57,7 @@ export interface PanelDeps {
 }
 
 const occurrenceParamsSchema = z.object({ id: z.uuid() });
+const idParamsSchema = z.object({ id: z.uuid() });
 const searchQuerySchema = z.object({ q: z.string().max(200).default('') });
 
 /** Recusas comuns a toda rota do painel. */
@@ -294,6 +302,75 @@ export function registerPanelRoutes(instance: FastifyInstance, deps: PanelDeps) 
         request.params.id,
         request.body.requestIds,
       );
+      if ('error' in result) return sendActionError(reply, result);
+      return result.ok;
+    },
+  );
+
+  app.get(
+    '/panel/reviews',
+    {
+      preHandler: panelAuth,
+      schema: { response: { 200: workQueueResponseSchema, ...panelErrors } },
+    },
+    async (request, reply) => {
+      const identity = await requirePanelMember(db, request, reply);
+      if (!identity) return reply;
+      return loadWorkQueue(db, identity, 'awaiting_review');
+    },
+  );
+
+  app.get(
+    '/panel/reviews/:id',
+    {
+      preHandler: panelAuth,
+      schema: {
+        params: idParamsSchema,
+        response: { 200: reviewDetailSchema, ...panelErrors, 404: apiErrorSchema },
+      },
+    },
+    async (request, reply) => {
+      const identity = await requirePanelMember(db, request, reply);
+      if (!identity) return reply;
+      const detail = await loadReviewDetail(db, identity, request.params.id, storage);
+      if (!detail) return reply.code(404).send({ code: 'work_order_not_found' });
+      return detail;
+    },
+  );
+
+  app.post(
+    '/panel/work-orders/:id/publish',
+    {
+      preHandler: panelAuth,
+      schema: {
+        params: idParamsSchema,
+        body: publishBodySchema,
+        response: { 200: workOrderResultSchema, ...actionErrors },
+      },
+    },
+    async (request, reply) => {
+      const identity = await requirePanelMember(db, request, reply);
+      if (!identity) return reply;
+      const result = await publishWorkOrder(db, identity, request.params.id, request.body);
+      if ('error' in result) return sendActionError(reply, result);
+      return result.ok;
+    },
+  );
+
+  app.post(
+    '/panel/work-orders/:id/rework',
+    {
+      preHandler: panelAuth,
+      schema: {
+        params: idParamsSchema,
+        body: reworkBodySchema,
+        response: { 200: workOrderResultSchema, ...actionErrors },
+      },
+    },
+    async (request, reply) => {
+      const identity = await requirePanelMember(db, request, reply);
+      if (!identity) return reply;
+      const result = await requestRework(db, identity, request.params.id, request.body);
       if ('error' in result) return sendActionError(reply, result);
       return result.ok;
     },

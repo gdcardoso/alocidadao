@@ -1,21 +1,21 @@
 import { schema, withContext, type Database, type Transaction } from '@alocidadao/db';
 import {
   apiErrorSchema,
-  applyWorkOrderAction,
   devManagerActionBodySchema,
   workOrderStatusSchema,
   type DevManagerActionBody,
-  type ReworkDetails,
   type WorkOrderStatus,
 } from '@alocidadao/shared';
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { requireAuth } from '../auth/plugin.js';
 import { requireTenantMember } from '../auth/tenant-context.js';
+import type { PanelIdentity } from '../panel/member.js';
+import { requestReworkInTx, rescheduleInTx } from '../panel/work-order-actions.js';
 
-const { workOrders, statusEvents, photos, memberships } = schema;
+const { workOrders, memberships } = schema;
 
 const idParams = z.object({ id: z.uuid() });
 
@@ -52,66 +52,36 @@ async function applyManagerAction(
   workOrderId: string,
   body: DevManagerActionBody,
 ): Promise<Outcome> {
-  // Trava a atividade: decisões concorrentes sobre ela são serializadas.
-  const [order] = await tx
-    .select()
-    .from(workOrders)
-    .where(eq(workOrders.id, workOrderId))
-    .for('update');
-  if (!order) return { kind: 'not_found' };
-
   const managerId = await findManager(tx, tenantId);
+  // Gestor da simulação, sem alcance por setor (`departmentIds: null`).
+  const identity: PanelIdentity = {
+    userId: managerId ?? '',
+    tenantId,
+    role: 'manager',
+    departmentIds: null,
+  };
+  // A atividade é lida antes só para distinguir "não existe" de "sem gestor na prefeitura".
+  const [order] = await tx
+    .select({ id: workOrders.id })
+    .from(workOrders)
+    .where(eq(workOrders.id, workOrderId));
+  if (!order) return { kind: 'not_found' };
   if (!managerId) return { kind: 'manager_not_found' };
 
-  const transition = applyWorkOrderAction(order.status, body.action, 'manager');
-  if (!transition.ok) return { kind: 'unavailable', status: order.status };
-  const target = transition.to;
-  const event = {
-    tenantId,
-    occurrenceId: order.occurrenceId,
-    workOrderId: order.id,
-    fromStatus: order.status,
-    toStatus: target,
-    actorUserId: managerId,
-  };
-
-  if (body.action === 'request_rework') {
-    const ids = [...new Set(body.discardedPhotoIds)];
-    if (ids.length > 0) {
-      // Só fotos de conclusão desta atividade podem ser descartadas.
-      const found = await tx
-        .select({ id: photos.id })
-        .from(photos)
-        .where(
-          and(
-            inArray(photos.id, ids),
-            eq(photos.workOrderId, order.id),
-            eq(photos.purpose, 'completion'),
-          ),
-        );
-      if (found.length !== ids.length) return { kind: 'photo_not_found' };
-      await tx.update(photos).set({ review: 'discarded' }).where(inArray(photos.id, ids));
-    }
-    await tx
-      .update(workOrders)
-      .set({ status: target, updatedAt: new Date() })
-      .where(eq(workOrders.id, order.id));
-    const details: ReworkDetails = { reasons: body.reasons, discardedPhotoIds: ids };
-    await tx.insert(statusEvents).values({ ...event, comment: body.message, details });
-  } else {
-    await tx
-      .update(workOrders)
-      .set({
-        status: target,
-        dueAt: body.dueAt ? new Date(body.dueAt) : null,
-        updatedAt: new Date(),
-      })
-      .where(eq(workOrders.id, order.id));
-    await tx
-      .insert(statusEvents)
-      .values({ ...event, comment: 'Reagendada pelo gestor (simulação)' });
+  const result =
+    body.action === 'request_rework'
+      ? await requestReworkInTx(tx, identity, workOrderId, body)
+      : await rescheduleInTx(tx, identity, workOrderId, {
+          dueAt: body.dueAt ? new Date(body.dueAt) : null,
+          comment: 'Reagendada pelo gestor (simulação)',
+        });
+  if ('ok' in result) return { kind: 'ok', status: result.ok.status };
+  const { error } = result;
+  if (error.code === 'work_order_not_found') return { kind: 'not_found' };
+  if (error.code === 'work_order_unavailable') {
+    return { kind: 'unavailable', status: error.workOrderStatus };
   }
-  return { kind: 'ok', status: target };
+  return { kind: 'photo_not_found' };
 }
 
 /**

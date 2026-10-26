@@ -17,6 +17,7 @@ import {
   type OccurrenceAction,
   type RequestAction,
   type SplitResponse,
+  type WorkOrderStatus,
 } from '@alocidadao/shared';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import type { PanelIdentity } from './member.js';
@@ -27,11 +28,18 @@ const { occurrences, occurrenceSeparations, requests, statusEvents, teams, workO
 /** Recusa de uma ação do painel: o status HTTP e o código do corpo `{ code }`. */
 export type ActionError = {
   error:
-    | { status: 404; code: 'occurrence_not_found' }
+    | { status: 404; code: 'occurrence_not_found' | 'work_order_not_found' }
     | { status: 409; code: 'occurrence_unavailable' | 'both_have_work_orders' }
+    | {
+        status: 409;
+        code: 'work_order_unavailable';
+        /** Status atual da atividade (a rota de desenvolvimento o devolve ao agente). */
+        workOrderStatus: WorkOrderStatus;
+      }
     | {
         status: 422;
         code:
+          | 'photo_not_found'
           | 'team_not_eligible'
           | 'due_date_in_past'
           | 'category_mismatch'
@@ -40,24 +48,24 @@ export type ActionError = {
       };
 };
 
-type Result<T> = { ok: T } | ActionError;
+export type Result<T> = { ok: T } | ActionError;
 
 const NOT_FOUND = { error: { status: 404, code: 'occurrence_not_found' } } as const;
 const UNAVAILABLE = { error: { status: 409, code: 'occurrence_unavailable' } } as const;
-const unprocessable = (code: Extract<ActionError['error'], { status: 422 }>['code']) =>
+export const unprocessable = (code: Extract<ActionError['error'], { status: 422 }>['code']) =>
   ({ error: { status: 422, code } }) as const;
 
 /** Prazo da atividade: o fim do dia escolhido no horário de Brasília. */
-const dueAtFor = (date: string) => new Date(`${date}T23:59:59-03:00`);
+export const dueAtFor = (date: string) => new Date(`${date}T23:59:59-03:00`);
 
 /** Roda a ação no contexto da prefeitura, numa transação só. */
-function run<T>(db: Database, identity: PanelIdentity, fn: (tx: Transaction) => Promise<T>) {
+export function run<T>(db: Database, identity: PanelIdentity, fn: (tx: Transaction) => Promise<T>) {
   const { tenantId, userId } = identity;
   return withContext(db, { tenantId, userId }, fn);
 }
 
 /** Trava a ocorrência no alcance (inclusive a juntada, que responde 409 e não 404). */
-const lockOccurrence = (tx: Transaction, identity: PanelIdentity, id: string) =>
+export const lockOccurrence = (tx: Transaction, identity: PanelIdentity, id: string) =>
   findScopedOccurrence(tx, identity, id, { lock: true, includeMerged: true });
 
 /** Mesmo UUID, sem diferenciar maiúsculas (o Postgres também não diferencia). */
@@ -82,7 +90,7 @@ async function findActiveWorkOrder(tx: Transaction, occurrenceId: string) {
  * Muda o status da ocorrência pela máquina de estados, com o evento da própria ocorrência
  * (sem solicitação nem atividade). Devolve false quando a transição não vale.
  */
-async function moveOccurrence(
+export async function moveOccurrence(
   tx: Transaction,
   identity: PanelIdentity,
   occurrence: Pick<ScopedOccurrence, 'id' | 'status'>,
@@ -115,7 +123,7 @@ async function moveOccurrence(
  * Aplica a ação a cada solicitação da ocorrência em que ela vale (as demais ficam como estão),
  * com um evento por solicitação.
  */
-async function moveRequests(
+export async function moveRequests(
   tx: Transaction,
   identity: PanelIdentity,
   occurrenceId: string,

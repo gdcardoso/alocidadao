@@ -9,11 +9,12 @@ import { SessionProvider } from '../session/SessionProvider';
 import { LoginPage } from './LoginPage';
 
 vi.mock('../api', () => ({
-  api: { panelStart: vi.fn(), panelVerify: vi.fn() },
+  api: { panelStart: vi.fn(), panelVerify: vi.fn(), me: vi.fn() },
 }));
 
 const panelStart = vi.mocked(api.panelStart);
 const panelVerify = vi.mocked(api.panelVerify);
+const me = vi.mocked(api.me);
 
 const challenge = {
   challengeId: '7d9f0c2e-4b1a-4c3d-9e8f-1a2b3c4d5e6f',
@@ -38,6 +39,7 @@ function renderLogin() {
         <Routes>
           <Route path="/entrar" element={<LoginPage />} />
           <Route path="/mapa" element={<p>Página do mapa</p>} />
+          <Route path="/backoffice/prefeituras" element={<p>Página do backoffice</p>} />
         </Routes>
       </MemoryRouter>
     </SessionProvider>,
@@ -54,6 +56,7 @@ beforeEach(() => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
   panelStart.mockReset();
   panelVerify.mockReset();
+  me.mockReset();
 });
 
 afterEach(() => {
@@ -105,6 +108,7 @@ describe('LoginPage', () => {
   it('six pasted digits submit the code', async () => {
     panelStart.mockResolvedValue(challenge);
     panelVerify.mockResolvedValue({ session: { accessToken: 'tok', accessExpiresInSeconds: 900 } });
+    me.mockResolvedValue({ platformRole: null } as never);
     const { user, session } = renderLogin();
     await sendCpf(user);
 
@@ -117,6 +121,19 @@ describe('LoginPage', () => {
     });
     expect(await screen.findByText('Página do mapa')).toBeInTheDocument();
     expect(session.getAccessToken()).toBe('tok');
+  });
+
+  it('staff lands on the backoffice after login and others on the map', async () => {
+    panelStart.mockResolvedValue(challenge);
+    panelVerify.mockResolvedValue({ session: { accessToken: 'tok', accessExpiresInSeconds: 900 } });
+    me.mockResolvedValue({ platformRole: 'support' } as never);
+    const { user } = renderLogin();
+    await sendCpf(user);
+
+    await user.click(await screen.findByLabelText('Dígito 1 de 6'));
+    await user.paste('731942');
+
+    expect(await screen.findByText('Página do backoffice')).toBeInTheDocument();
   });
 
   it('code_invalid shows the message and keeps the step', async () => {

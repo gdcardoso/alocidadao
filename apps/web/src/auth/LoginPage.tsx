@@ -13,6 +13,7 @@ import { formatCountdown, INVALID_CPF_MESSAGE, loginErrorMessage } from './login
 import styles from './LoginPage.module.css';
 
 const HOME_PATH = '/mapa';
+const BACKOFFICE_PATH = '/backoffice/prefeituras';
 
 const emptyCode = (): string[] => Array.from({ length: CODE_LENGTH }, () => '');
 
@@ -96,7 +97,9 @@ export function LoginPage() {
         code: digits.join(''),
       });
       session.signIn(access);
-      void navigate(HOME_PATH, { replace: true });
+      // Equipe interna entra no backoffice; qualquer falha na consulta cai no mapa.
+      const me = await session.withAuth(() => api.me()).catch(() => null);
+      void navigate(me?.platformRole ? BACKOFFICE_PATH : HOME_PATH, { replace: true });
     } catch (caught) {
       setError(loginErrorMessage(caught));
       setCode(emptyCode());

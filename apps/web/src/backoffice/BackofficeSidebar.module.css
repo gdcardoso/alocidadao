@@ -1,0 +1,143 @@
+.sidebar {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 24px;
+  width: 256px;
+  height: 100%;
+  padding: 20px 14px;
+  background: var(--sidebar-dark-bg);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 6px;
+}
+
+.logoBox {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.logo {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+}
+
+.brandText {
+  display: flex;
+  flex-direction: column;
+}
+
+.brandName {
+  color: #ffffff;
+  font-family: var(--font-heading);
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.brandSub {
+  color: var(--sidebar-dark-muted);
+  font-size: 13px;
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 44px;
+  padding: 0 12px;
+  border-radius: 12px;
+  color: var(--border);
+  font-size: 15px;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.itemIcon {
+  flex: none;
+  color: var(--sidebar-dark-icon);
+}
+
+.active {
+  background: var(--sidebar-dark-active);
+}
+
+.spacer {
+  flex: 1;
+}
+
+.user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 6px 0;
+  border-top: 1px solid var(--sidebar-dark-border);
+}
+
+.avatar {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--sidebar-dark-active);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.userText {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.userName {
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.userRole {
+  color: var(--sidebar-dark-muted);
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.signOut {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--sidebar-dark-icon);
+  cursor: pointer;
+}

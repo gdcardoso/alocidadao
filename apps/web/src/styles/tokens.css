@@ -8,6 +8,13 @@
   --on-brand-green: #ffffff;
   --on-brand-yellow: #0f172a;
 
+  /* Menu escuro do backoffice */
+  --sidebar-dark-bg: #0f172a;
+  --sidebar-dark-active: #1e293b;
+  --sidebar-dark-border: #334155;
+  --sidebar-dark-muted: #94a3b8;
+  --sidebar-dark-icon: #cbd5e1;
+
   /* Interface */
   --bg: #f5f7fa;
   --surface: #ffffff;

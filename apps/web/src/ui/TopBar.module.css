@@ -1,0 +1,53 @@
+.bar {
+  display: flex;
+  flex: none;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.withFilters {
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 24px 12px;
+}
+
+.simple {
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px 24px;
+}
+
+.withAction {
+  align-items: center;
+  gap: 16px;
+  padding: 16px 24px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.titles {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.title {
+  font-size: 22px;
+}
+
+.subtitle {
+  color: var(--text-secondary);
+  font-size: 14px;
+}

@@ -1,28 +1,26 @@
 import { Navigate, Route, Routes } from 'react-router';
 import { LoginPage } from './auth/LoginPage';
+import { ComingSoonPage } from './shell/ComingSoonPage';
+import { PanelLayout } from './shell/PanelLayout';
 import { RequireSession } from './session/RequireSession';
-import { useSession } from './session/SessionProvider';
+import { TopBar } from './ui/TopBar';
 
-/** Página provisória do mapa: as Tasks 8 e 9 trocam pelo shell e pela W1. */
-function MapPlaceholder() {
-  const { session } = useSession();
-  return (
-    <main style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <h1>Mapa de ocorrências</h1>
-      <p>Esta tela chega na próxima etapa do painel.</p>
-      <button type="button" onClick={() => void session.signOut()} style={{ alignSelf: 'start' }}>
-        Sair
-      </button>
-    </main>
-  );
-}
-
+/** Rotas do painel. `/mapa` e `/triagem` ganham as telas reais nas Tasks 9 e 10. */
 export default function App() {
   return (
     <Routes>
       <Route path="/entrar" element={<LoginPage />} />
       <Route element={<RequireSession />}>
-        <Route path="/mapa" element={<MapPlaceholder />} />
+        <Route element={<PanelLayout />}>
+          <Route path="/mapa" element={<TopBar title="Mapa de ocorrências" />} />
+          <Route path="/triagem" element={<ComingSoonPage title="Triagem" />} />
+          <Route path="/revisao" element={<ComingSoonPage title="Aguardando revisão" />} />
+          <Route path="/impedimentos" element={<ComingSoonPage title="Impedimentos" />} />
+          <Route path="/em-atendimento" element={<ComingSoonPage title="Em atendimento" />} />
+          <Route path="/solicitacoes" element={<ComingSoonPage title="Todas as solicitações" />} />
+          <Route path="/equipes" element={<ComingSoonPage title="Equipes e agentes" />} />
+          <Route path="/categorias" element={<ComingSoonPage title="Categorias" />} />
+        </Route>
       </Route>
       <Route path="*" element={<Navigate to="/mapa" replace />} />
     </Routes>

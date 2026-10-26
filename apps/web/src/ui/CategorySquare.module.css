@@ -1,0 +1,21 @@
+.square {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+}
+
+.infrastructure {
+  background: var(--primary);
+  color: var(--on-primary);
+}
+
+.environment {
+  background: var(--brand-green);
+  color: var(--on-brand-green);
+}
+
+.public_services {
+  background: var(--brand-yellow);
+  color: var(--on-brand-yellow);
+}

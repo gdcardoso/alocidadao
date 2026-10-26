@@ -1,6 +1,6 @@
 import type { TenantStatus } from '@alocidadao/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { CirclePause, CirclePlay, LogIn } from 'lucide-react';
+import { CircleCheck, LogIn, Pause, Play } from 'lucide-react';
 import { useState } from 'react';
 import { api } from '../../api';
 import { errorCode } from '../../occurrence/use-occurrence-actions';
@@ -75,7 +75,7 @@ export function TenantStatusActions({
           <Button
             variant="danger-outline"
             size="md"
-            icon={<CirclePause size={16} aria-hidden />}
+            icon={<Pause size={16} aria-hidden />}
             onClick={() => setConfirming('suspend')}
           >
             Suspender
@@ -84,7 +84,7 @@ export function TenantStatusActions({
         {isAdmin && status === 'suspended' ? (
           <Button
             size="md"
-            icon={<CirclePlay size={16} aria-hidden />}
+            icon={<Play size={16} aria-hidden />}
             disabled={change.isPending}
             onClick={() => change.mutate('reactivate')}
           >
@@ -92,7 +92,11 @@ export function TenantStatusActions({
           </Button>
         ) : null}
         {isAdmin && status === 'onboarding' ? (
-          <Button size="md" onClick={() => setConfirming('activate')}>
+          <Button
+            size="md"
+            icon={<CircleCheck size={16} aria-hidden />}
+            onClick={() => setConfirming('activate')}
+          >
             Ativar prefeitura
           </Button>
         ) : null}

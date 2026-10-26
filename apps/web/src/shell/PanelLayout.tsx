@@ -1,6 +1,6 @@
 import { ApiError } from '@alocidadao/api-client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Outlet, useNavigate } from 'react-router';
 import { api } from '../api';
 import { NETWORK_ERROR_MESSAGE, UNEXPECTED_ERROR_MESSAGE } from '../auth/login-errors';
@@ -35,14 +35,40 @@ export function PanelLayout() {
   const queryClient = useQueryClient();
   const [noAccess, setNoAccess] = useState(false);
   // Equipe interna numa prefeitura: o `sessionStorage` mantém o modo suporte ao recarregar.
-  const [support] = useState(getSupportTenant);
+  const [support, setSupport] = useState(getSupportTenant);
+  const supportRef = useRef(support);
+  useEffect(() => {
+    supportRef.current = support;
+  }, [support]);
+  const dropping = useRef(false);
   const [leaving, setLeaving] = useState(false);
 
   // Vínculo ou prefeitura perdidos com o painel aberto: qualquer chamada (inclusive as das
   // telas filhas) que responda 403 not_a_member derruba o painel para a página sem acesso.
   useEffect(() => {
+    // No modo suporte, 403 not_a_member é a prefeitura suspensa (ou a conta que deixou de ser
+    // da equipe): apaga o modo suporte e volta à P3 se a pessoa é da equipe; senão segue
+    // como painel comum.
+    async function dropSupport(tenant: string) {
+      if (dropping.current) return;
+      dropping.current = true;
+      clearSupportTenant();
+      let staff = false;
+      try {
+        await session.withAuth(() => api.backofficeContext());
+        staff = true;
+      } catch {
+        // não é da equipe interna
+      }
+      if (staff) void navigate(`/backoffice/prefeituras/${tenant}`, { replace: true });
+      else setSupport(null);
+      dropping.current = false;
+    }
     const watch = (error: unknown) => {
-      if (isNotAMember(error)) setNoAccess(true);
+      if (!isNotAMember(error)) return;
+      const current = supportRef.current;
+      if (current) void dropSupport(current.tenantId);
+      else setNoAccess(true);
     };
     const offQueries = queryClient.getQueryCache().subscribe((event) => {
       if (event.type === 'updated' && event.action.type === 'error') watch(event.action.error);
@@ -54,7 +80,7 @@ export function PanelLayout() {
       offQueries();
       offMutations();
     };
-  }, [queryClient]);
+  }, [queryClient, session, navigate]);
 
   const meQuery = useQuery({
     queryKey: ['me'],

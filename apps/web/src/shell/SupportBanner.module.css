@@ -6,13 +6,13 @@
   height: 44px;
   padding: 0 24px;
   background: var(--text-primary);
-  color: #fff;
+  color: var(--surface);
   font-size: 14px;
 }
 
 .icon {
   flex: none;
-  color: #fbbf24;
+  color: var(--support-banner-icon);
 }
 
 .text {
@@ -32,7 +32,7 @@
   padding: 0 12px;
   border: 0;
   border-radius: 15px;
-  background: #fff;
+  background: var(--surface);
   color: var(--text-primary);
   font-size: 13px;
   font-weight: 600;
@@ -45,6 +45,6 @@
 }
 
 .leave:focus-visible {
-  outline: 2px solid #fbbf24;
+  outline: 2px solid var(--support-banner-icon);
   outline-offset: 2px;
 }

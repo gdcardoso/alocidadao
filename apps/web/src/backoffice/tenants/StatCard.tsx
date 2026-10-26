@@ -9,7 +9,7 @@ export interface StatCardProps {
 
 export function StatCard({ label, value, help, tone }: StatCardProps) {
   return (
-    <div className={`${styles.card} ${tone === 'warning' ? styles.warning : ''}`}>
+    <div className={`${styles.card} ${tone === 'warning' ? styles.warning : ''}`} data-tone={tone}>
       <span className={styles.label}>{label}</span>
       <span className={styles.value}>{value}</span>
       {help ? <span className={styles.help}>{help}</span> : null}

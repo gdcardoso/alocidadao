@@ -1,4 +1,5 @@
 import { ApiError } from '@alocidadao/api-client';
+import { clearSupportTenant } from './support-tenant';
 
 /** O que a sessão usa do cliente da API: só a renovação e a saída, que vão pelo cookie. */
 export interface PanelSessionClient {
@@ -91,6 +92,8 @@ export function createPanelSession({ client, onExpired }: PanelSessionOptions): 
   function clear(expiredNotice: boolean) {
     generation += 1;
     accessToken = null;
+    // O modo suporte é de quem entrou: saída, expiração e restauração falha o apagam.
+    clearSupportTenant();
     clearTimer();
     setState({ status: 'signed_out', expiredNotice });
   }
@@ -155,6 +158,8 @@ export function createPanelSession({ client, onExpired }: PanelSessionOptions): 
 
     signIn(session) {
       generation += 1;
+      // Nova entrada nunca herda o modo suporte de outra pessoa.
+      clearSupportTenant();
       apply(session);
     },
 

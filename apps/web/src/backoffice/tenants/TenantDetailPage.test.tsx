@@ -168,16 +168,16 @@ describe('TenantDetailPage', () => {
   it('review card turns warning only with late reviews', async () => {
     renderPage();
     const card = (await screen.findByText('Aguardando revisão')).parentElement!;
-    expect(card.className).toMatch(/warning/);
-    expect(within(card).getByText('2 há mais de 1 dia').className).toBeTruthy();
-    expect(screen.getByText('Cidadãos').parentElement!.className).not.toMatch(/warning/);
+    expect(card).toHaveAttribute('data-tone', 'warning');
+    expect(within(card).getByText('2 há mais de 1 dia')).toBeInTheDocument();
+    expect(screen.getByText('Cidadãos').parentElement).not.toHaveAttribute('data-tone');
   });
 
   it('review card is plain without late reviews', async () => {
     tenant.mockResolvedValue(detail({}, { lateReviewCount: 0 }));
     renderPage();
     const card = (await screen.findByText('Aguardando revisão')).parentElement!;
-    expect(card.className).not.toMatch(/warning/);
+    expect(card).not.toHaveAttribute('data-tone');
   });
 
   it('activate asks for confirmation and shows tenant_not_ready', async () => {

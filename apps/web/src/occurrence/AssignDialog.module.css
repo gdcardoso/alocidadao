@@ -1,0 +1,167 @@
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.labelRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.label {
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.hint {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.message {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.effect {
+  flex: 1;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.teams {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.team {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-input);
+  border-radius: 12px;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.teamSelected {
+  border: 2px solid var(--primary);
+  padding: 11px 13px;
+  background: var(--primary-soft);
+}
+
+.team:focus-within {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.radio {
+  flex: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  border: 2px solid var(--border-input);
+  border-radius: 50%;
+  background: var(--surface);
+}
+
+.radio:checked {
+  border-color: var(--primary);
+  background: radial-gradient(circle, var(--primary) 0 4px, var(--surface) 5px);
+}
+
+.teamText {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.teamName {
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.teamMeta {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.badge {
+  padding: 3px 8px;
+  border: 1px solid var(--primary);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.dateRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dateBox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 240px;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--border-input);
+  border-radius: 8px;
+  color: var(--text-secondary);
+}
+
+.dateBox:focus-within {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.dateInput {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 14px;
+}
+
+.dateHint {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.textarea {
+  min-height: 96px;
+  padding: 12px;
+  border: 1px solid var(--border-input);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.helpIcon {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}

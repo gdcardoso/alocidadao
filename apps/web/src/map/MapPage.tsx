@@ -3,6 +3,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { lazy, Suspense, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { api } from '../api';
+import { AssignDialog } from '../occurrence/AssignDialog';
 import { PointPanel } from '../occurrence/PointPanel';
 import type { OccurrenceActionResult } from '../occurrence/use-occurrence-actions';
 import { useSession } from '../session/SessionProvider';
@@ -34,8 +35,8 @@ export function MapPage() {
   const [params, setParams] = useSearchParams();
   const state = useMemo(() => parseMapQuery(params), [params]);
   const [focus, setFocus] = useState<MapFocus | null>(null);
-  // Ocorrência para a W2 (Atribuir a uma equipe), que a Task 10 abre a partir deste estado.
-  const [, setAssignTarget] = useState<OccurrenceDetail | null>(null);
+  // Ocorrência da W2 (Atribuir a uma equipe), aberta a partir do painel do ponto.
+  const [assignTarget, setAssignTarget] = useState<OccurrenceDetail | null>(null);
 
   function update(patch: Partial<MapQueryState>) {
     setParams(toSearchParams({ ...state, ...patch }), { replace: true });
@@ -124,6 +125,13 @@ export function MapPage() {
           />
         ) : null}
       </div>
+      {assignTarget ? (
+        <AssignDialog
+          occurrence={assignTarget}
+          onClose={() => setAssignTarget(null)}
+          onAssigned={() => setAssignTarget(null)}
+        />
+      ) : null}
     </div>
   );
 }

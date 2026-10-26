@@ -14,13 +14,22 @@ export type OccurrenceAction =
   | { kind: 'merge'; occurrenceId: string; otherOccurrenceId: string }
   | { kind: 'dismiss'; occurrenceId: string; otherOccurrenceId: string }
   | { kind: 'split'; occurrenceId: string; requestIds: string[] }
-  | { kind: 'reject'; occurrenceId: string; reason: string };
+  | { kind: 'reject'; occurrenceId: string; reason: string }
+  | {
+      kind: 'assign';
+      occurrenceId: string;
+      teamId: string;
+      teamName: string;
+      dueDate: string;
+      instructions: string | null;
+    };
 
 export type OccurrenceActionResult =
   | { kind: 'merge'; survivorId: string }
   | { kind: 'dismiss' }
   | { kind: 'split'; newOccurrenceId: string }
-  | { kind: 'reject' };
+  | { kind: 'reject' }
+  | { kind: 'assign'; workOrderId: string };
 
 /**
  * Desfecho de uma ação: `done` deu certo; `stale` a ocorrência mudou (ou sumiu) e os dados
@@ -46,7 +55,7 @@ function splitNotice(count: number): string {
 }
 
 /**
- * Ações do painel do ponto (juntar, "é outro problema", separar e recusar). Depois de cada
+ * Ações do painel do ponto (juntar, "é outro problema", separar, recusar e atribuir). Depois de cada
  * uma, recarrega o detalhe, o mapa (`['occurrences']`), a triagem (`['triage']`) e os
  * contadores do menu, e mostra o aviso das decisões.
  */
@@ -81,6 +90,15 @@ export function useOccurrenceActions(tenantId: string) {
             api.panelReject(tenantId, id, { reason: action.reason.trim() }),
           );
           return { kind: 'reject' };
+        case 'assign': {
+          const body = {
+            teamId: action.teamId,
+            dueDate: action.dueDate,
+            instructions: action.instructions,
+          };
+          const { workOrderId } = await session.withAuth(() => api.panelAssign(tenantId, id, body));
+          return { kind: 'assign', workOrderId };
+        }
       }
     },
   });
@@ -134,6 +152,9 @@ export function useOccurrenceActions(tenantId: string) {
       toast.show(splitNotice(action.requestIds.length));
     }
     if (result.kind === 'reject') toast.show('Ocorrência recusada.');
+    if (result.kind === 'assign' && action.kind === 'assign') {
+      toast.show(`Atribuída a ${action.teamName}.`);
+    }
     void refresh(action);
     return { status: 'done', result };
   }

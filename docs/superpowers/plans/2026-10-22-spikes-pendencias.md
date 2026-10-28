@@ -122,7 +122,7 @@ Feito no 6a (`2026-10-26-backoffice-6a.md`): entrada da equipe interna, P1 Prefe
 - [x] Auditoria (`staff_audit_events`): nunca gravar dado pessoal em `details`; o modo suporte grava só `{ route }`. (veio do Plano 5b)
 - [x] `app.platform_role` nunca para token do app (só depois de `requirePlatformStaff` ou `requirePanelMember`).
 
-- Textos do backoffice criados sem Pencil no 6a, para o usuário confirmar (decisões do `2026-10-26-backoffice-6a.md`; os do Pencil não entram aqui):
+- [x] Textos do backoffice criados sem Pencil no 6a, confirmados pelo usuário em 2026-10-28 (decisões do `2026-10-26-backoffice-6a.md`; os do Pencil não entram aqui):
   - Validação do formulário da P2: 'Preencha este campo.'; 'Informe o nome (2 a 80 caracteres).'; 'Informe o nome (2 a 120 caracteres).'; 'CPF inválido.'; 'E-mail inválido.'; 'Informe de 1 a 10000.'; 'Não foi possível buscar os municípios.'; 'Confira os dados e tente de novo.'.
   - Placeholders da P2: 'Nome ou código do município'; 'Nome completo'; '000.000.000-00'; 'nome@prefeitura.gov.br'.
   - Erros da P2 vindos da API: 'Município não encontrado. Busque de novo.'; 'Este município já tem prefeitura cadastrada.'; 'Este CPF já tem outro e-mail cadastrado: {maskedEmail}.'; 'Este e-mail já é de outra pessoa.'; 'Este CPF está numa conta bloqueada. Fale com o suporte do Alô Cidadão.'; 'Esta pessoa é da equipe Alô Cidadão. Use outro CPF.' (`staff_account_not_allowed`); 'O fim da vigência não pode ser antes do início.'.

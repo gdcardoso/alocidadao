@@ -281,10 +281,13 @@ export function MoveAgentDialog({ agent, teams, onClose }: MoveAgentDialogProps)
       onClose();
     },
     onError: (failure) => {
+      const code = errorCode(failure);
       setError(
-        errorCode(failure) === 'team_not_eligible'
+        code === 'team_not_eligible'
           ? 'Esta equipe não está disponível para você.'
-          : generalErrorMessage(failure),
+          : code === 'staff_account_not_allowed'
+            ? 'Este número é de alguém da equipe Alô Cidadão. Use outro número.'
+            : generalErrorMessage(failure),
       );
     },
   });

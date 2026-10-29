@@ -113,6 +113,40 @@ describe('FrozenAccountPanel', () => {
     expect(onResolved).not.toHaveBeenCalled();
   });
 
+  it('release of a frozen account without phone shows its message', async () => {
+    const user = userEvent.setup();
+    release.mockRejectedValue(new ApiError(409, { code: 'frozen_account_without_phone' }));
+    const { onResolved } = renderPanel();
+    await user.click(screen.getByRole('button', { name: 'Criar conta nova' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Criar conta nova?' });
+    await user.click(within(dialog).getByRole('button', { name: 'Criar conta nova' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'A conta antiga não tem celular, então o CPF não pode sair dela.',
+    );
+    expect(onResolved).not.toHaveBeenCalled();
+  });
+
+  it('support tenant mismatch and staff account refusals show their messages', async () => {
+    const user = userEvent.setup();
+    sendCode.mockRejectedValue(new ApiError(403, { code: 'support_tenant_mismatch' }));
+    release.mockRejectedValue(new ApiError(403, { code: 'admin_only' }));
+    const { onResolved } = renderPanel('5a4d3f2b-8c1e-4e6f-8a7b-9c0d1e2f3a4b');
+    await user.click(screen.getByRole('button', { name: 'Recuperar conta antiga' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Você não está no modo suporte desta prefeitura. Volte ao backoffice e entre nela de novo.',
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Criar conta nova' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Criar conta nova?' });
+    await user.click(within(dialog).getByRole('button', { name: 'Criar conta nova' }));
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'Esta conta é de alguém da equipe Alô Cidadão. Só um Admin pode recuperá-la ou liberar o CPF dela.',
+      ),
+    );
+    expect(onResolved).not.toHaveBeenCalled();
+  });
+
   it('frozen account panel without email offers only a new account', async () => {
     const user = userEvent.setup();
     sendCode.mockRejectedValue(new ApiError(409, { code: 'frozen_account_without_email' }));

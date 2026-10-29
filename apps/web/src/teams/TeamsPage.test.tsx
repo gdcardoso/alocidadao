@@ -335,6 +335,27 @@ describe('TeamsPage', () => {
     ).toBeInTheDocument();
   });
 
+  it('staff_account_not_allowed on move and reactivate shows the staff phone message', async () => {
+    updateAgent.mockRejectedValue(new ApiError(409, { code: 'staff_account_not_allowed' }));
+    const user = renderPage();
+    await screen.findByText('João Pereira');
+    await user.click(screen.getByRole('button', { name: 'Ações de João Pereira' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Mudar de equipe' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Mudar de equipe' });
+    await user.selectOptions(within(dialog).getByLabelText('Equipe'), 'Obras · Zona Norte');
+    await user.click(within(dialog).getByRole('button', { name: 'Mudar' }));
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'Este número é de alguém da equipe Alô Cidadão. Use outro número.',
+    );
+    await user.click(within(dialog).getByRole('button', { name: 'Cancelar' }));
+
+    await user.click(screen.getByRole('button', { name: 'Ações de Carla Dias' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Reativar' }));
+    expect(
+      await screen.findByText('Este número é de alguém da equipe Alô Cidadão. Use outro número.'),
+    ).toBeInTheDocument();
+  });
+
   it('deactivate asks for confirmation and reactivate does not', async () => {
     updateAgent.mockResolvedValue(joao);
     const user = renderPage();

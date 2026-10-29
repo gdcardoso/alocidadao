@@ -1042,6 +1042,110 @@ describe('conta congelada', () => {
     ).toBe('P0002');
   });
 
+  it('recuperar tira o número mesmo quando ninguém mais o usa', async () => {
+    const phone = newPhone();
+    const frozen = await createUser({
+      name: 'Congelada',
+      cpf: newCpf(),
+      phone,
+      email: 'livre@gelo6b.dev',
+      accountStatus: 'frozen',
+    });
+    // Quem ficou com o número excluiu a conta: nenhuma conta ativa tem o número agora.
+    await createUser({ name: 'Excluída', phone: null, cpf: null, deletedAt: new Date() });
+
+    await call(
+      asSupport(),
+      sql`select platform_recover_frozen_account(${frozen}, 'livre.nova@gelo6b.dev', null)`,
+    );
+    expect(await userRow(frozen)).toMatchObject({ accountStatus: 'active', phone: null });
+  });
+
+  it('só o admin recupera ou libera conta congelada de alguém da equipe', async () => {
+    const cpf = newCpf();
+    const frozen = await createUser({
+      name: 'Equipe congelada',
+      cpf,
+      email: 'equipe@gelo6b.dev',
+      accountStatus: 'frozen',
+      platformRole: 'support',
+    });
+    for (const query of [
+      sql`select platform_recover_frozen_account(${frozen}, 'equipe.nova@gelo6b.dev', null)`,
+      sql`select platform_release_frozen_cpf(${cpf}, null)`,
+    ]) {
+      const error = await pgError(call(asSupport(), query));
+      expect(error).toMatchObject({ code: '42501', message: 'admin_only' });
+    }
+    expect(await userRow(frozen)).toMatchObject({ accountStatus: 'frozen', cpf });
+
+    await call(asAdmin(), sql`select platform_release_frozen_cpf(${cpf}, null)`);
+    expect(await userRow(frozen)).toMatchObject({ accountStatus: 'frozen', cpf: null });
+  });
+
+  it('liberar CPF recusa conta congelada sem número', async () => {
+    const cpf = newCpf();
+    const frozen = await createUser({
+      name: 'Sem número',
+      cpf,
+      phone: null,
+      email: 'sem.numero@gelo6b.dev',
+      accountStatus: 'frozen',
+    });
+    expect(
+      await pgError(call(asAdmin(), sql`select platform_release_frozen_cpf(${cpf}, null)`)),
+    ).toMatchObject({ code: '23514', message: 'frozen_account_without_phone' });
+    expect(await userRow(frozen)).toMatchObject({ accountStatus: 'frozen', cpf });
+    expect(await auditOf('account.release_cpf', frozen)).toEqual([]);
+  });
+
+  it('prefeitura do modo suporte aberto de quem chama', async () => {
+    const seed = await createTenant('Suporte aberto');
+    const staffId = await createUser({
+      name: 'Suporte aberto',
+      cpf: newCpf(),
+      platformRole: 'support',
+    });
+    const asStaff: DbContext = { userId: staffId, platformRole: 'support' };
+    const open = async () =>
+      (
+        await call<{ t: string | null }>(asStaff, sql`select platform_open_support_tenant() as t`)
+      )[0]!.t;
+
+    expect(await open()).toBeNull();
+    await owner.db.insert(staffAuditEvents).values({
+      tenantId: seed.tenantId,
+      staffUserId: staffId,
+      action: 'support.enter',
+      targetType: 'tenant',
+      targetId: seed.tenantId,
+    });
+    expect(await open()).toBe(seed.tenantId);
+    // Outra pessoa da equipe não vê o modo suporte desta.
+    expect(
+      (
+        await call<{ t: string | null }>(
+          asSupport(),
+          sql`select platform_open_support_tenant() as t`,
+        )
+      )[0]!.t,
+    ).not.toBe(seed.tenantId);
+
+    await owner.db.insert(staffAuditEvents).values({
+      tenantId: seed.tenantId,
+      staffUserId: staffId,
+      action: 'support.leave',
+      targetType: 'tenant',
+      targetId: seed.tenantId,
+      createdAt: new Date(Date.now() + 1000),
+    });
+    expect(await open()).toBeNull();
+
+    expect(
+      (await pgError(call({ userId: staffId }, sql`select platform_open_support_tenant()`))).code,
+    ).toBe('42501');
+  });
+
   it('liberar CPF mantém a conta congelada e sem CPF', async () => {
     const cpf = newCpf();
     const frozen = await createUser({

@@ -642,6 +642,8 @@ export function registerPanelRoutes(instance: FastifyInstance, deps: PanelDeps) 
       if (!identity) return reply;
       const result = await updateAgent(db, identity, request.params.userId, request.body);
       if ('error' in result) return sendTeamsError(reply, result);
+      // No modo suporte, a troca do celular (que recebe o código de login) tem ação própria.
+      if (request.body.action === 'change_phone') request.auditAction = 'agent.phone_change';
       return result.ok;
     },
   );

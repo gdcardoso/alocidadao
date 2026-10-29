@@ -272,11 +272,13 @@ const setManagerStatus = (
       ),
     );
 
+/** `onEmailChange` é chamado quando o e-mail de fato muda (a auditoria tem ação própria). */
 export function updateManager(
   db: Database,
   identity: PanelIdentity,
   userId: string,
   body: ManagerUpdateBody,
+  onEmailChange?: () => void,
 ): Promise<AdminResult<ManagerRow>> {
   return guard(() =>
     runAdmin(db, identity, async (tx) => {
@@ -290,6 +292,7 @@ export function updateManager(
           const departmentIds = await requireDepartments(tx, identity, body.departmentIds);
           if (manager.email?.toLowerCase() !== body.email) {
             await tx.execute(sql`SELECT panel_change_manager_email(${userId}, ${body.email})`);
+            onEmailChange?.();
           }
           await replaceDepartments(tx, identity, userId, departmentIds);
           break;
@@ -497,8 +500,13 @@ export function registerAdminRoutes(instance: FastifyInstance, { db }: { db: Dat
     async (request, reply) => {
       const identity = await requirePanelAdmin(db, request, reply);
       if (!identity) return reply;
-      const result = await updateManager(db, identity, request.params.userId, request.body);
+      let emailChanged = false;
+      const result = await updateManager(db, identity, request.params.userId, request.body, () => {
+        emailChanged = true;
+      });
       if ('error' in result) return sendAdminError(reply, result);
+      // No modo suporte, a troca do e-mail (que recebe o código de login) tem ação própria.
+      if (emailChanged) request.auditAction = 'manager.email_change';
       return result.ok;
     },
   );

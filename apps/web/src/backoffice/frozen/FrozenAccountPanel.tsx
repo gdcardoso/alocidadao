@@ -54,6 +54,15 @@ export function FrozenAccountPanel({ cpf, email, tenantId, onResolved }: FrozenA
     if (code === 'tenant_not_found') {
       return 'Esta prefeitura não foi encontrada. Volte ao backoffice e tente de novo.';
     }
+    if (code === 'support_tenant_mismatch') {
+      return 'Você não está no modo suporte desta prefeitura. Volte ao backoffice e entre nela de novo.';
+    }
+    if (code === 'admin_only') {
+      return 'Esta conta é de alguém da equipe Alô Cidadão. Só um Admin pode recuperá-la ou liberar o CPF dela.';
+    }
+    if (code === 'frozen_account_without_phone') {
+      return 'A conta antiga não tem celular, então o CPF não pode sair dela.';
+    }
     if (code === 'invalid_code') return 'Código incorreto ou expirado. Confira ou peça um novo.';
     if (code === 'email_in_use') return 'Este e-mail já é de outra pessoa.';
     return generalErrorMessage(failure);

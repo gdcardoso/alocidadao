@@ -249,6 +249,16 @@ describe('ManagersPage', () => {
     expect(await screen.findByText('Gestor salvo.')).toBeInTheDocument();
   });
 
+  it('reactivate refused for a staff account shows the staff message', async () => {
+    updateManager.mockRejectedValue(new ApiError(409, { code: 'staff_account_not_allowed' }));
+    const user = renderAdminPage(<ManagersPage />, '/equipes/gestores');
+    await user.click(await screen.findByRole('button', { name: 'Ações de Paulo Nunes' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Reativar' }));
+    expect(
+      await screen.findByText('Esta pessoa é da equipe Alô Cidadão. Use outro CPF.'),
+    ).toBeInTheDocument();
+  });
+
   it('deactivate asks for confirmation and reactivate does not', async () => {
     updateManager.mockResolvedValue(carlos);
     const user = renderAdminPage(<ManagersPage />, '/equipes/gestores');

@@ -56,7 +56,7 @@ export function StaffDialog({ member, onClose }: StaffDialogProps) {
           return;
         }
         if (!createBody.success) throw new Error('invalid');
-        await api.backofficeAddStaff(createBody.data);
+        return (await api.backofficeAddStaff(createBody.data)).id;
       }),
     onMutate: () => {
       setCpfError(null);
@@ -64,9 +64,17 @@ export function StaffDialog({ member, onClose }: StaffDialogProps) {
       setGeneralError(null);
       setFrozen(false);
     },
-    onSuccess: async () => {
+    onSuccess: async (addedId) => {
       await queryClient.invalidateQueries({ queryKey: STAFF_KEY });
-      toast.show(editing ? 'Pessoa salva.' : `${name.trim()} entrou na equipe.`);
+      if (editing) {
+        toast.show('Pessoa salva.');
+      } else {
+        // Conta que já existia pelo CPF guarda o nome dela: o aviso usa o nome da lista relida.
+        const added = queryClient
+          .getQueryData<{ items: StaffMember[] }>(STAFF_KEY)
+          ?.items.find((item) => item.userId === addedId);
+        toast.show(`${added?.name ?? name.trim()} entrou na equipe.`);
+      }
       onClose();
     },
     onError: (error) => {

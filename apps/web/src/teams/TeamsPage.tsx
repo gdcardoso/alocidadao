@@ -4,6 +4,7 @@ import { Info, Pencil, Plus, UserPlus } from 'lucide-react';
 import { useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { api } from '../api';
+import { errorCode } from '../occurrence/use-occurrence-actions';
 import { useSession } from '../session/SessionProvider';
 import { usePanel } from '../shell/use-panel';
 import { Button } from '../ui/Button';
@@ -96,7 +97,12 @@ export function TeamsPage() {
       setDialog(null);
     },
     onError: (error) => {
-      setActionError(generalErrorMessage(error));
+      // Reativar agente que entrou na equipe Alô Cidadão: o banco recusa.
+      setActionError(
+        errorCode(error) === 'staff_account_not_allowed'
+          ? 'Este número é de alguém da equipe Alô Cidadão. Use outro número.'
+          : generalErrorMessage(error),
+      );
       setDialog(null);
     },
   });

@@ -175,6 +175,77 @@ describe('auditoria do modo suporte', () => {
     });
   });
 
+  it('support email change of a manager has its own audit action', async () => {
+    const supportId = await fx.newStaff('support');
+    const seed = await fx.seedPanelTenant();
+    const managerId = await fx.newManager(seed.tenantId, [seed.worksId]);
+    const headers = await panelAuthHeader(appDb.db, supportId, seed.tenantId);
+    const patch = (email: string) =>
+      app.inject({
+        method: 'PATCH',
+        url: `/panel/managers/${managerId}`,
+        headers,
+        payload: { action: 'update', email, departmentIds: [seed.worksId] },
+      });
+
+    const email = `gestor.${randomInt(0, 1_000_000_000)}@teste.dev`;
+    expect((await patch(email)).statusCode).toBe(200);
+    // O mesmo e-mail de novo só mexe nos setores: ação genérica.
+    expect((await patch(email)).statusCode).toBe(200);
+
+    await vi.waitFor(async () => {
+      expect(await auditOf(seed.tenantId)).toHaveLength(2);
+    });
+    // A gravação é depois da resposta: a ordem entre as duas não é garantida.
+    const events = (await auditOf(seed.tenantId)).toSorted((a, b) =>
+      a.action.localeCompare(b.action),
+    );
+    expect(events.map((e) => [e.action, e.targetType, e.targetId, e.details])).toEqual([
+      ['manager.email_change', 'manager', managerId, { route: 'PATCH /panel/managers/:userId' }],
+      ['manager.update', 'manager', managerId, { route: 'PATCH /panel/managers/:userId' }],
+    ]);
+  });
+
+  it('support phone change of an agent has its own audit action', async () => {
+    const supportId = await fx.newStaff('support');
+    const seed = await fx.seedPanelTenant();
+    const teamId = await fx.addTeam(seed.tenantId, {
+      departmentId: seed.worksId,
+      name: 'Equipe C',
+    });
+    const agentId = await fx.addAgent(seed.tenantId, teamId, 'active');
+    const headers = await panelAuthHeader(appDb.db, supportId, seed.tenantId);
+
+    const changed = await app.inject({
+      method: 'PATCH',
+      url: `/panel/agents/${agentId}`,
+      headers,
+      payload: {
+        action: 'change_phone',
+        phone: `+55419${String(randomInt(0, 100_000_000)).padStart(8, '0')}`,
+      },
+    });
+    expect(changed.statusCode).toBe(200);
+    const deactivated = await app.inject({
+      method: 'PATCH',
+      url: `/panel/agents/${agentId}`,
+      headers,
+      payload: { action: 'deactivate' },
+    });
+    expect(deactivated.statusCode).toBe(200);
+
+    await vi.waitFor(async () => {
+      expect(await auditOf(seed.tenantId)).toHaveLength(2);
+    });
+    const events = (await auditOf(seed.tenantId)).toSorted((a, b) =>
+      a.action.localeCompare(b.action),
+    );
+    expect(events.map((e) => [e.action, e.targetType, e.targetId])).toEqual([
+      ['agent.phone_change', 'agent', agentId],
+      ['agent.update', 'agent', agentId],
+    ]);
+  });
+
   it('adding an agent audits the agent as target', async () => {
     const supportId = await fx.newStaff('support');
     const seed = await fx.seedPanelTenant();

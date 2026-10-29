@@ -52,20 +52,29 @@ function newCpf(): string {
 const newEmail = () => `pessoa.${randomUUID()}@teste.dev`;
 const newPhone = () => `+55319${String(randomInt(0, 100_000_000)).padStart(8, '0')}`;
 
-/** Conta congelada com CPF (e e-mail, salvo `email: null`) e uma sessão aberta. */
-async function frozenAccount({ email = newEmail() }: { email?: string | null } = {}) {
+/** Conta congelada com CPF (e e-mail, salvo `email: null`; número, salvo `phone: null`). */
+async function frozenAccount({
+  email = newEmail(),
+  phone = newPhone(),
+  platformRole = null,
+}: {
+  email?: string | null;
+  phone?: string | null;
+  platformRole?: 'admin' | 'support' | null;
+} = {}) {
   const cpf = newCpf();
   const [user] = await owner.db
     .insert(users)
     .values({
       name: 'Dona da Conta Antiga',
-      phone: newPhone(),
+      phone,
       cpf,
       email,
       accountStatus: 'frozen',
+      platformRole,
     })
     .returning();
-  return { id: user!.id, cpf, email, phone: user!.phone! };
+  return { id: user!.id, cpf, email, phone: user!.phone };
 }
 
 async function post(url: string, staffId: string, payload: Record<string, unknown>) {
@@ -84,6 +93,12 @@ const recover = (staffId: string, payload: Record<string, unknown>) =>
 const releaseCpf = (staffId: string, payload: Record<string, unknown>) =>
   post('/backoffice/frozen-accounts/release-cpf', staffId, payload);
 
+/** Abre o modo suporte da pessoa na prefeitura (a auditoria das rotas só aceita essa prefeitura). */
+async function enterSupport(staffId: string, tenantId: string) {
+  const response = await post(`/backoffice/tenants/${tenantId}/support/enter`, staffId, {});
+  expect(response.statusCode).toBe(204);
+}
+
 /** O código de 6 dígitos do último e-mail enviado para `to`. */
 function codeSentTo(to: string): string {
   const message = emailsSent.findLast((m) => m.to === to);
@@ -96,13 +111,17 @@ const userRow = async (id: string) => {
   return row!;
 };
 
-const auditBy = (staffId: string) =>
-  owner.db.select().from(staffAuditEvents).where(eq(staffAuditEvents.staffUserId, staffId));
+/** Eventos da pessoa, sem os de entrada e saída do modo suporte. */
+const auditBy = async (staffId: string) =>
+  (
+    await owner.db.select().from(staffAuditEvents).where(eq(staffAuditEvents.staffUserId, staffId))
+  ).filter((event) => !event.action.startsWith('support.'));
 
 describe('conta congelada no backoffice', () => {
   it('recovery code goes to the frozen account email, never the typed one', async () => {
     const supportId = await fx.newStaff('support');
     const tenantId = await fx.createTenant();
+    await enterSupport(supportId, tenantId);
     const frozen = await frozenAccount({ email: 'Antiga.Dona@Teste.dev' });
     const typed = newEmail();
 
@@ -125,10 +144,12 @@ describe('conta congelada no backoffice', () => {
       tenantId,
     });
     expect(recovered.statusCode).toBe(204);
+    // O número foi reusado por outra pessoa: a conta recuperada fica sem ele.
     expect(await userRow(frozen.id)).toMatchObject({
       accountStatus: 'active',
       email: newAddress,
       cpf: frozen.cpf,
+      phone: null,
     });
     const open = await owner.db
       .select()
@@ -315,6 +336,7 @@ describe('conta congelada no backoffice', () => {
     const seed = await fx.seedPanelTenant();
     const adminId = await fx.newAdmin(seed.tenantId);
     const frozen = await frozenAccount();
+    await enterSupport(supportId, seed.tenantId);
 
     const released = await releaseCpf(supportId, { cpf: frozen.cpf, tenantId: seed.tenantId });
     expect(released.statusCode).toBe(204);
@@ -348,6 +370,89 @@ describe('conta congelada no backoffice', () => {
       targetId: frozen.id,
       details: null,
     });
+  });
+
+  it('tenantId other than the open support tenant is 403 support_tenant_mismatch', async () => {
+    const supportId = await fx.newStaff('support');
+    const frozen = await frozenAccount();
+    const tenantId = await fx.createTenant();
+    const otherTenantId = await fx.createTenant();
+
+    const refused = async () => {
+      for (const send of [requestCode, releaseCpf]) {
+        const response = await send(supportId, { cpf: frozen.cpf, tenantId });
+        expect(response.statusCode).toBe(403);
+        expect(response.json()).toEqual({ code: 'support_tenant_mismatch' });
+      }
+      const recovered = await recover(supportId, {
+        challengeId: randomUUID(),
+        code: '123456',
+        email: newEmail(),
+        tenantId,
+      });
+      expect(recovered.statusCode).toBe(403);
+      expect(recovered.json()).toEqual({ code: 'support_tenant_mismatch' });
+    };
+
+    // Fora do modo suporte.
+    await refused();
+    // No modo suporte de outra prefeitura.
+    await enterSupport(supportId, otherTenantId);
+    await refused();
+    // Depois de sair dele.
+    await post(`/backoffice/tenants/${otherTenantId}/support/leave`, supportId, {});
+    await refused();
+
+    expect(emailsSent).toEqual([]);
+    expect(await userRow(frozen.id)).toMatchObject({ accountStatus: 'frozen', cpf: frozen.cpf });
+    expect(await auditBy(supportId)).toEqual([]);
+
+    // Na prefeitura do modo suporte aberto, vale.
+    await enterSupport(supportId, tenantId);
+    expect((await releaseCpf(supportId, { cpf: frozen.cpf, tenantId })).statusCode).toBe(204);
+  });
+
+  it('release of a frozen account without phone is 409 frozen_account_without_phone', async () => {
+    const supportId = await fx.newStaff('support');
+    const frozen = await frozenAccount({ phone: null });
+    const response = await releaseCpf(supportId, { cpf: frozen.cpf, tenantId: null });
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toEqual({ code: 'frozen_account_without_phone' });
+    expect(await userRow(frozen.id)).toMatchObject({ accountStatus: 'frozen', cpf: frozen.cpf });
+    expect(await auditBy(supportId)).toEqual([]);
+  });
+
+  it('support cannot recover or release a frozen staff account (403 admin_only)', async () => {
+    const supportId = await fx.newStaff('support');
+    const adminId = await fx.newStaff('admin');
+    const frozen = await frozenAccount({ platformRole: 'admin' });
+
+    const sent = await requestCode(supportId, { cpf: frozen.cpf, tenantId: null });
+    const { challengeId } = sent.json<{ challengeId: string }>();
+    const code = codeSentTo(frozen.email!);
+    const recovered = await recover(supportId, {
+      challengeId,
+      code,
+      email: newEmail(),
+      tenantId: null,
+    });
+    expect(recovered.statusCode).toBe(403);
+    expect(recovered.json()).toEqual({ code: 'admin_only' });
+
+    const released = await releaseCpf(supportId, { cpf: frozen.cpf, tenantId: null });
+    expect(released.statusCode).toBe(403);
+    expect(released.json()).toEqual({ code: 'admin_only' });
+    expect(await userRow(frozen.id)).toMatchObject({
+      accountStatus: 'frozen',
+      cpf: frozen.cpf,
+      email: frozen.email,
+    });
+    expect(await auditBy(supportId)).toEqual([]);
+
+    // O admin recupera, com o mesmo código (a recusa desfez o consumo).
+    const ok = await recover(adminId, { challengeId, code, email: newEmail(), tenantId: null });
+    expect(ok.statusCode).toBe(204);
+    expect((await userRow(frozen.id)).accountStatus).toBe('active');
   });
 
   it('app token is 403 not_platform_staff', async () => {

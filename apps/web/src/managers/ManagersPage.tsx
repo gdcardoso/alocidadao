@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Info, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { api } from '../api';
+import { errorCode } from '../occurrence/use-occurrence-actions';
 import { useSession } from '../session/SessionProvider';
 import { usePanel } from '../shell/use-panel';
 import { initialsOf } from '../shell/menu';
@@ -82,7 +83,12 @@ export function ManagersPage() {
       setDialog(null);
     },
     onError: (error) => {
-      setActionError(generalErrorMessage(error));
+      // Reativar gestor que entrou na equipe Alô Cidadão: o banco recusa.
+      setActionError(
+        errorCode(error) === 'staff_account_not_allowed'
+          ? 'Esta pessoa é da equipe Alô Cidadão. Use outro CPF.'
+          : generalErrorMessage(error),
+      );
       setDialog(null);
     },
   });

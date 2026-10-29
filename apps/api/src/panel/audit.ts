@@ -14,6 +14,11 @@ declare module 'fastify' {
      * agente criado em `POST /panel/teams/:id/agents`, cujo id só existe na resposta).
      */
     auditTarget: AuditTarget | null;
+    /**
+     * Ação de auditoria definida pela própria rota no lugar da de `PANEL_AUDIT_ACTIONS`, quando a
+     * mesma rota faz coisas diferentes (ex.: a troca de e-mail do gestor, que é fator de login).
+     */
+    auditAction: StaffAuditAction | null;
   }
 }
 
@@ -117,6 +122,7 @@ export async function recordStaffAudit(
 export function registerPanelAudit(app: FastifyInstance, db: Database): void {
   app.decorateRequest('panelIdentity', null);
   app.decorateRequest('auditTarget', null);
+  app.decorateRequest('auditAction', null);
   app.addHook('onResponse', async (request, reply) => {
     const identity = request.panelIdentity;
     if (!identity?.platformRole) return;
@@ -124,7 +130,7 @@ export function registerPanelAudit(app: FastifyInstance, db: Database): void {
     if (reply.statusCode < 200 || reply.statusCode >= 300) return;
 
     const route = `${request.method} ${request.routeOptions.url}`;
-    const action = PANEL_AUDIT_ACTIONS[route];
+    const action = request.auditAction ?? PANEL_AUDIT_ACTIONS[route];
     if (!action) {
       request.log.error({ route }, 'rota do painel sem ação de auditoria');
       return;

@@ -79,7 +79,7 @@ describe('backoffice contracts', () => {
     for (const action of STAFF_AUDIT_ACTIONS) {
       expect(STAFF_AUDIT_ACTION_LABELS[action]).toBeTruthy();
     }
-    expect(STAFF_AUDIT_ACTIONS).toHaveLength(32);
+    expect(STAFF_AUDIT_ACTIONS).toHaveLength(34);
   });
 
   it('every commercial status and staff audit action has a label', () => {
@@ -93,6 +93,8 @@ describe('backoffice contracts', () => {
     expect(STAFF_AUDIT_ACTION_LABELS['account.release_cpf']).toBe(
       'Liberou o CPF de uma conta congelada',
     );
+    expect(STAFF_AUDIT_ACTION_LABELS['manager.email_change']).toBe('Trocou o e-mail de um gestor');
+    expect(STAFF_AUDIT_ACTION_LABELS['agent.phone_change']).toBe('Trocou o celular de um agente');
   });
 
   it('city interest csv uses semicolons, BOM, pt-BR dates and Sim/Não', () => {

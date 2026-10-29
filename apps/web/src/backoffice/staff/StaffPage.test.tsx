@@ -144,6 +144,17 @@ describe('StaffPage', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Bia Lima entrou na equipe.');
   });
 
+  it('add person of an existing account shows the name the account keeps', async () => {
+    const user = renderPage();
+    add.mockResolvedValue({ id: biaId });
+    const dialog = await fillAddDialog(user);
+    // O CPF já tinha conta, com outro nome: a lista relida traz o nome guardado.
+    list.mockResolvedValue({ items: [lucas, marina, { ...bia, name: 'Beatriz Lima' }] });
+    await user.click(within(dialog).getByRole('button', { name: 'Salvar' }));
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Beatriz Lima entrou na equipe.');
+  });
+
   it('add person with a city hall member shows the cpf message', async () => {
     const user = renderPage();
     add.mockRejectedValue(new ApiError(409, { code: 'tenant_member_not_allowed' }));

@@ -32,6 +32,8 @@ A equipe interna entra pelo mesmo login e vai para `/backoffice/prefeituras`:
 
 Quem entra em `/backoffice/*` sem papel interno volta para `/mapa`. No backoffice, `Entrar no painel da prefeitura` (ou `Gerenciar`) abre o painel na prefeitura escolhida com a faixa do modo suporte; ela fica em `sessionStorage` (`ac_support_tenant`) e `Sair da prefeitura` volta ao detalhe. Cada chamada que altera dados nesse modo fica em `staff_audit_events` e aparece em "Últimas ações da equipe Alô Cidadão".
 
+No 6b o menu ganhou as telas de verdade: `Interesse por cidade` (P5, admin e suporte: situação comercial pelo menu ⋯ e `Exportar CSV`), `Equipe Alô Cidadão` (P6, só admin: adicionar, editar, trocar papel e remover) e `Auditoria` (P7, só admin: filtros de prefeitura, pessoa e período na URL). O suporte não vê P6 nem P7 no menu, e a API responde 403 `admin_only`. Quando o CPF digitado na P2, na P6 ou no `Novo gestor` em modo suporte está numa conta bloqueada, o formulário mostra o bloco "Este CPF está numa conta bloqueada." para recuperar a conta antiga (código no e-mail dela; em desenvolvimento, o código fixo) ou criar uma nova. O seed não tem conta bloqueada: para ver o bloco, congele uma conta de teste no banco local (`account_status = 'frozen'`, com CPF, e-mail e telefone).
+
 Para subir o web contra uma API em outra porta, use `API_PROXY_TARGET` (por exemplo `API_PROXY_TARGET=http://localhost:3334 pnpm --filter @alocidadao/web dev`, com a API iniciada com `PORT=3334`).
 
 ## Testar a revisão, os impedimentos e o cadastro

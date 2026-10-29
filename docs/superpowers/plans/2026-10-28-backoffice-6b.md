@@ -502,12 +502,66 @@ Feita por quem coordena, com as ferramentas do Pencil (MCP `pencil`). Não é ta
   - este plano: seção "Resultado no navegador";
   - `README.md` ou `docs/` onde o 6a documentou o backoffice.
 
-- [ ] **Step 1:** Subir API e web (`pnpm dev`, depois de matar processos antigos na porta 3333). No navegador, com o admin e o suporte do seed, passar por:
+- [x] **Step 1:** Subir API e web (`pnpm dev`, depois de matar processos antigos na porta 3333). No navegador, com o admin e o suporte do seed, passar por:
   - P5 (mudar situação, exportar);
   - P6 (adicionar, editar, trocar papel, remover, último admin);
   - P7 (filtros);
   - modo suporte (troca de e-mail, CPF de conta congelada com recuperar e com criar nova);
   - P2 com CPF congelado.
-- [ ] **Step 2:** Registrar no plano o que foi visto e o que não deu para ver.
-- [ ] **Step 3:** `pnpm test`, `pnpm lint`, `pnpm format:check` e `pnpm typecheck` → PASS.
-- [ ] **Step 4:** Commit: `Backoffice 6b: documentação, pendências e passada no navegador`.
+- [x] **Step 2:** Registrar no plano o que foi visto e o que não deu para ver.
+- [x] **Step 3:** `pnpm test`, `pnpm lint`, `pnpm format:check` e `pnpm typecheck` → PASS.
+- [x] **Step 4:** Commit: `Backoffice 6b: documentação, pendências e passada no navegador`.
+
+## Resultado no navegador
+
+29/10/2026, Playwright (Chromium) em 1440x900, com o código fixo de desenvolvimento `123456`. Antes da passada: processos antigos das portas 3333 e 5173 parados, `pnpm db:migrate`, `pnpm db:seed:dev --reset` e `pnpm dev`. Entradas: Admin Demo (`11144477735`) e Suporte Demo (`86288366757`).
+
+**Dados criados só no banco de desenvolvimento.** O seed não tem conta congelada. Para a passada, cinco contas congeladas foram inseridas por SQL no banco local (`account_status = 'frozen'`, com CPF e e-mail; CPFs `12312312387`, `32132132178`, `45645645014`, `65465465077` e `11122233396`). Na primeira tentativa de "Criar conta nova" elas estavam sem telefone, o que deu 500 (ver "Problemas"); depois ganharam telefone, como as congeladas de verdade (o número reaproveitado é o único caminho que congela uma conta com CPF). A passada também criou as prefeituras de Campinas (SP) e de Campinas do Sul (RS), mudou situações da P5 e trocou o e-mail de Carlos Demo para `carlos.novo@alocidadao.dev`; o `--reset` não desfaz tudo isso.
+
+**Telas sem Pencil.** O limite de uso do pen.dev bloqueou a Task 1. As telas foram feitas no código seguindo o padrão do Pencil; as capturas abaixo são para o usuário aprovar e, em 31/10, viram o desenho no Pencil (Task 1b).
+
+Capturas em `docs/superpowers/specs/telas-backoffice/`: `P6-equipe.png`, `P6-adicionar-pessoa.png`, `P6-menu-e-confirmacoes.png`, `P6-confirmacao-trocar-papel.png`, `P6-confirmacao-remover.png`, `P6-conta-congelada.png`, `P5-menu-situacao.png`, `P7-auditoria.png`, `P4-conta-congelada.png`, `P4-criar-conta-nova.png`, `P2-conta-congelada.png`.
+
+| Passo                                   | Resultado                                                                                                                                                                                                                                                                                                     |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P6 lista                                | OK (`P6-equipe`): `Admin Demo` (Admin, `hoje, 11:56`) e `Suporte Demo` (Suporte, `há 3 dias`), CPF mascarado, cartões de papel.                                                                                                                                                                               |
+| P6 adicionar                            | OK (`P6-adicionar-pessoa`): `Bruna Equipe` como Suporte; aviso `Bruna Equipe entrou na equipe.`; `nunca entrou` na lista.                                                                                                                                                                                     |
+| P6 editar                               | OK: janela `Editar pessoa` (nome e e-mail; CPF só mascarado); nome trocado, aviso `Pessoa salva.`.                                                                                                                                                                                                            |
+| P6 trocar papel                         | OK (`P6-menu-e-confirmacoes`, `P6-confirmacao-trocar-papel`): menu `Editar`, `Trocar papel`, `Remover da equipe`; `Trocar o papel de Bruna Equipe Silva?` / `… passa de Suporte para Admin.`; aviso `… agora é Admin.`.                                                                                       |
+| P6 remover                              | OK (`P6-confirmacao-remover`): `Remover … da equipe?` com o texto do plano; aviso `… saiu da equipe.`; a linha some.                                                                                                                                                                                          |
+| P6 própria linha                        | OK: o menu de `Admin Demo` (quem está logado) só tem `Editar`.                                                                                                                                                                                                                                                |
+| P6 último Admin                         | Não dá para provocar pela tela: ninguém troca o próprio papel nem se remove, então sempre sobra quem está agindo. Só os testes cobrem `last_platform_admin` (banco, API e a mensagem do app).                                                                                                                 |
+| P6 CPF congelado                        | OK (`P6-conta-congelada`): o bloco aparece no `Salvar`; `Recuperar conta antiga` envia o código (`Enviamos um código para a•••@alocidadao.dev, o e-mail da conta antiga.`); código errado mostra `Código incorreto ou expirado. Confira ou peça um novo.`; com `123456` a conta volta e entra na equipe.      |
+| P5 lista                                | OK: 4 municípios, `Cidade Demo — SP` com `Já é cliente`, `+N` nos últimos 30 dias, nota de privacidade.                                                                                                                                                                                                       |
+| P5 mudar situação                       | OK (`P5-menu-situacao`): 6 situações, visto na atual; `Contatado` (azul), `Fechado` (verde), `Perdido` (cinza); aviso `Vila Sem Adesão — SP: Contatado.`. O suporte também muda (`Proposta enviada`).                                                                                                         |
+| P5 exportar                             | OK: baixa `interesse-por-cidade.csv`, UTF-8 com BOM, `;`, colunas e datas do plano, `Sim` só na Cidade Demo.                                                                                                                                                                                                  |
+| P7 lista                                | OK (`P7-auditoria`): as ações da passada com os rótulos novos e os alvos resolvidos (pessoa, `Município — UF`, protocolo, prefeitura); `—` na prefeitura das ações sem prefeitura.                                                                                                                            |
+| P7 filtros                              | OK: prefeitura (5 linhas), prefeitura + pessoa (3), `De` (9), `De` depois de `Até` (vazio `Nenhuma ação com estes filtros.`), só `Até` (12); filtros na URL (`?prefeitura=…`, `?de=…&ate=…`).                                                                                                                 |
+| Modo suporte, troca de e-mail           | OK: admin entrou na Prefeitura Demo A; e-mail de Carlos Demo trocado, aviso `Gestor salvo.`, auditoria `manager.update`.                                                                                                                                                                                      |
+| Modo suporte, CPF congelado, recuperar  | OK (`P4-conta-congelada`): `Novo gestor` com CPF congelado mostra o bloco; código enviado ao e-mail da conta antiga; a conta volta ativa com o e-mail digitado e vira gestora; auditoria `account.recover` na prefeitura.                                                                                     |
+| Modo suporte, CPF congelado, criar nova | OK depois da correção dos dados (`P4-criar-conta-nova`): confirmação `Criar conta nova?` sobre a janela; `Eva Gestora cadastrado como gestor.`; a conta antiga continua congelada e sem CPF; auditoria `account.release_cpf`.                                                                                 |
+| P2 CPF congelado, recuperar             | OK (`P2-conta-congelada`): bloco abaixo do e-mail do admin; recuperada, a P2 repete o cadastro e abre a P3 de `Prefeitura de Campinas`.                                                                                                                                                                       |
+| P2 CPF congelado, criar nova            | OK: `Prefeitura de Campinas do Sul` criada com conta nova; a antiga continua congelada e sem CPF.                                                                                                                                                                                                             |
+| Suporte no backoffice                   | OK: menu só com `Prefeituras` e `Interesse por cidade`; `/backoffice/equipe` e `/backoffice/auditoria` voltam para a P1.                                                                                                                                                                                      |
+| Auditoria no banco                      | OK: `staff.create`, `staff.update`, `staff.role_change`, `staff.remove`, `lead.update` (`{ ibgeCode }`), `account.recover` e `account.release_cpf` (sem `details`), `support.enter`/`support.leave`; nenhum dado pessoal em `details`. Na P2 e na P6 a prefeitura vai nula; no modo suporte, a da prefeitura. |
+
+Problemas achados e corrigidos:
+
+- **Menu ⋯ da P5 cortado** (só 3 das 6 situações apareciam): o `main` da página não ocupava a altura toda e o `overflow: auto` cortava o menu da última linha. `.content` da P5 e da P6 ganhou `flex: 1`; o item do `RowMenu` ficou `flex` com espaço entre o texto e o visto (`Sem contato✓` estava colado). Só CSS, sem teste de unidade; conferido no navegador. Commit `Backoffice: menu ⋯ da P5 sem corte e visto separado do texto`.
+
+O que chamou atenção e não foi mudado (anotado nas pendências):
+
+- **Liberar CPF de conta congelada sem telefone dá 500** (`users_phone_or_cpf_check`). Só aconteceu com os dados inseridos à mão; nenhum caminho de hoje congela uma conta com CPF e sem telefone.
+- **Conta recuperada mantém o nome antigo.** O nome digitado é ignorado (a conta existente vale). Na P6 o aviso usou o nome digitado (`Carla Nova entrou na equipe.`) e a lista mostrou o da conta (`Congelada P6`).
+- A tabela de gestores tem cabeçalho `⋯` (pendência antiga do 5b).
+- O console mostra os 409 do cadastro com CPF congelado (o que abre o bloco) e o 500 acima.
+
+Não executado no navegador (só os testes cobrem):
+
+- P6: `last_platform_admin`, `self_change_not_allowed`, `already_staff`, `tenant_member_not_allowed`, `staff_not_found`, `email_mismatch`; erro de carga.
+- Conta bloqueada: `frozen_account_without_email`, `Enviar outro código` e o aviso de 429, `email_in_use` na recuperação, `tenant_not_found`.
+- P5: vazio, erro de carga, erro ao mudar situação e ao exportar.
+- P7: segunda página (só havia 21 linhas), páginas além da última, parâmetros inválidos na URL, alvo `Conta excluída`.
+- Modo suporte: troca de celular de agente com vínculo em outra prefeitura; cadastro de agente com número da equipe; saída implícita (`support.leave` com `reason: 'implicit'`).
+- App: exclusão da conta pelo último Admin.
+- Conferência de pixels (não há Pencil das telas novas) e larguras menores que 1440.

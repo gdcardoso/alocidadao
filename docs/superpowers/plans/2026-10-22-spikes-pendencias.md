@@ -140,16 +140,57 @@ Feito no 6a (`2026-10-26-backoffice-6a.md`): entrada da equipe interna, P1 Prefe
 
 ## Plano 6b — Backoffice (segunda parte)
 
-- Telas que o menu já mostra como provisórias: Interesse por cidade (`city_interest` e `municipality_leads`), Equipe Alô Cidadão e Auditoria; abas da P3 além de Visão geral.
-- `panel_find_or_create_manager_user` ainda aceita conta da equipe Alô Cidadão como gestor de uma prefeitura (o `platform_find_or_create_tenant_admin` já recusa com `staff_account_not_allowed`). Decidir se o cadastro de gestor recusa também. (veio do Plano 6a)
-- `municipality_leads.updated_by` não é forçado a `app_current_user()` e `updated_at` não muda no `UPDATE`.
-- Correções de conta pelo suporte, com função própria e auditoria.
-- Excluir conta ainda não apaga `city_interest` nem tira `platform_role` da conta excluída.
-- Sessões revogadas de conta excluída guardam `installation_id`.
-- Trocar o e-mail de um gestor que também tem acesso a outro painel, de quem tem `platform_role` ou de um admin: o painel recusa com `email_change_not_allowed` porque o código de login vai para `users.email`, global entre prefeituras; o suporte faz a troca. (veio do Plano 5b)
-- Cadastrar como gestor quem está numa conta bloqueada que guarda o CPF: o painel responde 409 `cpf_unavailable` e o suporte resolve. (veio do Plano 5b)
-- Trocar o celular de um agente que também tem vínculo em outra prefeitura (`phone_change_not_allowed`): nenhuma das duas prefeituras consegue; o suporte faz a troca. (veio do Plano 5b)
-- Achados da passada no navegador do 6a (ver "Resultado no navegador" do plano): o painel em modo suporte recarrega o detalhe da revisão publicada e recebe 404 (erro no console, sem efeito na tela); o aviso 'Prefeitura criada…' não foi capturado em tela.
+Feito no 6b (`2026-10-28-backoffice-6b.md`): P5 Interesse por cidade, P6 Equipe Alô Cidadão, P7 Auditoria, conta congelada (CPF preso) na P2, na P6 e no painel em modo suporte, troca de e-mail e de celular pelo suporte e a separação equipe × prefeitura.
+
+- [x] Telas que o menu já mostrava como provisórias: Interesse por cidade, Equipe Alô Cidadão e Auditoria. As abas da P3 além de Visão geral continuam em aberto (ver "Em aberto depois do 6b").
+- [x] `panel_find_or_create_manager_user` e `panel_find_or_create_agent_user` recusam conta da equipe Alô Cidadão (`staff_account_not_allowed`), e um gatilho em `memberships` segura a regra no banco. (veio do Plano 6a)
+- [x] `municipality_leads.updated_by` forçado a `app_current_user()` e `updated_at` atualizado no `UPDATE` (gatilho).
+- [x] Correções de conta pelo suporte, com função própria e auditoria (`account.recover`, `account.release_cpf`).
+- [x] Excluir conta apaga `city_interest` e tira `platform_role`; recusa deixar a equipe sem Admin (`last_platform_admin`).
+- [x] Sessões revogadas de conta excluída ficam sem `installation_id`.
+- [x] Trocar o e-mail de um gestor com acesso a outro painel ou de um admin: em modo suporte o painel aceita. (veio do Plano 5b)
+- [x] Cadastrar como gestor quem está numa conta bloqueada que guarda o CPF: recuperar a conta antiga ou criar uma nova. (veio do Plano 5b)
+- [x] Trocar o celular de um agente com vínculo em outra prefeitura: em modo suporte o painel aceita. (veio do Plano 5b)
+- [x] Achados da passada do 6a: o 404 do detalhe da revisão publicada saiu (Task 11). O aviso 'Prefeitura criada…' continua só no teste de unidade.
+
+### Textos novos do 6b para o usuário confirmar
+
+As telas do 6b foram feitas no código antes do Pencil (o limite de uso do pen.dev bloqueou a Task 1). Os textos abaixo não vêm do Pencil; os do spec e do plano estão marcados com "(plano)".
+
+- **P6 Equipe Alô Cidadão:**
+  - Janela: 'Adicionar pessoa' (título; o botão vem do Pencil); 'Editar pessoa'; 'recebe o código' (ajuda do E-mail); 'Papel' (rótulo do select, com 'Admin' e 'Suporte').
+  - Avisos: '{nome} entrou na equipe.'; 'Pessoa salva.'; '{nome} agora é {Admin/Suporte}.'; '{nome} saiu da equipe.'.
+  - Menu ⋯: 'Editar', 'Trocar papel', 'Remover da equipe'. Na própria linha só 'Editar'.
+  - Confirmações: 'Trocar o papel de {nome}?' / '{nome} passa de {Admin/Suporte} para {Suporte/Admin}.' / botão 'Trocar papel'; 'Remover {nome} da equipe?' / 'A pessoa deixa de entrar no backoffice. A conta dela continua existindo.' / botão 'Remover'.
+  - Erros: 'Esta pessoa já está na equipe Alô Cidadão.' (`already_staff`); 'Esta pessoa é gestora ou agente de uma prefeitura. Use outro CPF.' (plano); 'A equipe precisa de ao menos um Admin. Passe o papel de Admin a outra pessoa antes.' (`last_platform_admin`); 'Você não pode trocar o próprio papel nem se remover da equipe.' (`self_change_not_allowed`); 'Esta pessoa não está mais na equipe.' (`staff_not_found`); 'Não foi possível carregar a equipe.' com 'Tentar de novo'.
+  - Último acesso: 'hoje, HH:MM', 'ontem, HH:MM', 'há N dias' (2 a 30 dias), depois '25 set 2026'; 'nunca entrou'.
+- **Conta bloqueada (bloco da P2, da P6 e do painel em modo suporte):** 'Este CPF está numa conta bloqueada.'; 'Recupere a conta antiga com o código enviado ao e-mail dela, ou crie uma conta nova sem o histórico da antiga.'; 'Recuperar conta antiga' / 'Criar conta nova' (plano); 'Enviamos um código para {e-mail mascarado}, o e-mail da conta antiga.'; 'Código'; 'Recuperar conta'; 'Enviar outro código'; 'Código incorreto ou expirado. Confira ou peça um novo.'; 'A conta antiga não tem e-mail para receber o código. Só dá para criar uma conta nova.'; confirmação 'Criar conta nova?' / 'O CPF sai da conta antiga, que continua bloqueada e guarda o histórico dela. A pessoa começa do zero numa conta nova.' / botão 'Criar conta nova'; 'Esta prefeitura não foi encontrada. Volte ao backoffice e tente de novo.' (`tenant_not_found`, modo suporte); 'Conta bloqueada' (`aria-label`, só leitor de tela).
+- **P5 Interesse por cidade:** situações 'Sem contato', 'Contatado', 'Proposta enviada', 'Em negociação', 'Fechado', 'Perdido' (plano); selo 'Já é cliente'; aviso '{Município — UF}: {situação}.'; vazio 'Ninguém pediu o Alô Cidadão em uma cidade ainda.'; erro 'Não foi possível carregar o interesse por cidade.' com 'Tentar de novo'; colunas do CSV 'Posição;Município;UF;Pedidos;Últimos 30 dias;Primeiro pedido;Situação comercial;Já é cliente' com 'Sim'/'Não' e o arquivo 'interesse-por-cidade.csv' (plano).
+- **P7 Auditoria:** título 'Auditoria' e apoio 'O que a equipe fez no backoffice'; colunas 'Quando', 'Pessoa', 'Prefeitura', 'Ação', 'Alvo'; filtros 'Prefeitura: todas', 'Pessoa: todas', 'De', 'Até'; 'Carregando…'; 'Nenhuma ação com estes filtros.'; 'Não foi possível carregar a auditoria.' com 'Tentar de novo'; paginação 'Anterior', 'Próxima', '1–50 de 120'; alvo 'Conta excluída' e '—' (plano); 'Fez uma alteração' para ação sem rótulo.
+- **Rótulos novos da auditoria (plano):** 'Adicionou uma pessoa à equipe'; 'Editou uma pessoa da equipe'; 'Trocou o papel de uma pessoa da equipe'; 'Removeu uma pessoa da equipe'; 'Mudou a situação comercial'; 'Recuperou uma conta congelada'; 'Liberou o CPF de uma conta congelada'.
+- **Painel (cadastros):** gestor da equipe Alô Cidadão: 'Esta pessoa é da equipe Alô Cidadão. Use outro CPF.' (o mesmo da P2); agente: 'Este número é de alguém da equipe Alô Cidadão. Use outro número.' (plano).
+- **App:** exclusão recusada do último Admin: 'Você é o último Admin da equipe Alô Cidadão. Passe o papel a outra pessoa antes de excluir a conta.' (plano).
+
+### Escolhas visuais fora do Pencil para o usuário confirmar
+
+- Cores dos selos da P5: 'Contatado' azul (`primary`), 'Fechado' verde (`success`), 'Perdido' cinza (`muted`), 'Já é cliente' verde (`success`). 'Sem contato' (`subtle`), 'Proposta enviada' e 'Em negociação' (`primary`) seguem o Pencil.
+- Selo de papel da P6 ('Admin', 'Suporte') com 13/600, do componente `Badge` do painel; o Pencil usa 12/700.
+- Bloco de conta bloqueada: caixa cinza com ícone de alerta, dentro do formulário, logo acima dos botões (capturas `P2-conta-congelada.png`, `P4-conta-congelada.png`, `P6-conta-congelada.png`).
+- P7: filtros como selects e campos de data na barra do título; data e hora 'dd/mm/aaaa, HH:MM' na coluna 'Quando'.
+
+### Em aberto depois do 6b
+
+- **Task 1b, 31/10/2026:** passar as telas do 6b (P5 com menu, P6 com janela e confirmações, P7, bloco de conta bloqueada) para o Pencil e validar lá. As capturas do código em `docs/superpowers/specs/telas-backoffice/` são substituídas pelas exportações do Pencil.
+- Encerrar o modo suporte por tempo sem atividade. Hoje a saída implícita só grava `support.leave` ao entrar de novo no modo suporte ou no painel por login.
+- Abas da P3 além de Visão geral (Contrato, Equipes e agentes, Gestores, Categorias, Cidadãos, Auditoria): sem Pencil e sem tela.
+- Conta recuperada mantém o nome antigo: o nome digitado no cadastro é ignorado (a conta existente vale, como no 6a). Na P6 o aviso diz '{nome digitado} entrou na equipe.' e a lista mostra o nome antigo. Decidir se a recuperação troca o nome ou se o aviso usa o nome da conta.
+- Liberar o CPF de uma conta congelada sem telefone dá 500 (`users_phone_or_cpf_check`). Hoje não acontece: a única forma de congelar uma conta com CPF é o número reaproveitado, que guarda o telefone. Se surgir outro caminho, a função precisa tratar (ou recusar com código próprio).
+- 'Último Admin' na P6 não dá para provocar pela tela (ninguém troca o próprio papel nem se remove); só a exclusão da conta no app chega a `last_platform_admin`.
+- Menores das revisões, agrupados:
+  - Banco: corridas estreitas (trava condicional em `account_delete`; gatilho de `memberships` sem trava contra `platform_staff_add`; `support.leave` implícito e `support.enter` em transações separadas); `p_limit`/`p_offset` sem validação; 23505 ambíguo em `platform_staff_add`; recuperar confia na conferência do desafio pela API.
+  - API: testes que faltam (token do app nas rotas novas, 401 e corpo inválido, erros do CSV, `DELETE` 404 só confere o status); mapa de erros da equipe duplicado; segunda leitura do e-mail mascarado sem trava; teste de último Admin muda todos os admins do banco de teste.
+  - Web: P5 sem testes dos erros de situação e do CSV, sem estado de carregando, erro antigo não some no sucesso; P7 pisca o vazio depois do redirecionamento, não confere `de` > `até`, regex de UUID mais solta que `z.uuid()`; ManagerDialog não limpa o bloco de conta bloqueada ao editar o e-mail; detalhe antigo depois da recusa por "mudou"; `formatLastAccess` mostra data futura sem ano.
+  - Compartilhado: `csvCell` sem proteção contra fórmula (só nomes de município).
 
 ## Plano 7 — Notificações
 

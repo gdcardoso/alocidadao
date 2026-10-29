@@ -261,3 +261,25 @@ Estados:
 - Permissão por papel: o que o "Suporte" vê no menu (P6 e "Contrato" estariam bloqueados?), botões desabilitados para Suporte (Nova prefeitura, Suspender, Adicionar pessoa).
 - Responsivo: só 1440x900; sem comportamento para telas menores nem menu recolhido; rolagem de tabelas.
 - Textos e dados são exemplos (Sorocaba, São Paulo, Lucas Prado, contagens, datas em 2026).
+
+---
+
+## 7. Telas do 6b (capturas do código, Pencil pendente)
+
+O limite de uso do pen.dev bloqueou o desenho das telas do 6b no Pencil. Elas foram feitas no código seguindo o padrão deste documento, e as capturas abaixo (Playwright, 1440x900, 1x) servem para o usuário aprovar. Em 31/10/2026 as telas aprovadas são desenhadas no Pencil (Task 1b do plano `2026-10-28-backoffice-6b.md`), e as exportações do Pencil substituem estas capturas. Os textos e as escolhas visuais a confirmar estão em `docs/superpowers/plans/2026-10-22-spikes-pendencias.md`, seção "Plano 6b".
+
+Em `docs/superpowers/specs/telas-backoffice/`:
+
+| Captura                           | O que mostra                                                                  |
+| --------------------------------- | ----------------------------------------------------------------------------- |
+| `P5-menu-situacao.png`            | P5 com selos de situação, `Já é cliente` e o menu ⋯ aberto com as 6 situações |
+| `P6-equipe.png`                   | P6 com a equipe e os cartões de papel                                         |
+| `P6-adicionar-pessoa.png`         | Janela `Adicionar pessoa` preenchida                                          |
+| `P6-menu-e-confirmacoes.png`      | Menu ⋯ de uma pessoa (`Editar`, `Trocar papel`, `Remover da equipe`)          |
+| `P6-confirmacao-trocar-papel.png` | Confirmação de troca de papel                                                 |
+| `P6-confirmacao-remover.png`      | Confirmação de remoção                                                        |
+| `P6-conta-congelada.png`          | Bloco de conta bloqueada na janela da P6                                      |
+| `P7-auditoria.png`                | P7 com filtros e a lista                                                      |
+| `P4-conta-congelada.png`          | Bloco de conta bloqueada no `Novo gestor` do painel em modo suporte           |
+| `P4-criar-conta-nova.png`         | Confirmação `Criar conta nova?` sobre a janela do gestor                      |
+| `P2-conta-congelada.png`          | Bloco de conta bloqueada no admin da P2                                       |

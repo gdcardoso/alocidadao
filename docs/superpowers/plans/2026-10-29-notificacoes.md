@@ -308,3 +308,39 @@
 - [ ] **Step 2:** Registrar no plano o que foi visto e o que não deu.
 - [ ] **Step 3:** `pnpm test`, `pnpm lint`, `pnpm format:check`, `pnpm typecheck` → PASS.
 - [ ] **Step 4:** Commit: `Notificações: documentação, pendências e passada no navegador`.
+
+## Resultado no navegador
+
+29/10/2026, Playwright (Chromium) em 1440x900, com o código fixo de desenvolvimento `123456`. API (`tsx watch`, porta 3333, código deste branch) e web (Vite, porta 5199) que já estavam no ar, com o log da API lido do arquivo de saída; `pnpm db:migrate` antes (0031–0034 já aplicadas). Sem `--reset` do seed: a passada usou os dados que já estavam no banco de desenvolvimento.
+
+**Como as ações foram feitas.** Painel no navegador: atribuir (Carlos Demo, gestor de Obras) e publicar. App pela API, com um script local: login por celular do Agente Demo e dos três cidadãos do seed, cada um com um aparelho com token falso (`PUT /me/devices`), para o push não sair `skipped`; o agente iniciou, concluiu (com uma foto enviada ao MinIO) e registrou impedimento pelas rotas reais `/agent/*`; o cidadão contestou e cancelou por `/citizen/requests/:id/contest` e `/cancel`. **'Concluída sem fotos'** não sai pela API (concluir exige foto): foi simulada por SQL no banco local, com a atividade `rework_requested` → `awaiting_review` e o evento sem foto nova. No fim, os quatro aparelhos saíram do app (`/auth/logout`) e ficaram sem token.
+
+Captura em `docs/superpowers/specs/telas-painel/`: `sino-avisos.png` (sino aberto de Carlos Demo, 9 não lidos).
+
+| Passo                         | Resultado                                                                                                                                                                                                                                                                                                       |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Atribuir (ocorrência de 3)    | OK: no log, 3 `Push (log, sem provedor)` `request_in_progress` (`Solicitação 2026-000127: em atendimento`, `…128`, `…129`, android) e 1 `work_order_assigned` (`Nova atividade: 2026-000127`, ios), com só o fim do token (`…-plano-7`). Fila: 4 linhas `sent`.                                                 |
+| Concluir com foto (agente)    | OK: sino `Solicitação 2026-000127: concluída com fotos` para Carlos Demo, Rita Demo (admin) e Eva Gestora (`withPhotos: true`). Nenhum push.                                                                                                                                                                    |
+| Concluir sem foto (simulação) | OK: `Solicitação 2026-000262: concluída sem fotos` (`withPhotos: false`). O sino também mostra 'sem fotos' para as conclusões do seed, que não têm foto de conclusão.                                                                                                                                           |
+| Impedimento (agente)          | OK: sino `Solicitação 2026-000260: impedimento registrado` para os três.                                                                                                                                                                                                                                        |
+| Publicar (painel)             | OK: 3 push `Solicitação {p}: concluída. Confira as fotos` e 3 `E-mail (log, sem provedor)` com assunto `Solicitação {p}: concluída` e o corpo do plano, para `cidadao.demo`, `cidadao2.demo` e `cidadao3.demo@alocidadao.dev`.                                                                                  |
+| Contestar (Cidadão Demo)      | OK: push `Solicitação 2026-000128: voltou para análise` e `…129` para as outras duas cidadãs; quem contestou não recebe nada. Sino `Solicitação 2026-000127: contestada pelo cidadão`.                                                                                                                          |
+| Cancelar (Cidadão Demo 3)     | OK: sino `Solicitação 2026-000119: cancelada pelo cidadão`; nenhum push.                                                                                                                                                                                                                                        |
+| Sino do gestor                | OK (`sino-avisos`): contador 9, lista do mais novo para o mais antigo, não lidos em destaque, hora 'há 1 min'. Tocar leva e marca como lido (contador 9 → 8 → 7): contestada → `/solicitacoes?ocorrencia=…` com a gaveta aberta; impedimento → `/impedimentos?atividade=…`; concluída → `/revisao?atividade=…`. |
+| Marcar todos como lidos       | OK: o contador some e o botão sai do cabeçalho; no banco, os 9 de Carlos Demo lidos e os de Rita Demo e Eva Gestora intactos.                                                                                                                                                                                   |
+| Sino do admin                 | OK: Rita Demo (Admin da prefeitura) vê os mesmos avisos com o próprio contador (9); cancelada → `/solicitacoes?ocorrencia=…` abre a gaveta da ocorrência cancelada ('Cancelada há 1 min').                                                                                                                      |
+| Modo suporte                  | OK: Suporte Demo entrou na Prefeitura Demo A; o menu não tem o botão 'Avisos'.                                                                                                                                                                                                                                  |
+| Logout do app                 | OK: `POST /auth/logout` do Cidadão Demo 3 apagou o token do aparelho da sessão.                                                                                                                                                                                                                                 |
+
+O que não deu para ver:
+
+- **Vazio** ('Nenhum aviso por enquanto.') e **'99+'**: nenhuma conta do seed estava sem aviso ou com mais de 99; só os testes do `NotificationBell` cobrem.
+- **'Nova, aguardando análise'** (`occurrence_new`): pede uma solicitação nova criada pelo app (fotos e GPS); não foi criada na passada. Coberto pelos testes do gatilho.
+- **Confirmação automática em 7 dias, nova tentativa e falha do envio:** dependem do tempo ou de um provedor que falha; só os testes cobrem.
+- **Push de verdade e toque no push:** sem Firebase e Apple; o toque no push (troca de modo, partida a frio) ficou no roteiro de aparelho do `0002` (seção 5).
+
+Problemas achados e corrigidos:
+
+- **Teste de push do Laboratório quebrado:** a tela mandava `status` para `/dev/push`, que desde a Task 4 pede `kind`; com o provedor configurado daria 400. O corpo saiu para `lib/lab-push.ts`, com teste. Commit `App: teste de push do Laboratório com o tipo do aviso`.
+
+O que chamou atenção e não foi mudado (anotado nas pendências): 'concluída sem fotos' só aparece para eventos sem foto gravados fora da API; o nome acessível do botão do sino não diz quantos avisos há.

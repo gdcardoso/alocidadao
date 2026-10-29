@@ -71,6 +71,21 @@ Roteiro: 3 atividades, início e conclusão (com 1 ou 2 fotos e relato) em modo 
 - As rotas `/dev/*` só ficam ligadas com `ENABLE_DEV_ROUTES=true` e `NODE_ENV` diferente de `production` (o script `dev` da API define a variável; sem ela, ficam desligadas). Em produção, definir `NODE_ENV=production` e substituir a identidade de desenvolvimento por autenticação.
 - Itens menores registrados na revisão (timeout de 30 s também no PUT da foto, pastas de fotos de itens em conflito não removidas, 401/503 que falham o item de vez, entre outros) entram no plano do app do agente.
 
+## Notificações: fila e envio (Plano 7, 29/10/2026)
+
+O push direto (FCM e APNs pela própria API) continua; o Plano 7 decidiu como os avisos nascem e saem:
+
+- **Os avisos nascem no banco.** Toda mudança de situação grava `status_events` na mesma transação da ação. Um gatilho `AFTER INSERT` em `status_events` (`SECURITY DEFINER`) aplica as regras do plano (`docs/superpowers/plans/2026-10-29-notificacoes.md`, "Decisões") e grava, na mesma transação, as linhas de `notification_outbox` (push e e-mail) e de `panel_notifications` (sino do painel). Nenhum caminho, nem os de desenvolvimento, muda a situação sem gerar o aviso, e quem agiu nunca é avisado.
+- **A fila (outbox).** `notification_outbox` guarda canal (`push`, `email`), tipo, protocolo, ids e situação (`pending`, `sent`, `failed`, `skipped`). Só funções `SECURITY DEFINER` leem e gravam a fila (sem política para `app_user`).
+- **O envio é na API, fora da transação da ação.** Um agendador na API pega lotes de 50 a cada 5 s (`FOR UPDATE SKIP LOCKED`, com a linha presa por 10 min), manda pelos senders e grava o resultado. Falha de envio nunca desfaz nem trava a ação. Duas instâncias da API não pegam a mesma linha.
+- **Push por aparelho.** O push vai a todos os tokens distintos da pessoa. Token inválido é apagado do aparelho; se ao menos um aparelho recebeu, a linha fica `sent` (sem reenvio para quem já recebeu); se nenhum recebeu e houve falha passageira, nova tentativa com espera de 1, 5, 30 e 120 min, e `failed` na 5ª. Sem aparelho com token (ou sem e-mail) a linha vira `skipped`. Conta congelada ou excluída é pulada.
+- **Conteúdo.** Título `Alô Cidadão` e o texto do tipo com o protocolo; os dados escondidos são só `kind`, `tenantId` e `requestId` (cidadão) ou `workOrderId` (agente). Tocar no push abre a solicitação ou a atividade no app (no modo agente, trocando de modo e de prefeitura).
+- **Aparelhos.** Registrar um token tira o mesmo token de qualquer outro registro (`device_claim_push_token`); sair do app apaga o token do aparelho da sessão.
+- **Sem provedor.** Sem FCM/APNs configurados, o sender de log registra `Push (log, sem provedor)` com plataforma, tipo e texto, e só o fim do token; o e-mail sem Resend sai como `E-mail (log, sem provedor)`. `POST /dev/push` continua respondendo 503 `push_not_configured` sem o provedor real.
+- **Agendador de manutenção.** A cada 10 min, `auto_confirm_requests()` confirma as solicitações aguardando o cidadão há mais de 7 dias (sem push) e a limpeza apaga `panel_notifications` com mais de 90 dias e linhas `sent`/`failed`/`skipped` da fila com mais de 30 dias. O agendador para antes do pool do banco fechar.
+
+Visto na passada do Plano 7 (navegador e log da API local): atribuir, concluir, publicar, contestar e cancelar geram os push e e-mails no log e o sino do gestor e do admin. Nada foi enviado ao FCM ou APNs de verdade.
+
 ## Pendente
 
 Nada abaixo foi executado. Preencha a tabela do fim ao concluir.
@@ -102,7 +117,7 @@ Mesma sequência da seção 1, exceto push. Rode `EXPO_PUBLIC_API_URL=http://<IP
 4. No ambiente da API, defina `FCM_PROJECT_ID` e `FCM_SERVICE_ACCOUNT_FILE=./secrets/firebase-service-account.json`; reinicie a API.
 5. Rode `npx expo run:android` em `apps/mobile` de novo (o arquivo muda o build nativo). No emulador, use uma imagem com Google Play.
 6. Laboratório > Notificações > "Registrar aparelho", aceite a permissão; o token deve aparecer.
-7. App aberto: "Enviar teste". Esperado: banner "Solicitação 2026-000123: Em atendimento".
+7. App aberto: "Enviar teste". Esperado: banner "Alô Cidadão" com "Solicitação 2026-000123: em atendimento".
 8. App em segundo plano: "Enviar em 10 s", volte para a tela inicial e espere a chegada.
 9. App fechado: "Enviar em 10 s", arraste o app dos recentes e espere a chegada.
 10. Token inventado: `POST /dev/push` com `"token": "x"` deve devolver `invalid_token`.
@@ -114,6 +129,15 @@ Mesma sequência da seção 1, exceto push. Rode `EXPO_PUBLIC_API_URL=http://<IP
 2. No ambiente da API, defina `APNS_TEAM_ID`, `APNS_KEY_ID` e `APNS_KEY_FILE=./secrets/apns.p8` (`APNS_PRODUCTION=false` para build de desenvolvimento); reinicie a API.
 3. Habilite a capability de Push Notifications no app e rode `npx expo run:ios --device`.
 4. Registre o aparelho na tela Notificações e repita os três cenários da seção 3 (aberto, segundo plano, fechado) e o teste do token inválido.
+
+### 5. Tocar no push (Plano 7, depois da seção 3 ou 4)
+
+Com a entrega real funcionando, e o aparelho registrado pelo app (cidadão e agente do `db:seed:dev`):
+
+1. Cidadão com o app em segundo plano: o gestor atribui a solicitação no painel; tocar no push `Solicitação {p}: em atendimento` abre o detalhe da solicitação.
+2. **Troca de modo:** agente com o app aberto no modo cidadão (ou em outra prefeitura); o gestor atribui uma ocorrência à equipe dele; tocar no push `Nova atividade: {p}` troca para o modo agente, escolhe a prefeitura do aviso e abre a atividade (A2). Conferir que não para na lista nem volta para o modo cidadão.
+3. **Partida a frio:** app fechado (arrastado dos recentes); tocar no push abre o app já na solicitação ou na atividade, sem ficar na tela inicial.
+4. Sair do app e mandar outro aviso: o aparelho não recebe (o token foi apagado no logout).
 
 ### Tabela de resultados (preencher)
 
@@ -129,6 +153,8 @@ Mesma sequência da seção 1, exceto push. Rode `EXPO_PUBLIC_API_URL=http://<IP
 | Push com app aberto                 |              | n/a    | não testado             |
 | Push em segundo plano               |              | n/a    | não testado             |
 | Push com app fechado                |              | n/a    | não testado             |
+| Toque no push troca o modo (agente) |              |        | não testado             |
+| Toque no push com partida a frio    |              |        | não testado             |
 
 ## Conclusão
 

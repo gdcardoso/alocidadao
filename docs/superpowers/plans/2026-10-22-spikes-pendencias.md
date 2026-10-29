@@ -4,7 +4,7 @@ Itens menores achados nas revisões dos spikes (`2026-10-22-spikes-de-risco.md`)
 
 ## Antes de tudo (não são código)
 
-- Testes em aparelho real (Android e iPhone), entrega real de push (FCM e APNs) e foto de câmera real: roteiros em `docs/decisoes/0002-recursos-nativos-offline-e-push.md`. O plano de notificações depende da entrega real ter funcionado.
+- Testes em aparelho real (Android e iPhone), entrega real de push (FCM e APNs) e foto de câmera real: roteiros em `docs/decisoes/0002-recursos-nativos-offline-e-push.md`. O Plano 7 foi feito sem a entrega real (o envio sai no log enquanto Firebase e Apple não estão configurados); a entrega real de push com Firebase e Apple fica para o fim (ver "Em aberto depois do Plano 7").
 
 ## Plano 1 — Modelo de dados
 
@@ -183,7 +183,7 @@ As telas do 6b foram feitas no código antes do Pencil (o limite de uso do pen.d
 
 ### Em aberto depois do 6b
 
-- **Task 1b, 31/10/2026:** passar as telas do 6b (P5 com menu, P6 com janela e confirmações, P7, bloco de conta bloqueada) para o Pencil e validar lá. As capturas do código em `docs/superpowers/specs/telas-backoffice/` são substituídas pelas exportações do Pencil.
+- **Task 1b, 31/10/2026:** passar as telas do 6b (P5 com menu, P6 com janela e confirmações, P7, bloco de conta bloqueada) e o sino de avisos do painel (Plano 7, captura `docs/superpowers/specs/telas-painel/sino-avisos.png`) para o Pencil e validar lá. As capturas do código em `docs/superpowers/specs/telas-backoffice/` são substituídas pelas exportações do Pencil.
 - Encerrar o modo suporte por tempo sem atividade. Hoje a saída implícita só grava `support.leave` ao entrar de novo no modo suporte ou no painel por login.
 - Abas da P3 além de Visão geral (Contrato, Equipes e agentes, Gestores, Categorias, Cidadãos, Auditoria): sem Pencil e sem tela.
 - O último Admin pode ser congelado pelo número reaproveitado: um Admin com telefone (cidadão que virou equipe), parado há 90 dias, é congelado quando alguém cadastra o número (`auth_freeze_stale_account`, da 0014). `platform_require_other_admin` só conta contas ativas, mas nada impede o congelamento. Pouco provável; caminho sugerido: `auth_freeze_stale_account` pular contas com `platform_role`.
@@ -200,16 +200,36 @@ As telas do 6b foram feitas no código antes do Pencil (o limite de uso do pen.d
 
 ## Plano 7 — Notificações
 
-- FCM: todo 400 `INVALID_ARGUMENT` vira token inválido; com descarte de tokens, um erro de conteúdo apagaria todos. Corrigir antes de descartar tokens.
-- HTTP/2: sem teste de reaproveitamento da sessão; sessão com GOAWAY não é fechada; token do APNs sem `encodeURIComponent`; `DeviceTokenNotForTopic` tratado como nova tentativa; bundle id fixo no código; `.p8` ausente derruba a subida.
-- App: `app.config.ts` usa `process.cwd()` em vez de `__dirname`.
-- O mesmo token de push em duas contas: ao registrar, apagar o token dos outros aparelhos (função `SECURITY DEFINER`).
-- Avisos por push ao cidadão nas mudanças de status da solicitação (o app já diz "Você recebe um aviso a cada mudança").
-- Conclusão automática em 7 dias: solicitação aguardando a confirmação do cidadão é confirmada sozinha (o texto da tela já promete).
-- Push de nova atividade e de ajuste pedido para os agentes da equipe.
-- Push de atribuição para a equipe: o painel atribui (`POST /panel/occurrences/:id/assign`) sem avisar os agentes. (veio do Plano 5a)
-- Push do painel 5b: publicar para os cidadãos (aviso de que o serviço foi concluído), devolver ao agente (ajuste pedido), reatribuir (à equipe nova) e reagendar (à equipe atual). (veio do Plano 5b)
-- Aviso da contestação: as outras solicitações reabertas ganham o evento 'Outro morador informou que o problema continua; a prefeitura vai reavaliar.', mas o detalhe não mostra comentários; levar esse aviso no push (ou expor como aviso do sistema no detalhe).
+Feito no Plano 7 (`2026-10-29-notificacoes.md`): avisos gerados no banco por gatilho em `status_events`, fila `notification_outbox` com envio pela API (push e e-mail), sino do painel, confirmação automática em 7 dias, logout que apaga o token do aparelho e toque no push que abre a solicitação ou a atividade no app. Sem Firebase e Apple configurados, o push sai no log (`Push (log, sem provedor)`).
+
+- [x] FCM: todo 400 `INVALID_ARGUMENT` vira token inválido; com descarte de tokens, um erro de conteúdo apagaria todos. Agora só `UNREGISTERED` e token de registro inválido descartam o token; o resto é nova tentativa (e 404 só com `UNREGISTERED` no detalhe).
+- [x] HTTP/2: teste de reaproveitamento da sessão e de reconexão; sessão com GOAWAY fechada; token do APNs com `encodeURIComponent`; `DeviceTokenNotForTopic` como token inválido; bundle id em `APNS_BUNDLE_ID`; `.p8` ausente desliga o APNs com aviso em vez de derrubar a subida.
+- [x] App: `app.config.ts` usa `__dirname`.
+- [x] O mesmo token de push em duas contas: ao registrar, o token sai dos outros aparelhos (`device_claim_push_token`).
+- [x] Avisos por push ao cidadão nas mudanças de status da solicitação.
+- [x] Conclusão automática em 7 dias (`auto_confirm_requests()`, a cada 10 min, sem push).
+- [x] Push de nova atividade e de ajuste pedido para os agentes da equipe.
+- [x] Push de atribuição para a equipe. (veio do Plano 5a)
+- [x] Push do painel 5b: publicar (cidadão, push e e-mail), devolver ao agente (ajuste pedido), reatribuir (nova atividade para a equipe nova). Reagendar não avisa (decisão do plano). (veio do Plano 5b)
+- [x] Aviso da contestação: as outras solicitações reabertas recebem o push `Solicitação {p}: voltou para análise`. O detalhe do app continua sem mostrar o comentário do evento.
+- [x] O Laboratório do app mandava `status` para `/dev/push`, que passou a pedir `kind` (achado na passada do Plano 7; corrigido com teste).
+
+### Textos novos do Plano 7 para o usuário confirmar
+
+- **Sino do painel (sem Pencil; captura `docs/superpowers/specs/telas-painel/sino-avisos.png`):** 'Avisos' (título e `aria-label` do botão); 'Marcar todos como lidos'; vazio 'Nenhum aviso por enquanto.'; contador '99+' acima de 99; hora do aviso no formato relativo do painel ('há 1 min', 'há 1 h').
+- **Já aprovados com o plano:** os textos do push (título 'Alô Cidadão' e os 11 tipos da tabela das Decisões do `2026-10-29-notificacoes.md`) e o e-mail da conclusão (assunto e corpo). Vistos no log da passada sem mudança.
+
+### Em aberto depois do Plano 7
+
+- **Sino no Pencil, 31/10/2026:** junto com a Task 1b do 6b (ver "Em aberto depois do 6b").
+- **Testes em aparelho do toque no push** (roteiro na seção 5 do `0002`): agente com o app no modo cidadão toca num push de atividade (troca de modo e de prefeitura e depois abre a atividade); app fechado aberto pelo toque (partida a frio). Os dois só têm teste de unidade.
+- **'Concluída sem fotos' não sai pela API de hoje:** concluir pelo agente exige ao menos uma foto, então o sino só mostra 'sem fotos' para eventos gravados sem foto (o seed de desenvolvimento e a simulação da passada). O texto fica para quando houver conclusão sem foto.
+- Menores das revisões, agrupados:
+  - Banco: política de `panel_notifications` `FOR ALL` (os grants são a barreira); a barreira da fila sem política não tem teste próprio; nome aleatório da 0031; testes que faltam (contagem de admin + gestor só pelo número, teste de "quem agiu" com transição impossível, gestor que também é da equipe, cidadão excluído); as FKs `NO ACTION` pedem ordem de limpeza nos testes; `finish` não confere quem pegou a linha (janela de envio em dobro aceita); registro simultâneo do mesmo token; linhas `skipped` contam no lote.
+  - API: PEM malformado ou arquivo da conta de serviço do FCM ausente sem aviso na subida; avisos da fila perdidos se `buildApp` falhar; stream HTTP/2 fechado sem `end` espera o tempo limite; aparelho com nova tentativa não recebe se outro aparelho da pessoa recebeu (decisão da Task 5); linha `sent` pode guardar `last_error`; `catch` do savepoint do logout sem teste; o mesmo token em duas plataformas fica com a última; rotas do sino sem teste entre prefeituras e lista sem `withPhotos` falso.
+  - Web: `aria-haspopup` num botão que abre um painel simples; o número de não lidos não entra no nome acessível do botão ('Avisos'); sem testes da marcação que falha, do Esc e do clique fora; mocks de `PanelLayout`/`SupportMode` sem `panelNotifications`; largura do painel do sino em telas estreitas não conferida.
+  - App: id do push sem conferência estrita de UUID; `openNotificationRoute` sem teste; `usePathname` faz a pilha da raiz renderizar de novo; a prefeitura do push não vai para a tela da atividade.
+- **Entrega real de push com Firebase e Apple** (seções 3 e 4 do `0002`): continua no fim, depois dos testes em aparelho real.
 
 ## Plano 8 — Infraestrutura
 

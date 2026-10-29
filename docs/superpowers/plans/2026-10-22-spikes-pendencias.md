@@ -191,9 +191,10 @@ As telas do 6b foram feitas no código antes do Pencil (o limite de uso do pen.d
 - A tabela de gestores do painel tem cabeçalho `⋯` na coluna do menu (pendência antiga do 5b, vista de novo na passada do 6b).
 - Corte do menu ⋯ (`RowMenu`) não conferido na `ManagersPage`, na `AgentsTable` e na `DepartmentsPage`: a correção do 6b (`flex: 1` em `.content`) foi só na P5 e na P6.
 - 'Último Admin' na P6 não dá para provocar pela tela (ninguém troca o próprio papel nem se remove); só a exclusão da conta no app chega a `last_platform_admin`.
+- Recuperar uma conta congelada cujo CPF já foi liberado (código pedido antes da liberação) dá 500 (`users_phone_or_cpf_check`), sem gravar nada. Caminho sugerido: `AND u.cpf IS NOT NULL` na busca de `platform_recover_frozen_account`, que vira `invalid_code`.
 - Menores das revisões, agrupados:
   - Banco: corridas estreitas (trava condicional em `account_delete`; gatilho de `memberships` sem trava contra `platform_staff_add`; `support.leave` implícito e `support.enter` em transações separadas); `p_limit`/`p_offset` sem validação; 23505 ambíguo em `platform_staff_add`; recuperar confia na conferência do desafio pela API.
-  - API: testes que faltam (token do app nas rotas novas, 401 e corpo inválido, erros do CSV, `DELETE` 404 só confere o status); mapa de erros da equipe duplicado; segunda leitura do e-mail mascarado sem trava; teste de último Admin muda todos os admins do banco de teste.
+  - API: testes que faltam (token do app nas rotas novas, 401 e corpo inválido, erros do CSV, `DELETE` 404 só confere o status); mapa de erros da equipe duplicado; segunda leitura do e-mail mascarado sem trava; `tenantId` em maiúsculas dá `support_tenant_mismatch` falso (só pedido feito à mão); `agent.phone_change` gravado mesmo sem mudar o número; teste de último Admin muda todos os admins do banco de teste.
   - Web: P5 sem testes dos erros de situação e do CSV, sem estado de carregando, erro antigo não some no sucesso; P7 pisca o vazio depois do redirecionamento, não confere `de` > `até`, regex de UUID mais solta que `z.uuid()`; ManagerDialog não limpa o bloco de conta bloqueada ao editar o e-mail; detalhe antigo depois da recusa por "mudou"; `formatLastAccess` mostra data futura sem ano.
   - Compartilhado: `csvCell` sem proteção contra fórmula (só nomes de município).
 

@@ -226,4 +226,23 @@ describe('AuditPage', () => {
     expect(staff).not.toHaveBeenCalled();
     expect(tenants).not.toHaveBeenCalled();
   });
+
+  it('goes back to page 1 when the page is beyond the last', async () => {
+    audit.mockImplementation(async (query) =>
+      query?.page === 1
+        ? { items: [row()], total: 1, page: 1, pageSize: 50 }
+        : { items: [], total: 0, page: query?.page ?? 1, pageSize: 50 },
+    );
+    renderPage('/backoffice/auditoria?pagina=9');
+    expect(await screen.findByText('1–1 de 1')).toBeInTheDocument();
+    expect(screen.getByTestId('search')).not.toHaveTextContent('pagina');
+    expect(audit).toHaveBeenLastCalledWith({ page: 1 });
+  });
+
+  it('ignores invalid url params', async () => {
+    renderPage('/backoffice/auditoria?prefeitura=x&pessoa=y&de=2026-13-45&ate=ontem');
+    await screen.findByText('Prefeitura de Atibaia', { selector: 'td *, td' });
+    expect(audit).toHaveBeenCalledWith({ page: 1 });
+    expect(audit).toHaveBeenCalledTimes(1);
+  });
 });

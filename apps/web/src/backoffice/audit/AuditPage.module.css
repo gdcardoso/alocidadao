@@ -39,8 +39,7 @@
   font-size: 13px;
 }
 
-.dateInput:focus-visible,
-.pagerButton:focus-visible {
+.dateInput:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
 }
@@ -57,22 +56,4 @@
 .pager {
   display: flex;
   gap: 8px;
-}
-
-.pagerButton {
-  height: 32px;
-  padding: 0 12px;
-  border: 1px solid var(--border-input);
-  border-radius: 16px;
-  background: var(--surface);
-  color: var(--text-primary);
-  font: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.pagerButton:disabled {
-  color: var(--text-placeholder);
-  cursor: not-allowed;
 }

@@ -5,6 +5,7 @@ import {
   type AuditRow,
 } from '@alocidadao/shared';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { useEffect } from 'react';
 import { Navigate, useSearchParams } from 'react-router';
 import { api } from '../../api';
 import { formatNumericDateTime } from '../../format/date';
@@ -22,6 +23,19 @@ const ALL = '';
 const FALLBACK_ACTION_LABEL = 'Fez uma alteração';
 
 type FilterKey = 'prefeitura' | 'pessoa' | 'de' | 'ate';
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const validUuid = (value: string | null) => (value && UUID.test(value) ? value : undefined);
+
+/** Só `yyyy-mm-dd` de um dia que existe; o resto é ignorado. */
+function validDate(value: string | null): string | undefined {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return undefined;
+  const date = new Date(`${value}T00:00:00Z`);
+  return Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value
+    ? undefined
+    : value;
+}
 
 const actionLabel = (action: string): string =>
   (STAFF_AUDIT_ACTION_LABELS as Record<string, string>)[action] ?? FALLBACK_ACTION_LABEL;
@@ -48,10 +62,10 @@ export function AuditPage() {
   const isAdmin = context.data?.platformRole === 'admin';
   const [params, setParams] = useSearchParams();
 
-  const tenantId = params.get('prefeitura') ?? undefined;
-  const staffUserId = params.get('pessoa') ?? undefined;
-  const from = params.get('de') ?? undefined;
-  const to = params.get('ate') ?? undefined;
+  const tenantId = validUuid(params.get('prefeitura'));
+  const staffUserId = validUuid(params.get('pessoa'));
+  const from = validDate(params.get('de'));
+  const to = validDate(params.get('ate'));
   const requested = Number(params.get('pagina'));
   const page = Number.isInteger(requested) && requested >= 1 ? requested : 1;
 
@@ -77,6 +91,22 @@ export function AuditPage() {
     queryFn: () => session.withAuth(() => api.backofficeStaff()),
     enabled: isAdmin,
   });
+
+  const data = audit.data;
+  const beyondLast =
+    Boolean(data) && !audit.isPlaceholderData && page > 1 && data!.items.length === 0;
+  // `?pagina=` além da última: a API devolve vazio; volta para a página 1.
+  useEffect(() => {
+    if (!beyondLast) return;
+    setParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        next.delete('pagina');
+        return next;
+      },
+      { replace: true },
+    );
+  }, [beyondLast, setParams]);
 
   if (context.data && !isAdmin) return <Navigate to={LIST_PATH} replace />;
 
@@ -105,7 +135,6 @@ export function AuditPage() {
   const tenantName = tenantOptions.find((item) => item.id === tenantId)?.displayName;
   const staffName = staffOptions.find((item) => item.userId === staffUserId)?.name;
 
-  const data = audit.data;
   const rows = data?.items ?? [];
   const total = data?.total ?? 0;
   const firstItem = (page - 1) * AUDIT_PAGE_SIZE + 1;
@@ -173,7 +202,7 @@ export function AuditPage() {
           </div>
         ) : null}
         {audit.isPending && !audit.isError ? <p className={styles.state}>Carregando…</p> : null}
-        {data && rows.length === 0 ? (
+        {data && rows.length === 0 && !beyondLast ? (
           <p className={styles.state}>Nenhuma ação com estes filtros.</p>
         ) : null}
         {rows.length > 0 ? (
@@ -189,22 +218,22 @@ export function AuditPage() {
                 {firstItem}–{lastItem} de {total}
               </span>
               <div className={styles.pager}>
-                <button
-                  type="button"
-                  className={styles.pagerButton}
+                <Button
+                  variant="secondary"
+                  size="sm"
                   disabled={page <= 1}
                   onClick={() => goToPage(page - 1)}
                 >
                   Anterior
-                </button>
-                <button
-                  type="button"
-                  className={styles.pagerButton}
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
                   disabled={lastItem >= total}
                   onClick={() => goToPage(page + 1)}
                 >
                   Próxima
-                </button>
+                </Button>
               </div>
             </div>
           </>

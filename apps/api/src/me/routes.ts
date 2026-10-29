@@ -27,6 +27,7 @@ import { asActiveUser, INACTIVE } from '../auth/active-user.js';
 import { codeError, usersUniqueConflict, type AuthDeps } from '../auth/app-routes.js';
 import { hashCode, issueChallenge } from '../auth/codes.js';
 import { requireAuth } from '../auth/plugin.js';
+import { isPgError } from '../db-errors.js';
 import { smsCodeText } from '../messaging/sms.js';
 
 const { users, memberships, tenants, devices } = schema;
@@ -294,10 +295,22 @@ export function registerMeRoutes(instance: FastifyInstance, deps: MeDeps) {
 
   app.delete(
     '/me',
-    { preHandler: anyAudience, schema: { response: { 204: z.null(), 401: apiErrorSchema } } },
+    {
+      preHandler: anyAudience,
+      schema: { response: { 204: z.null(), 401: apiErrorSchema, 409: apiErrorSchema } },
+    },
     async (request, reply) => {
       const { userId } = request.auth!;
-      const result = await asActiveUser(db, userId, (tx) => deleteAccount(tx));
+      let result;
+      try {
+        result = await asActiveUser(db, userId, (tx) => deleteAccount(tx));
+      } catch (error) {
+        // O último Admin da equipe interna não pode excluir a conta.
+        if (isPgError(error, '23514', 'last_platform_admin')) {
+          return reply.code(409).send({ code: 'last_platform_admin' });
+        }
+        throw error;
+      }
       if (result === INACTIVE) return reply.code(401).send(unauthorized);
       return reply.code(204).send(null);
     },

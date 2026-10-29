@@ -11,11 +11,13 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp } from '../app.js';
 import type { EmailSender } from '../messaging/email.js';
 import type { SmsSender } from '../messaging/sms.js';
+import { panelFixtures } from '../test/panel-fixtures.js';
 import { API_TEST_APP_URL, API_TEST_OWNER_URL } from '../test/urls.js';
 
 const { users, memberships, tenants, devices } = schema;
 
 const owner = createDatabase(API_TEST_OWNER_URL);
+const fx = panelFixtures(owner.db);
 const appDb = createDatabase(API_TEST_APP_URL);
 const secret = 'segredo-de-teste-da-api-com-mais-de-32-caracteres';
 
@@ -506,6 +508,28 @@ describe('me routes', () => {
     const [row] = await owner.db.select().from(users).where(eq(users.id, user.id));
     expect(row).toMatchObject({ accountStatus: 'frozen', phone: null, email: null });
     expect(row!.deletedAt).not.toBeNull();
+  });
+
+  it('last admin cannot delete the account', async () => {
+    // Todo admin ativo do banco de teste vira suporte, para sobrar só este.
+    await owner.db
+      .update(users)
+      .set({ platformRole: 'support' })
+      .where(eq(users.platformRole, 'admin'));
+    const user = await createUser();
+    await owner.db.update(users).set({ platformRole: 'admin' }).where(eq(users.id, user.id));
+    const session = await signIn(user.phone);
+
+    const refused = await app.inject({ method: 'DELETE', url: '/me', headers: bearer(session) });
+    expect(refused.statusCode).toBe(409);
+    expect(refused.json()).toEqual({ code: 'last_platform_admin' });
+    const [row] = await owner.db.select().from(users).where(eq(users.id, user.id));
+    expect(row).toMatchObject({ platformRole: 'admin', accountStatus: 'active' });
+
+    // Com outro admin, a exclusão passa.
+    await fx.newStaff('admin');
+    const allowed = await app.inject({ method: 'DELETE', url: '/me', headers: bearer(session) });
+    expect(allowed.statusCode).toBe(204);
   });
 
   it('frozen account is refused by me routes', async () => {

@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { API_URL } from '../../lib/api';
+import { labPushBody } from '../../lib/lab-push';
 import { registerForPush, type PushRegistration } from '../../lib/push';
 
 type Registered = Extract<PushRegistration, { token: string }>;
 type PushResult = { kind: 'sent' | 'invalid_token' | 'retry'; reason?: string };
 
-const TEST_PROTOCOL = '2026-000123';
-const TEST_STATUS = 'in_progress'; // "em atendimento"
 const DELAY_MS = 10_000;
 
 function Button({
@@ -36,12 +35,7 @@ async function sendTest(registration: Registered): Promise<string> {
     const response = await fetch(`${API_URL}/dev/push`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        platform: registration.platform,
-        token: registration.token,
-        protocol: TEST_PROTOCOL,
-        status: TEST_STATUS,
-      }),
+      body: JSON.stringify(labPushBody(registration.platform, registration.token)),
     });
     if (response.status === 503) {
       return 'A API ainda não está configurada para enviar push (push_not_configured). Veja a seção "Push (Firebase)" do .env.example.';

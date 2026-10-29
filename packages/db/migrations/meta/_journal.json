@@ -218,6 +218,20 @@
       "when": 1793287159570,
       "tag": "0030_frozen_account_fixes",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1793304431493,
+      "tag": "0031_small_darwin",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1793304432273,
+      "tag": "0032_notifications_access",
+      "breakpoints": true
     }
   ]
 }

@@ -675,3 +675,80 @@ export const clientActions = pgTable(
   },
   (t) => [unique().on(t.tenantId, t.id)],
 );
+
+/**
+ * Fila de avisos (push e e-mail) criados pelo gatilho dos eventos de status.
+ * Sem GRANT para app_user: só as funções SECURITY DEFINER leem e escrevem.
+ */
+export const notificationOutbox = pgTable(
+  'notification_outbox',
+  {
+    id: id(),
+    tenantId: tenantId(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id),
+    channel: text('channel', { enum: ['push', 'email'] }).notNull(),
+    kind: text('kind').notNull(),
+    protocol: text('protocol').notNull(),
+    requestId: uuid('request_id'),
+    workOrderId: uuid('work_order_id'),
+    details: jsonb('details'),
+    status: text('status', { enum: ['pending', 'sent', 'failed', 'skipped'] })
+      .notNull()
+      .default('pending'),
+    attempts: integer('attempts').notNull().default(0),
+    nextAttemptAt: timestamp('next_attempt_at', { withTimezone: true }).notNull().defaultNow(),
+    lastError: text('last_error'),
+    createdAt: createdAt(),
+    sentAt: timestamp('sent_at', { withTimezone: true }),
+  },
+  (t) => [
+    foreignKey({
+      columns: [t.tenantId, t.requestId],
+      foreignColumns: [requests.tenantId, requests.id],
+    }),
+    foreignKey({
+      columns: [t.tenantId, t.workOrderId],
+      foreignColumns: [workOrders.tenantId, workOrders.id],
+    }),
+    check('notification_outbox_channel_check', sql`${t.channel} in ('push', 'email')`),
+    check(
+      'notification_outbox_status_check',
+      sql`${t.status} in ('pending', 'sent', 'failed', 'skipped')`,
+    ),
+    index('notification_outbox_pending_idx')
+      .on(t.nextAttemptAt)
+      .where(sql`${t.status} = 'pending'`),
+  ],
+);
+
+/** Avisos do sino do painel: cada pessoa vê só os seus, na prefeitura atual. */
+export const panelNotifications = pgTable(
+  'panel_notifications',
+  {
+    id: id(),
+    tenantId: tenantId(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id),
+    kind: text('kind').notNull(),
+    protocol: text('protocol').notNull(),
+    occurrenceId: uuid('occurrence_id').notNull(),
+    workOrderId: uuid('work_order_id'),
+    details: jsonb('details'),
+    readAt: timestamp('read_at', { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    foreignKey({
+      columns: [t.tenantId, t.occurrenceId],
+      foreignColumns: [occurrences.tenantId, occurrences.id],
+    }),
+    foreignKey({
+      columns: [t.tenantId, t.workOrderId],
+      foreignColumns: [workOrders.tenantId, workOrders.id],
+    }),
+    index('panel_notifications_user_idx').on(t.userId, t.tenantId, t.createdAt.desc()),
+  ],
+);

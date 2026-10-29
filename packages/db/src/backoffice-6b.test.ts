@@ -501,6 +501,71 @@ describe('equipe interna', () => {
     expect(manager[0]).toEqual({ id, email: 'exequipe@equipe6b.dev' });
   });
 
+  it('reativar gestor que virou equipe é recusado', async () => {
+    const seed = await createTenant('Reativar gestor');
+    const tenantAdmin = await createUser({ name: 'Admin da prefeitura', cpf: newCpf() });
+    await link(seed.tenantId, tenantAdmin, 'tenant_admin');
+    const asTenantAdmin: DbContext = { tenantId: seed.tenantId, userId: tenantAdmin };
+
+    const cpf = newCpf();
+    const exManager = await createUser({ name: 'Ex-gestor', cpf, email: 'reat.g@equipe6b.dev' });
+    await link(seed.tenantId, exManager, 'manager', 'inactive');
+    await staffAdd(asAdmin(), 'X', cpf, 'reat.g@equipe6b.dev', 'support');
+
+    const refused = { code: '23514', message: 'staff_account_not_allowed' };
+    // Reativar o vínculo (como o painel faz) e criar outro, de gestor ou admin.
+    expect(
+      await pgError(
+        withContext(app.db, asTenantAdmin, (tx) =>
+          tx
+            .update(memberships)
+            .set({ status: 'active' })
+            .where(and(eq(memberships.userId, exManager), eq(memberships.role, 'manager'))),
+        ),
+      ),
+    ).toMatchObject(refused);
+    for (const role of ['manager', 'tenant_admin'] as const) {
+      expect(await pgError(link(seed.tenantId, exManager, role))).toMatchObject(refused);
+    }
+    const links = await owner.db
+      .select({ status: memberships.status })
+      .from(memberships)
+      .where(eq(memberships.userId, exManager));
+    expect(links).toEqual([{ status: 'inactive' }]);
+
+    // Cidadão e vínculo inativo continuam permitidos.
+    await link(seed.tenantId, exManager, 'citizen');
+    await link(seed.tenantId, exManager, 'field_agent', 'inactive');
+  });
+
+  it('reativar agente que virou equipe é recusado', async () => {
+    const seed = await createTenant('Reativar agente');
+    const cpf = newCpf();
+    const exAgent = await createUser({ name: 'Ex-agente', cpf, email: 'reat.a@equipe6b.dev' });
+    await link(seed.tenantId, exAgent, 'field_agent', 'inactive');
+    await staffAdd(asAdmin(), 'X', cpf, 'reat.a@equipe6b.dev', 'support');
+
+    for (const status of ['invited', 'active'] as const) {
+      expect(
+        await pgError(
+          owner.db.update(memberships).set({ status }).where(eq(memberships.userId, exAgent)),
+        ),
+      ).toMatchObject({ code: '23514', message: 'staff_account_not_allowed' });
+    }
+
+    // Dado anterior ao 6b (convite de quem já era da equipe): ativar o convite no login não é
+    // barrado, porque não dá acesso novo.
+    const legacy = await createUser({ name: 'Legado' });
+    await link(seed.tenantId, legacy, 'field_agent', 'invited');
+    await owner.db.update(users).set({ platformRole: 'support' }).where(eq(users.id, legacy));
+    await call({ userId: legacy }, sql`select account_activate_invitations()`);
+    const [legacyLink] = await owner.db
+      .select({ status: memberships.status })
+      .from(memberships)
+      .where(eq(memberships.userId, legacy));
+    expect(legacyLink!.status).toBe('active');
+  });
+
   it('gestor e agente não podem ser da equipe interna', async () => {
     const seed = await createTenant('Sem equipe');
     const inSupport: DbContext = {

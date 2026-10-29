@@ -365,6 +365,34 @@ describe('gestores, categorias e setores na API', () => {
     expect(again.statusCode).toBe(200);
   });
 
+  it('reactivating a manager who joined the staff is 409 staff_account_not_allowed', async () => {
+    const base = await seedBase();
+    const off = await call(
+      'PATCH',
+      `/panel/managers/${base.managerId}`,
+      base.adminId,
+      base.tenantId,
+      { action: 'deactivate' },
+    );
+    expect(off.statusCode).toBe(200);
+    // Com o vínculo inativo, a pessoa entra na equipe interna.
+    await owner.db
+      .update(users)
+      .set({ platformRole: 'support' })
+      .where(eq(users.id, base.managerId));
+
+    const on = await call(
+      'PATCH',
+      `/panel/managers/${base.managerId}`,
+      base.adminId,
+      base.tenantId,
+      { action: 'reactivate' },
+    );
+    expect(on.statusCode).toBe(409);
+    expect(on.json()).toEqual({ code: 'staff_account_not_allowed' });
+    expect(await managerStatus(base.tenantId, base.managerId)).toBe('inactive');
+  });
+
   it('admin cannot deactivate themselves', async () => {
     const base = await seedBase();
     for (const payload of [

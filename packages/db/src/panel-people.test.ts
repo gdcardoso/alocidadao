@@ -256,8 +256,11 @@ describe('cadastro de agentes pelo painel', () => {
 
   it('troca de número recusada para quem tem acesso ao painel ou é da equipe interna', async () => {
     // Os dois têm celular, nunca entraram e são agentes desta prefeitura.
-    const staff = await createUser({ name: 'Suporte', phone: newPhone(), platformRole: 'support' });
+    // Conta da equipe com vínculo de agente: só existe em dado anterior ao 6b (o trigger de
+    // memberships recusa o vínculo novo), então o papel entra depois do vínculo.
+    const staff = await createUser({ name: 'Suporte', phone: newPhone() });
     await link(tenantA, staff, 'field_agent', 'invited');
+    await owner.db.update(users).set({ platformRole: 'support' }).where(eq(users.id, staff));
     const managerHere = await createUser({ name: 'Gestor agente', phone: newPhone() });
     await link(tenantA, managerHere, 'field_agent', 'invited');
     await link(tenantA, managerHere, 'manager', 'inactive');
@@ -367,8 +370,9 @@ describe('cadastro de gestores pelo painel', () => {
       return id;
     };
 
-    // Equipe interna da plataforma.
-    const staff = await manager('suporte@pessoas.dev', { platformRole: 'support' });
+    // Equipe interna da plataforma (dado anterior ao 6b: o papel entra depois do vínculo).
+    const staff = await manager('suporte@pessoas.dev');
+    await owner.db.update(users).set({ platformRole: 'support' }).where(eq(users.id, staff));
     // Gestor também em outra prefeitura, mesmo desativado lá.
     const alsoB = await manager('tambem.b@pessoas.dev');
     await link(tenantB, alsoB, 'manager', 'inactive');

@@ -31,7 +31,11 @@ type TeamsError =
   | {
       status: 409;
       code:
-        'team_name_taken' | 'agent_already_in_team' | 'phone_change_not_allowed' | 'phone_in_use';
+        | 'team_name_taken'
+        | 'agent_already_in_team'
+        | 'phone_change_not_allowed'
+        | 'phone_in_use'
+        | 'staff_account_not_allowed';
     }
   | { status: 409; code: 'agent_in_other_team'; teamName?: string }
   | { status: 422; code: 'department_not_eligible' | 'team_not_eligible' };
@@ -154,6 +158,10 @@ export async function createTeam(
 const DEPARTMENT_NOT_ELIGIBLE = { status: 422, code: 'department_not_eligible' } as const;
 const TEAM_NOT_FOUND = { status: 404, code: 'team_not_found' } as const;
 const AGENT_NOT_FOUND = { status: 404, code: 'agent_not_found' } as const;
+const STAFF_ACCOUNT_NOT_ALLOWED = { status: 409, code: 'staff_account_not_allowed' } as const;
+
+/** Conta da equipe interna não vira agente: cadastro (0026) ou reativação (trigger de memberships). */
+const isStaffAccount = (error: unknown) => isPgError(error, '23514', 'staff_account_not_allowed');
 const TEAM_NOT_ELIGIBLE = { status: 422, code: 'team_not_eligible' } as const;
 
 export async function updateTeam(
@@ -286,6 +294,7 @@ export async function addAgent(
       return (await queryAgents(tx, identity, { userId }))[0]!;
     });
   } catch (error) {
+    if (isStaffAccount(error)) return fail(STAFF_ACCOUNT_NOT_ALLOWED);
     if (isUniqueViolation(error) && violatedConstraint(error) === PHONE_ACTIVE_CONSTRAINT) {
       return fail({ status: 409, code: 'phone_in_use' });
     }
@@ -356,6 +365,7 @@ export async function updateAgent(
       return (await queryAgents(tx, identity, { userId }))[0]!;
     });
   } catch (error) {
+    if (isStaffAccount(error)) return fail(STAFF_ACCOUNT_NOT_ALLOWED);
     if (isPgError(error, '23514', 'phone_change_not_allowed')) {
       return fail({ status: 409, code: 'phone_change_not_allowed' });
     }

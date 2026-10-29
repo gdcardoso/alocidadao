@@ -54,6 +54,7 @@ type AdminError =
         | 'cpf_unavailable'
         | 'already_manager'
         | 'email_change_not_allowed'
+        | 'staff_account_not_allowed'
         | 'category_name_taken'
         | 'department_name_taken';
     }
@@ -98,6 +99,10 @@ async function guard<T>(block: () => Promise<AdminResult<T>>): Promise<AdminResu
     if (unique) return fail(unique);
     if (isPgError(error, '23514', 'email_change_not_allowed')) {
       return fail({ status: 409, code: 'email_change_not_allowed' });
+    }
+    // Conta da equipe interna não vira gestor nem admin, nem por reativação (trigger de memberships).
+    if (isPgError(error, '23514', 'staff_account_not_allowed')) {
+      return fail({ status: 409, code: 'staff_account_not_allowed' });
     }
     if (isPgError(error, 'P0002')) return fail(MANAGER_NOT_FOUND);
     throw error;

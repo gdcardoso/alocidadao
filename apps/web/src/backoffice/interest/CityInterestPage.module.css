@@ -1,5 +1,7 @@
 .content {
   display: flex;
+  /* Ocupa a altura toda: o menu ⋯ da última linha não fica cortado pelo overflow. */
+  flex: 1;
   flex-direction: column;
   gap: 12px;
   padding: 24px;

@@ -15,7 +15,9 @@ import { and, eq, isNull, sql } from 'drizzle-orm';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
+import { loadPlatformRole } from '../backoffice/staff.js';
 import { codeEmail } from '../messaging/email.js';
+import { recordImplicitSupportLeave } from '../panel/audit.js';
 import { codeError, type AuthDeps } from './app-routes.js';
 import { hashCode, issueChallenge } from './codes.js';
 import { PANEL_IDLE_TIMEOUT_SECONDS, startSession } from './session.js';
@@ -133,6 +135,11 @@ export function registerPanelAuthRoutes(instance: FastifyInstance, deps: AuthDep
       if (!user?.hasPanelAccess || user.id !== consumed.userId) {
         return reply.code(400).send(codeError('invalid'));
       }
+
+      // Quem é da equipe e deixou o modo suporte aberto (navegador fechado): fecha a entrada
+      // anterior. O papel vem do banco, como no requirePlatformStaff.
+      const platformRole = await loadPlatformRole(db, user.id);
+      if (platformRole) await recordImplicitSupportLeave(db, { userId: user.id, platformRole });
 
       const session = await withContext(db, { userId: user.id }, (tx) =>
         startSession(tx, { secret, userId: user.id, audience: 'panel' }),

@@ -1,3 +1,4 @@
+import { randomInt } from 'node:crypto';
 import { createDatabase, schema, withContext } from '@alocidadao/db';
 import { STAFF_AUDIT_ACTIONS, type GeoPoint } from '@alocidadao/shared';
 import { asc, eq } from 'drizzle-orm';
@@ -171,6 +172,38 @@ describe('auditoria do modo suporte', () => {
       targetType: 'manager',
       targetId: managerId,
       details: { route: 'PATCH /panel/managers/:userId' },
+    });
+  });
+
+  it('adding an agent audits the agent as target', async () => {
+    const supportId = await fx.newStaff('support');
+    const seed = await fx.seedPanelTenant();
+    const teamId = await fx.addTeam(seed.tenantId, {
+      departmentId: seed.worksId,
+      name: 'Equipe B',
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/panel/teams/${teamId}/agents`,
+      headers: await panelAuthHeader(appDb.db, supportId, seed.tenantId),
+      payload: {
+        name: 'Agente Novo',
+        phone: `+55419${String(randomInt(0, 100_000_000)).padStart(8, '0')}`,
+      },
+    });
+    expect(response.statusCode).toBe(201);
+    const agent = response.json<{ userId: string }>();
+
+    await vi.waitFor(async () => {
+      expect(await auditOf(seed.tenantId)).toHaveLength(1);
+    });
+    const [event] = await auditOf(seed.tenantId);
+    expect(event).toMatchObject({
+      action: 'agent.create',
+      targetType: 'agent',
+      targetId: agent.userId,
+      details: { route: 'POST /panel/teams/:id/agents' },
     });
   });
 });

@@ -6,7 +6,7 @@ import {
   type PanelRefreshResponse,
   type PanelSessionResponse,
 } from '@alocidadao/shared';
-import { eq } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp } from '../app.js';
 import type { EmailSender } from '../messaging/email.js';
@@ -16,7 +16,7 @@ import { PANEL_REFRESH_COOKIE } from './panel-routes.js';
 import { startSession } from './session.js';
 import { verifyAccessToken } from './tokens.js';
 
-const { users, memberships, tenants, sessions } = schema;
+const { users, memberships, tenants, sessions, staffAuditEvents } = schema;
 
 const CSRF = { 'x-requested-with': 'alocidadao-panel' };
 
@@ -241,6 +241,47 @@ describe('panel auth routes', () => {
       userId,
       audience: 'panel',
     });
+  });
+
+  it('staff panel login writes an implicit leave for an open support session', async () => {
+    const cpf = newCpf();
+    const userId = await createUser({
+      cpf,
+      email: `suporte.${cpf}@exemplo.com`,
+      platformRole: 'support',
+    });
+    const tenantId = await createTenant();
+    // Entrou no modo suporte e fechou o navegador sem sair.
+    await owner.db.insert(staffAuditEvents).values({
+      tenantId,
+      staffUserId: userId,
+      action: 'support.enter',
+      targetType: 'tenant',
+      targetId: tenantId,
+      createdAt: new Date(Date.now() - 60_000),
+    });
+    const eventsOf = () =>
+      owner.db
+        .select()
+        .from(staffAuditEvents)
+        .where(eq(staffAuditEvents.staffUserId, userId))
+        .orderBy(asc(staffAuditEvents.createdAt));
+
+    await signInPanel(cpf);
+    expect((await eventsOf()).map((e) => [e.action, e.tenantId, e.details])).toEqual([
+      ['support.enter', tenantId, null],
+      ['support.leave', tenantId, { reason: 'implicit' }],
+    ]);
+
+    // Gestor não grava auditoria da equipe no login.
+    const manager = await newManagerCpf();
+    await signInPanel(manager.cpf);
+    expect(
+      await owner.db
+        .select()
+        .from(staffAuditEvents)
+        .where(eq(staffAuditEvents.staffUserId, manager.userId)),
+    ).toEqual([]);
   });
 
   it('panel access lost before verify refuses the code', async () => {

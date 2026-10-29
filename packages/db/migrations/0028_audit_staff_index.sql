@@ -1,0 +1,1 @@
+CREATE INDEX "staff_audit_events_staff_user_id_created_at_index" ON "staff_audit_events" USING btree ("staff_user_id","created_at");

@@ -5,10 +5,12 @@ import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { requireAuth } from '../auth/plugin.js';
-import { recordStaffAudit } from '../panel/audit.js';
+import type { EmailSender } from '../messaging/email.js';
+import { recordImplicitSupportLeave, recordStaffAudit } from '../panel/audit.js';
 import { registerAuditRoutes } from './audit-routes.js';
 import { registerCityInterestRoutes } from './city-interest.js';
 import { registerCreateTenantRoutes } from './create-tenant.js';
+import { registerFrozenAccountRoutes } from './frozen-accounts.js';
 import { requirePlatformStaff } from './staff.js';
 import { registerStaffRoutes } from './staff-routes.js';
 import { registerTenantRoutes } from './tenants.js';
@@ -18,6 +20,12 @@ const { tenants, users } = schema;
 export interface BackofficeDeps {
   /** Banco como app_user (RLS). */
   db: Database;
+  /** Hashes dos códigos (AUTH_SECRET), como no login. */
+  secret: string;
+  /** Código fixo (só desenvolvimento). */
+  devFixedCode?: string;
+  /** Envio do código de recuperação da conta congelada. */
+  email: EmailSender;
 }
 
 const tenantParamsSchema = z.object({ id: z.uuid() });
@@ -33,7 +41,8 @@ const staffErrors = {
  * `users.platform_role` conferido no banco (requirePlatformStaff). O token do app passa pelo
  * requireAuth só para receber o 403 `not_platform_staff`.
  */
-export function registerBackofficeRoutes(instance: FastifyInstance, { db }: BackofficeDeps) {
+export function registerBackofficeRoutes(instance: FastifyInstance, deps: BackofficeDeps) {
+  const { db } = deps;
   const app = instance.withTypeProvider<ZodTypeProvider>();
   const preHandler = requireAuth(['app', 'panel']);
 
@@ -73,6 +82,8 @@ export function registerBackofficeRoutes(instance: FastifyInstance, { db }: Back
         if (path === 'enter' && tenant.status === 'suspended') {
           return reply.code(409).send({ code: 'tenant_suspended' });
         }
+        // Entrada sem saída (navegador fechado, troca de prefeitura): fecha a anterior antes.
+        if (path === 'enter') await recordImplicitSupportLeave(db, staff);
         await recordStaffAudit(
           db,
           { ...staff, tenantId },
@@ -87,6 +98,7 @@ export function registerBackofficeRoutes(instance: FastifyInstance, { db }: Back
   registerCityInterestRoutes(instance, { db, preHandler });
   registerStaffRoutes(instance, { db, preHandler });
   registerAuditRoutes(instance, { db, preHandler });
+  registerFrozenAccountRoutes(instance, { ...deps, preHandler });
 
   supportRoute('enter', 'support.enter');
   supportRoute('leave', 'support.leave');

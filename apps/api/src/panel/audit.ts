@@ -1,8 +1,21 @@
 import { schema, withContext, type Database, type Transaction } from '@alocidadao/db';
 import type { PlatformRole, StaffAuditAction } from '@alocidadao/shared';
+import { sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 
 const { staffAuditEvents } = schema;
+
+type AuditTarget = { targetType: string | null; targetId: string | null };
+
+declare module 'fastify' {
+  interface FastifyRequest {
+    /**
+     * Alvo da auditoria definido pela própria rota, quando não sai dos parâmetros da url (ex.: o
+     * agente criado em `POST /panel/teams/:id/agents`, cujo id só existe na resposta).
+     */
+    auditTarget: AuditTarget | null;
+  }
+}
 
 /**
  * Ação de auditoria de cada rota do painel que altera dados, pela chave `MÉTODO url` (a url como
@@ -44,10 +57,7 @@ const TARGET_TYPES: Record<string, string> = {
 const TARGET_PARAMS = ['id', 'userId', 'occurrenceId'] as const;
 
 /** Alvo da rota: o parâmetro `:id`, `:userId` ou `:occurrenceId` e o tipo do trecho anterior. */
-export function auditTarget(
-  url: string,
-  params: unknown,
-): { targetType: string | null; targetId: string | null } {
+export function auditTarget(url: string, params: unknown): AuditTarget {
   const segments = url.split('/');
   const values = (params ?? {}) as Record<string, unknown>;
   for (const name of TARGET_PARAMS) {
@@ -106,6 +116,7 @@ export async function recordStaffAudit(
  */
 export function registerPanelAudit(app: FastifyInstance, db: Database): void {
   app.decorateRequest('panelIdentity', null);
+  app.decorateRequest('auditTarget', null);
   app.addHook('onResponse', async (request, reply) => {
     const identity = request.panelIdentity;
     if (!identity?.platformRole) return;
@@ -125,7 +136,7 @@ export function registerPanelAudit(app: FastifyInstance, db: Database): void {
         { tenantId, userId, platformRole },
         {
           action,
-          ...auditTarget(request.routeOptions.url ?? '', request.params),
+          ...(request.auditTarget ?? auditTarget(request.routeOptions.url ?? '', request.params)),
           details: { route },
         },
       );
@@ -133,4 +144,17 @@ export function registerPanelAudit(app: FastifyInstance, db: Database): void {
       request.log.error({ err: error, route }, 'falha ao gravar a auditoria do modo suporte');
     }
   });
+}
+
+/**
+ * Saída implícita do modo suporte: se o último evento `support.*` de quem é da equipe for
+ * `support.enter`, grava um `support.leave` naquela prefeitura com `details: { reason: 'implicit' }`.
+ * Chamada ao entrar no modo suporte (antes da nova entrada) e no login do painel. Transação
+ * própria, antes da ação seguinte: as duas linhas não ficam com o mesmo `created_at`.
+ */
+export async function recordImplicitSupportLeave(
+  db: Database,
+  staff: { userId: string; platformRole: PlatformRole },
+): Promise<void> {
+  await withContext(db, staff, (tx) => tx.execute(sql`select platform_close_open_support()`));
 }

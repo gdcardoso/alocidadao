@@ -142,7 +142,12 @@ export async function buildApp({
     });
     // Backoffice da equipe interna: escopo próprio, sem limite por IP.
     await app.register(async (scope) => {
-      registerBackofficeRoutes(scope, { db: database });
+      registerBackofficeRoutes(scope, {
+        db: database,
+        secret: auth.secret,
+        devFixedCode: auth.devFixedCode,
+        email: auth.email,
+      });
     });
     // Cidadão: escopo próprio, sem o limite por IP do /auth/*.
     await app.register(async (scope) => {

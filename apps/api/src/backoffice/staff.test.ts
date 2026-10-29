@@ -306,4 +306,53 @@ describe('modo suporte', () => {
       { action: 'support.leave', staffUserId: adminId, targetType: 'tenant', targetId: tenantId },
     ]);
   });
+
+  it('entering another tenant writes an implicit leave for the previous one', async () => {
+    const supportId = await fx.newStaff('support');
+    const first = await fx.createTenant('active');
+    const second = await fx.createTenant('active');
+    const enter = (tenantId: string) =>
+      backoffice('POST', `/backoffice/tenants/${tenantId}/support/enter`, supportId);
+
+    expect((await enter(first)).statusCode).toBe(204);
+    // Sem sair da primeira, entra na segunda: a primeira ganha uma saída implícita antes.
+    expect((await enter(second)).statusCode).toBe(204);
+    const pick = (events: Awaited<ReturnType<typeof auditOf>>) =>
+      events.map(({ action, staffUserId, targetId, details }) => ({
+        action,
+        staffUserId,
+        targetId,
+        details,
+      }));
+    expect(pick(await auditOf(first))).toEqual([
+      { action: 'support.enter', staffUserId: supportId, targetId: first, details: null },
+      {
+        action: 'support.leave',
+        staffUserId: supportId,
+        targetId: first,
+        details: { reason: 'implicit' },
+      },
+    ]);
+    expect(pick(await auditOf(second))).toEqual([
+      { action: 'support.enter', staffUserId: supportId, targetId: second, details: null },
+    ]);
+
+    // Com saída explícita, a entrada seguinte não grava outra saída.
+    const leave = await backoffice(
+      'POST',
+      `/backoffice/tenants/${second}/support/leave`,
+      supportId,
+    );
+    expect(leave.statusCode).toBe(204);
+    expect((await enter(first)).statusCode).toBe(204);
+    expect((await auditOf(second)).map((e) => e.action)).toEqual([
+      'support.enter',
+      'support.leave',
+    ]);
+    expect((await auditOf(first)).map((e) => e.action)).toEqual([
+      'support.enter',
+      'support.leave',
+      'support.enter',
+    ]);
+  });
 });

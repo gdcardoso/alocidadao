@@ -621,6 +621,8 @@ export function registerPanelRoutes(instance: FastifyInstance, deps: PanelDeps) 
       if (!identity) return reply;
       const result = await addAgent(db, identity, request.params.id, request.body);
       if ('error' in result) return sendTeamsError(reply, result);
+      // No modo suporte, a auditoria aponta o agente criado ou vinculado, não a equipe da url.
+      request.auditTarget = { targetType: 'agent', targetId: result.ok.userId };
       return reply.code(201).send(result.ok);
     },
   );

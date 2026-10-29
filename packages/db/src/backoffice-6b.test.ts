@@ -923,6 +923,54 @@ describe('auditoria', () => {
   });
 });
 
+describe('saída implícita do modo suporte', () => {
+  it('fecha só a entrada em aberto de quem chama, na prefeitura dela', async () => {
+    const staffId = await createUser({ name: 'Suporte implícito', platformRole: 'support' });
+    const otherId = await createUser({ name: 'Outro suporte', platformRole: 'support' });
+    const { tenantId } = await createTenant('Saída implícita');
+    const asStaff: DbContext = { userId: staffId, platformRole: 'support' };
+    const close = (context: DbContext) =>
+      call<{ tenant_id: string | null }>(
+        context,
+        sql`select platform_close_open_support() as tenant_id`,
+      );
+    const eventsOf = (userId: string) =>
+      owner.db
+        .select()
+        .from(staffAuditEvents)
+        .where(eq(staffAuditEvents.staffUserId, userId))
+        .orderBy(staffAuditEvents.createdAt);
+
+    // Sem evento de suporte, nada a fechar.
+    expect((await close(asStaff))[0]!.tenant_id).toBeNull();
+
+    await owner.db.insert(staffAuditEvents).values({
+      tenantId,
+      staffUserId: staffId,
+      action: 'support.enter',
+      targetType: 'tenant',
+      targetId: tenantId,
+      createdAt: ago(60_000),
+    });
+    // A entrada em aberto de outra pessoa não é fechada por esta.
+    expect((await close({ userId: otherId, platformRole: 'support' }))[0]!.tenant_id).toBeNull();
+    expect(await eventsOf(otherId)).toEqual([]);
+
+    expect((await close(asStaff))[0]!.tenant_id).toBe(tenantId);
+    const events = await eventsOf(staffId);
+    expect(events.map((e) => [e.action, e.tenantId, e.details])).toEqual([
+      ['support.enter', tenantId, null],
+      ['support.leave', tenantId, { reason: 'implicit' }],
+    ]);
+    // Já fechada: a segunda chamada não grava outra saída.
+    expect((await close(asStaff))[0]!.tenant_id).toBeNull();
+    expect(await eventsOf(staffId)).toHaveLength(2);
+
+    // Só a equipe interna.
+    expect((await pgError(close({ userId: staffId }))).code).toBe('42501');
+  });
+});
+
 // ── Conta congelada ──
 
 describe('conta congelada', () => {

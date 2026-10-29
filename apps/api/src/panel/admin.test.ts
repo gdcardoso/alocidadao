@@ -393,6 +393,45 @@ describe('gestores, categorias e setores na API', () => {
     expect(await managerStatus(base.tenantId, base.managerId)).toBe('inactive');
   });
 
+  it('registering a staff account as manager or agent is 409 staff_account_not_allowed', async () => {
+    const base = await seedBase();
+    const cpf = newCpf();
+    const email = newEmail();
+    const [staff] = await owner.db
+      .insert(users)
+      .values({
+        name: 'Pessoa da Equipe',
+        phone: `+55419${String(randomInt(0, 100_000_000)).padStart(8, '0')}`,
+        cpf,
+        email,
+        platformRole: 'support',
+      })
+      .returning();
+
+    const manager = await call('POST', '/panel/managers', base.adminId, base.tenantId, {
+      name: 'Pessoa da Equipe',
+      cpf,
+      email,
+      departmentIds: [base.worksId],
+    });
+    expect(manager.statusCode).toBe(409);
+    expect(manager.json()).toEqual({ code: 'staff_account_not_allowed' });
+
+    const teamId = await fx.addTeam(base.tenantId, { departmentId: base.worksId, name: 'Equipe' });
+    const agent = await call('POST', `/panel/teams/${teamId}/agents`, base.adminId, base.tenantId, {
+      name: 'Pessoa da Equipe',
+      phone: staff!.phone,
+    });
+    expect(agent.statusCode).toBe(409);
+    expect(agent.json()).toEqual({ code: 'staff_account_not_allowed' });
+
+    const links = await owner.db
+      .select()
+      .from(memberships)
+      .where(and(eq(memberships.tenantId, base.tenantId), eq(memberships.userId, staff!.id)));
+    expect(links).toEqual([]);
+  });
+
   it('admin cannot deactivate themselves', async () => {
     const base = await seedBase();
     for (const payload of [

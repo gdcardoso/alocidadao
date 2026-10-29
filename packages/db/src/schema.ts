@@ -240,7 +240,8 @@ export const staffAuditEvents = pgTable(
     details: jsonb('details'),
     createdAt: createdAt(),
   },
-  (t) => [index().on(t.tenantId, t.createdAt)],
+  // Por pessoa da equipe: a saída implícita do modo suporte procura o último evento dela.
+  (t) => [index().on(t.tenantId, t.createdAt), index().on(t.staffUserId, t.createdAt)],
 );
 
 /** Cidadão de um município sem prefeitura cadastrada avisando que quer o app lá. */

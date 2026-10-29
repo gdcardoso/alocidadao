@@ -10,7 +10,13 @@ import { createPanelSession } from '../session/panel-session';
 import { SessionProvider } from '../session/SessionProvider';
 
 vi.mock('../api', () => ({
-  api: { backofficeContext: vi.fn(), me: vi.fn(), panelContext: vi.fn(), panelCounts: vi.fn() },
+  api: {
+    backofficeContext: vi.fn(),
+    backofficeTenants: vi.fn(),
+    me: vi.fn(),
+    panelContext: vi.fn(),
+    panelCounts: vi.fn(),
+  },
 }));
 vi.mock('../map/OccurrenceMap', () => ({ OccurrenceMap: () => null }));
 
@@ -75,6 +81,30 @@ describe('BackofficeLayout', () => {
     await waitFor(() => expect(panelLogout).toHaveBeenCalled());
   });
 
+  it('support does not see Equipe and Auditoria in the menu', async () => {
+    backofficeContext.mockResolvedValue({
+      user: { id: userId, name: 'Rafa Souza' },
+      platformRole: 'support',
+    });
+    renderApp('/backoffice/interesse');
+    expect(await screen.findByRole('link', { name: 'Prefeituras' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Interesse por cidade' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Equipe Alô Cidadão' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Auditoria' })).not.toBeInTheDocument();
+  });
+
+  it('support opening /backoffice/equipe goes back to prefeituras', async () => {
+    backofficeContext.mockResolvedValue({
+      user: { id: userId, name: 'Rafa Souza' },
+      platformRole: 'support',
+    });
+    vi.mocked(api.backofficeTenants).mockReturnValue(new Promise(() => undefined));
+    renderApp('/backoffice/equipe');
+    expect(await screen.findByRole('heading', { name: 'Prefeituras' })).toBeInTheDocument();
+    expect(api.backofficeTenants).toHaveBeenCalled();
+    expect(screen.queryByRole('heading', { name: 'Equipe Alô Cidadão' })).not.toBeInTheDocument();
+  });
+
   it('non-staff opening the backoffice goes to the map', async () => {
     backofficeContext.mockRejectedValue(new ApiError(403, { code: 'not_platform_staff' }));
     renderApp('/backoffice/prefeituras');
@@ -84,7 +114,6 @@ describe('BackofficeLayout', () => {
 
   it.each([
     ['/backoffice/interesse', 'Interesse por cidade'],
-    ['/backoffice/equipe', 'Equipe Alô Cidadão'],
     ['/backoffice/auditoria', 'Auditoria'],
   ])('coming soon pages show the item title and the text (%s)', async (path, title) => {
     renderApp(path);

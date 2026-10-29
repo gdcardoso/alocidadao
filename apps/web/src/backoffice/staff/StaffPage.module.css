@@ -1,0 +1,58 @@
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 24px;
+  overflow: auto;
+}
+
+.name {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.muted {
+  color: var(--text-secondary);
+}
+
+.state {
+  color: var(--text-secondary);
+}
+
+.error {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.alert {
+  color: var(--danger);
+  font-size: 14px;
+}
+
+.roles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.role {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.roleTitle {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.roleText {
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.4;
+}

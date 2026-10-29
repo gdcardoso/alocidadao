@@ -2,6 +2,7 @@ import { Navigate, Outlet, Route, Routes } from 'react-router';
 import { BackofficeLayout } from './backoffice/BackofficeLayout';
 import { ComingSoon } from './backoffice/ComingSoon';
 import { TenantDetailPage } from './backoffice/tenants/TenantDetailPage';
+import { StaffPage } from './backoffice/staff/StaffPage';
 import { NewTenantPage } from './backoffice/tenants/NewTenantPage';
 import { TenantsPage } from './backoffice/tenants/TenantsPage';
 import { LoginPage } from './auth/LoginPage';
@@ -55,7 +56,7 @@ export default function App() {
           <Route path="prefeituras/nova" element={<NewTenantPage />} />
           <Route path="prefeituras/:id" element={<TenantDetailPage />} />
           <Route path="interesse" element={<ComingSoon title="Interesse por cidade" />} />
-          <Route path="equipe" element={<ComingSoon title="Equipe Alô Cidadão" />} />
+          <Route path="equipe" element={<StaffPage />} />
           <Route path="auditoria" element={<ComingSoon title="Auditoria" />} />
         </Route>
       </Route>

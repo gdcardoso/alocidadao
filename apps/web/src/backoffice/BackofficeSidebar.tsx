@@ -25,16 +25,18 @@ export function BackofficeSidebar({ context, onSignOut }: BackofficeSidebarProps
       </div>
 
       <nav className={styles.nav}>
-        {BACKOFFICE_MENU.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            className={({ isActive }) => `${styles.item} ${isActive ? styles.active : ''}`}
-          >
-            <item.icon size={20} className={styles.itemIcon} />
-            <span>{item.label}</span>
-          </NavLink>
-        ))}
+        {BACKOFFICE_MENU.filter((item) => !item.adminOnly || context.platformRole === 'admin').map(
+          (item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              className={({ isActive }) => `${styles.item} ${isActive ? styles.active : ''}`}
+            >
+              <item.icon size={20} className={styles.itemIcon} />
+              <span>{item.label}</span>
+            </NavLink>
+          ),
+        )}
       </nav>
 
       <div className={styles.spacer} />

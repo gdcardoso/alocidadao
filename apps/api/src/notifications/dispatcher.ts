@@ -32,6 +32,8 @@ export interface DispatchDeps {
 
 /** Lote padrão por rodada do agendador. */
 export const DISPATCH_BATCH = 50;
+/** Linhas processadas ao mesmo tempo, para não ocupar o pool das requisições. */
+export const DISPATCH_CONCURRENCY = 5;
 
 /** Espera antes da tentativa seguinte, pela tentativa que falhou (1ª, 2ª, 3ª e 4ª). */
 const RETRY_DELAYS_SECONDS = [60, 300, 1800, 7200];
@@ -129,6 +131,27 @@ async function deliver(deps: DispatchDeps, row: ClaimedNotification): Promise<No
     : sendPush(deps, row, parsed.data);
 }
 
+async function processRow(deps: DispatchDeps, row: ClaimedNotification): Promise<void> {
+  let result: NotificationResult;
+  try {
+    result = await deliver(deps, row);
+  } catch (error) {
+    deps.log.error(
+      { notificationId: row.id, kind: row.kind, error: errorText(error) },
+      'Falha no envio do aviso',
+    );
+    result = retryOrFail(row.attempts, errorText(error));
+  }
+  try {
+    await finishNotification(deps.db, row.id, result);
+  } catch (error) {
+    deps.log.error(
+      { notificationId: row.id, error: errorText(error) },
+      'Falha ao gravar o resultado do aviso',
+    );
+  }
+}
+
 /**
  * Pega um lote da fila, envia cada linha e grava o resultado. Uma linha com erro não para as
  * outras; se nem o resultado for gravado, a linha volta sozinha quando a trava da pegada vence.
@@ -139,27 +162,10 @@ export async function dispatchNotifications(
   limit = DISPATCH_BATCH,
 ): Promise<number> {
   const rows = await claimNotifications(deps.db, limit);
-  await Promise.all(
-    rows.map(async (row) => {
-      let result: NotificationResult;
-      try {
-        result = await deliver(deps, row);
-      } catch (error) {
-        deps.log.error(
-          { notificationId: row.id, kind: row.kind, error: errorText(error) },
-          'Falha no envio do aviso',
-        );
-        result = retryOrFail(row.attempts, errorText(error));
-      }
-      try {
-        await finishNotification(deps.db, row.id, result);
-      } catch (error) {
-        deps.log.error(
-          { notificationId: row.id, error: errorText(error) },
-          'Falha ao gravar o resultado do aviso',
-        );
-      }
-    }),
-  );
+  const queue = [...rows];
+  const worker = async () => {
+    for (let row = queue.shift(); row; row = queue.shift()) await processRow(deps, row);
+  };
+  await Promise.all(Array.from({ length: Math.min(DISPATCH_CONCURRENCY, rows.length) }, worker));
   return rows.length;
 }

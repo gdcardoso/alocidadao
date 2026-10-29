@@ -1357,6 +1357,26 @@ describe('fila, aparelhos e confirmação automática', () => {
     expect(await eventsOf(recentOccurrence)).toEqual([]);
   });
 
+  it('confirmação automática processa em lotes de 100', async () => {
+    const batch = 100;
+    const occurrenceId = await newOccurrence('awaiting_confirmation');
+    const ids: string[] = [];
+    for (let i = 0; i < batch + 5; i++) {
+      ids.push((await awaiting(occurrenceId, ago(60 * DAY_MS + i * MINUTE_MS))).id);
+    }
+
+    // Há mais candidatas que o lote: uma chamada confirma só o lote.
+    expect(await autoConfirmRequests(app)).toBe(batch);
+    const statuses = await Promise.all(ids.map(async (id) => (await requestStatus(id)).status));
+    expect(statuses.filter((status) => status === 'completed')).toHaveLength(batch);
+
+    // Chamadas seguintes terminam o resto.
+    let rounds = 0;
+    while ((await autoConfirmRequests(app)) === batch && rounds++ < 5);
+    for (const id of ids) expect((await requestStatus(id)).status).toBe('completed');
+    expect(await autoConfirmRequests(app)).toBe(0);
+  }, 60_000);
+
   it('confirmação automática roda duas vezes sem duplicar', async () => {
     const occurrenceId = await newOccurrence('awaiting_confirmation');
     const request = await awaiting(occurrenceId, ago(8 * DAY_MS));

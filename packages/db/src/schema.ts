@@ -529,6 +529,10 @@ export const requests = pgTable(
     index().on(t.citizenId),
     index('requests_location_idx').using('gist', t.location),
     index().on(t.occurrenceId),
+    // Candidatas da confirmação automática (auto_confirm_requests).
+    index('requests_awaiting_confirmation_idx')
+      .on(t.statusChangedAt)
+      .where(sql`${t.status} = 'awaiting_confirmation'`),
     // O shared recusa ajuste acima de 200 m (haversine); a trava do banco tem folga de 5 m
     // para não recusar o que o shared aceitou por diferença de cálculo.
     check(

@@ -102,7 +102,13 @@ export async function claimPushToken(tx: Transaction, token: string): Promise<vo
   await tx.execute(sql`select device_claim_push_token(${token})`);
 }
 
-/** Confirma as solicitações sem resposta do cidadão no prazo; devolve quantas confirmou. */
+/** Candidatas por chamada de `auto_confirm_requests()` (o LIMIT da função, migração 0035). */
+export const AUTO_CONFIRM_BATCH = 100;
+
+/**
+ * Confirma até `AUTO_CONFIRM_BATCH` solicitações sem resposta do cidadão no prazo; devolve quantas
+ * confirmou. Chamar de novo enquanto devolver o tamanho do lote.
+ */
 export async function autoConfirmRequests(db: Executor): Promise<number> {
   const { rows } = await db.execute<{ confirmed: number }>(
     sql`select auto_confirm_requests() as confirmed`,

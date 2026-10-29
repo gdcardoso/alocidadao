@@ -11,7 +11,7 @@ import { panelAuthHeader } from '../test/panel.js';
 import { daysAgo, panelFixtures } from '../test/panel-fixtures.js';
 import { testAuthOptions } from '../test/session.js';
 import { API_TEST_APP_URL, API_TEST_OWNER_URL } from '../test/urls.js';
-import { dispatchNotifications } from './dispatcher.js';
+import { DISPATCH_CONCURRENCY, dispatchNotifications } from './dispatcher.js';
 
 const { devices, notificationOutbox, users, workOrders } = schema;
 
@@ -183,6 +183,39 @@ describe('dispatchNotifications', () => {
     const row = await outboxRow(id);
     expect(row).toMatchObject({ status: 'sent', attempts: 1 });
     expect(row.sentAt).not.toBeNull();
+  });
+
+  it('processes at most DISPATCH_CONCURRENCY rows at a time', async () => {
+    const { seed, request } = await citizenRequest();
+    await addDevice(seed.citizenId, 'android');
+    const total = DISPATCH_CONCURRENCY * 3 + 2;
+    const ids = [];
+    for (let i = 0; i < total; i++) {
+      ids.push(
+        await queue({
+          tenantId: seed.tenantId,
+          userId: seed.citizenId,
+          kind: 'request_in_progress',
+          protocol: request.protocol,
+          requestId: request.id,
+        }),
+      );
+    }
+    let inFlight = 0;
+    let peak = 0;
+    const android: PushSender = {
+      send: async () => {
+        peak = Math.max(peak, ++inFlight);
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        inFlight--;
+        return { kind: 'sent' };
+      },
+    };
+
+    expect(await dispatchNotifications(deps({ android }))).toBe(total);
+
+    expect(peak).toBe(DISPATCH_CONCURRENCY);
+    for (const id of ids) expect((await outboxRow(id)).status).toBe('sent');
   });
 
   it('sends once per distinct token', async () => {

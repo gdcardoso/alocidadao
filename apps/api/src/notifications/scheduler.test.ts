@@ -42,6 +42,7 @@ describe('notification scheduler', () => {
     const scheduler = startScheduler(deps(), {
       dispatchEveryMs: 5_000,
       maintenanceEveryMs: 600_000,
+      maintenanceFirstRunMs: 3_600_000,
     });
 
     await vi.advanceTimersByTimeAsync(4_999);
@@ -66,6 +67,56 @@ describe('notification scheduler', () => {
     expect(db.claimNotifications).toHaveBeenCalledTimes(240);
   });
 
+  it('runs maintenance shortly after start, then on its interval', async () => {
+    const scheduler = startScheduler(deps(), {
+      dispatchEveryMs: 60_000,
+      maintenanceEveryMs: 600_000,
+      maintenanceFirstRunMs: 30_000,
+    });
+
+    await vi.advanceTimersByTimeAsync(29_999);
+    expect(db.autoConfirmRequests).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(db.autoConfirmRequests).toHaveBeenCalledTimes(1);
+    expect(db.cleanupNotifications).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(600_000 - 30_000);
+    expect(db.autoConfirmRequests).toHaveBeenCalledTimes(2);
+    await scheduler.stop();
+  });
+
+  it('does not run the first maintenance after stop', async () => {
+    const scheduler = startScheduler(deps(), { maintenanceFirstRunMs: 30_000 });
+    await scheduler.stop();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(db.autoConfirmRequests).not.toHaveBeenCalled();
+  });
+
+  it('repeats auto confirm while the batch is full, up to a limit', async () => {
+    db.autoConfirmRequests
+      .mockResolvedValueOnce(100)
+      .mockResolvedValueOnce(100)
+      .mockResolvedValueOnce(7);
+    const d = deps();
+    const scheduler = startScheduler(d, {
+      dispatchEveryMs: 60_000,
+      maintenanceEveryMs: 600_000,
+      maintenanceFirstRunMs: 1_000,
+    });
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(db.autoConfirmRequests).toHaveBeenCalledTimes(3);
+    expect(d.log.info).toHaveBeenCalledWith(
+      { confirmed: 207 },
+      'Solicitações confirmadas automaticamente',
+    );
+
+    // Sempre cheio: para em 20 chamadas na rodada.
+    db.autoConfirmRequests.mockReset().mockResolvedValue(100);
+    await vi.advanceTimersByTimeAsync(600_000);
+    expect(db.autoConfirmRequests).toHaveBeenCalledTimes(20);
+    await scheduler.stop();
+  });
+
   it('does not overlap runs and waits for the running one on stop', async () => {
     let release!: () => void;
     db.claimNotifications.mockImplementationOnce(
@@ -74,6 +125,7 @@ describe('notification scheduler', () => {
     const scheduler = startScheduler(deps(), {
       dispatchEveryMs: 5_000,
       maintenanceEveryMs: 600_000,
+      maintenanceFirstRunMs: 3_600_000,
     });
 
     await vi.advanceTimersByTimeAsync(20_000);
@@ -95,7 +147,11 @@ describe('notification scheduler', () => {
     db.claimNotifications.mockRejectedValueOnce(new Error('banco fora'));
     db.autoConfirmRequests.mockRejectedValueOnce(new Error('trava'));
     const d = deps();
-    const scheduler = startScheduler(d, { dispatchEveryMs: 5_000, maintenanceEveryMs: 10_000 });
+    const scheduler = startScheduler(d, {
+      dispatchEveryMs: 5_000,
+      maintenanceEveryMs: 10_000,
+      maintenanceFirstRunMs: 3_600_000,
+    });
 
     await vi.advanceTimersByTimeAsync(10_000);
     expect(d.log.error).toHaveBeenCalledTimes(2);

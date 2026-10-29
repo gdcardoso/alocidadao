@@ -229,6 +229,15 @@ Feito no Plano 7 (`2026-10-29-notificacoes.md`): avisos gerados no banco por gat
   - API: PEM malformado ou arquivo da conta de serviço do FCM ausente sem aviso na subida; avisos da fila perdidos se `buildApp` falhar; stream HTTP/2 fechado sem `end` espera o tempo limite; aparelho com nova tentativa não recebe se outro aparelho da pessoa recebeu (decisão da Task 5); linha `sent` pode guardar `last_error`; `catch` do savepoint do logout sem teste; o mesmo token em duas plataformas fica com a última; rotas do sino sem teste entre prefeituras e lista sem `withPhotos` falso.
   - Web: `aria-haspopup` num botão que abre um painel simples; o número de não lidos não entra no nome acessível do botão ('Avisos'); sem testes da marcação que falha, do Esc e do clique fora; mocks de `PanelLayout`/`SupportMode` sem `panelNotifications`; largura do painel do sino em telas estreitas não conferida.
   - App: id do push sem conferência estrita de UUID; `openNotificationRoute` sem teste; `usePathname` faz a pilha da raiz renderizar de novo; a prefeitura do push não vai para a tela da atividade.
+- Menores da revisão final do Plano 7 que ficaram (relatório em `.superpowers/sdd/2026-10-29-notificacoes/final-review.md`; os itens 2, 3 e 4 foram corrigidos na migração 0035, no agendador e no despachante):
+  - Grants das funções da fila (`0034`) para `app_user`: defesa em profundidade; fazer um papel `notifier` com pool próprio para o agendador e mover os grants para ele.
+  - Falha do banco: o agendador loga um erro a cada 5 s por instância, sem recuo; fazer recuo exponencial ou logar só na mudança de estado (`scheduler.ts`).
+  - Destinatários do sino (`0033`, `FROM users u WHERE EXISTS (memberships ...)`): confirmar o plano com `EXPLAIN` num banco com dados ou reescrever partindo de `memberships` com `DISTINCT u.id`.
+  - A pegada da fila (`0034`) só confere `account_status` e `deleted_at`: reconferir o vínculo `field_agent` na pegada para os avisos `work_order_*` (quem saiu da equipe ainda recebe nas novas tentativas, até cerca de 2 h depois).
+  - O e-mail do cidadão não é verificado (`apps/api/src/me/routes.ts`), mas a conclusão passa a ser enviada a ele: decisão de produto (verificar o e-mail ou enviar só aos verificados).
+  - Sino que abre atividade já fora da fila cai em outra atividade sem aviso (`apps/web/src/work/WorkQueueLayout.tsx`): mostrar "Esta atividade já saiu da fila" em vez de abrir a primeira ou a última.
+  - Sessão revogada no servidor, expirada ou encerrada pelo logout offline deixa o token do aparelho no lugar (`apps/api/src/auth/app-routes.ts`): apagar o token do aparelho ao revogar a sessão no servidor.
+  - Ordem de implantação: o gatilho da 0033 enche a fila assim que a migração roda; rodar a migração e subir a API juntas, ou anotar no checklist de deploy.
 - **Entrega real de push com Firebase e Apple** (seções 3 e 4 do `0002`): continua no fim, depois dos testes em aparelho real.
 
 ## Plano 8 — Infraestrutura

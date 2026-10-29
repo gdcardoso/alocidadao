@@ -232,6 +232,13 @@
       "when": 1793304432273,
       "tag": "0032_notifications_access",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1793304783968,
+      "tag": "0033_notify_from_status_event",
+      "breakpoints": true
     }
   ]
 }

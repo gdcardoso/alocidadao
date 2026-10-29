@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray, or } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDatabase, withContext, type Database } from './client.js';
 import { DEMO_ADDRESSES, DEMO_UNSERVED_CENTER, seedDev } from './seed-dev-data.js';
@@ -9,7 +9,9 @@ import {
   clientActions,
   departmentManagers,
   memberships,
+  notificationOutbox,
   occurrences,
+  panelNotifications,
   photos,
   requests,
   statusEvents,
@@ -294,6 +296,12 @@ describe('dados de demonstração', () => {
     await owner.db.delete(memberships).where(eq(memberships.userId, before.managerId));
     // As atribuições da demo apontam para o gestor; saem com ele e voltam com o novo.
     await owner.db.delete(statusEvents).where(eq(statusEvents.actorUserId, before.managerId));
+    // Os avisos gerados pelos eventos da demo também apontam para as pessoas que saem.
+    for (const table of [panelNotifications, notificationOutbox]) {
+      await owner.db
+        .delete(table)
+        .where(or(eq(table.userId, before.managerId), eq(table.userId, before.platformAdminId)));
+    }
     await owner.db.delete(users).where(eq(users.id, before.managerId));
     await owner.db.delete(users).where(eq(users.id, before.platformAdminId));
     const after = await seedDev(owner.db);
@@ -362,6 +370,8 @@ describe('dados de demonstração', () => {
     // Simula o TRUNCATE de uma migração: some o operacional, ficam prefeitura, equipe e pessoas.
     const tenantId = before.tenantId;
     await owner.db.delete(statusEvents).where(eq(statusEvents.tenantId, tenantId));
+    await owner.db.delete(panelNotifications).where(eq(panelNotifications.tenantId, tenantId));
+    await owner.db.delete(notificationOutbox).where(eq(notificationOutbox.tenantId, tenantId));
     await owner.db.delete(photos).where(eq(photos.tenantId, tenantId));
     await owner.db.delete(workOrders).where(eq(workOrders.tenantId, tenantId));
     await owner.db.delete(requests).where(eq(requests.tenantId, tenantId));

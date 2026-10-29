@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { formatDate, formatDateTime, formatDayMonth, formatNumericDate } from './date';
+import {
+  formatDate,
+  formatDateTime,
+  formatDayMonth,
+  formatNumericDate,
+  formatNumericDateTime,
+} from './date';
 
 describe('formatDayMonth', () => {
   it('formats day and short month in Brasília time', () => {
@@ -30,5 +36,12 @@ describe('formatNumericDate', () => {
   it('formats dd/mm/yyyy in Brasília time', () => {
     expect(formatNumericDate(new Date('2026-08-12T15:00:00Z'))).toBe('12/08/2026');
     expect(formatNumericDate(new Date('2027-01-01T01:00:00Z'))).toBe('31/12/2026');
+  });
+});
+
+describe('formatNumericDateTime', () => {
+  it('formats dd/mm/yyyy and hour in Brasília time', () => {
+    expect(formatNumericDateTime(new Date('2026-10-21T18:40:00Z'))).toBe('21/10/2026, 15:40');
+    expect(formatNumericDateTime(new Date('2027-01-01T01:05:00Z'))).toBe('31/12/2026, 22:05');
   });
 });

@@ -53,3 +53,11 @@ export function formatNumericDate(date: Date): string {
   const pick = (type: string) => parts.find((part) => part.type === type)?.value ?? '';
   return `${pick('day')}/${pick('month')}/${pick('year')}`;
 }
+
+/** Data numérica e hora no horário de Brasília: `21/10/2026, 15:40`. */
+export function formatNumericDateTime(date: Date): string {
+  const parts = DATE_TIME_PARTS.formatToParts(date);
+  const hour = parts.find((part) => part.type === 'hour')?.value ?? '00';
+  const minute = parts.find((part) => part.type === 'minute')?.value ?? '00';
+  return `${formatNumericDate(date)}, ${hour}:${minute}`;
+}

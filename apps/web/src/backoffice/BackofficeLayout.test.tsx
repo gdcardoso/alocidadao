@@ -111,10 +111,4 @@ describe('BackofficeLayout', () => {
     await waitFor(() => expect(api.me).toHaveBeenCalled());
     expect(screen.queryByRole('link', { name: 'Auditoria' })).not.toBeInTheDocument();
   });
-
-  it('coming soon page shows the item title and the text', async () => {
-    renderApp('/backoffice/auditoria');
-    expect(await screen.findByRole('heading', { name: 'Auditoria' })).toBeInTheDocument();
-    expect(screen.getByText('Esta tela chega na próxima etapa do backoffice.')).toBeInTheDocument();
-  });
 });

@@ -6,6 +6,7 @@ import { View } from 'react-native';
 import { AberturaOverlay } from '../abertura/AberturaOverlay';
 import { SessionProvider } from '../auth/session-context';
 import { useSession } from '../auth/use-session';
+import { useNotificationTaps } from '../lib/use-notification-taps';
 import { useAppFonts } from '../ui/fonts';
 import { colors } from '../ui/theme';
 
@@ -49,6 +50,8 @@ function Gate({ fontsReady }: { fontsReady: boolean }) {
  */
 function RootStack() {
   const { status } = useSession();
+  // Toque no push: abre a solicitação ou a atividade quando a sessão e o roteador estão prontos.
+  useNotificationTaps();
   return (
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
       <Stack.Screen name="index" />

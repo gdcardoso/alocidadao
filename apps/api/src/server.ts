@@ -51,7 +51,7 @@ const app = await buildApp({
   database: databaseHandle?.db,
   push,
   devRoutes: env.devRoutes,
-  // Envio dos avisos, confirmação automática e limpeza; para no onClose, antes do pool.
+  // Envio dos avisos, confirmação automática e limpeza; para no preClose, antes do pool fechar.
   notifications: { scheduler: true },
   // Não há provedor de SMS: fora de produção o código sai no log; em produção, 503.
   auth: env.auth && databaseHandle ? { ...env.auth, email } : undefined,

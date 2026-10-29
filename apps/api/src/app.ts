@@ -53,7 +53,7 @@ export interface AppOptions {
   /**
    * Agendador dos avisos (envio da fila, confirmação automática e limpeza). Desligado por padrão
    * (testes chamam o envio direto); precisa de `database`, `auth` (o e-mail) e dos dois senders
-   * de `push`. Começa com o servidor pronto e para no fechamento.
+   * de `push`. Começa com o servidor pronto e para no preClose, antes dos onClose.
    */
   notifications?: { scheduler: boolean };
   /**
@@ -194,7 +194,9 @@ export async function buildApp({
           log: app.log,
         });
       });
-      app.addHook('onClose', async () => {
+      // preClose roda antes de todo onClose (o pool do banco fecha num onClose do server.ts):
+      // a rodada em andamento termina com o banco ainda aberto.
+      app.addHook('preClose', async () => {
         await scheduler?.stop();
       });
     }

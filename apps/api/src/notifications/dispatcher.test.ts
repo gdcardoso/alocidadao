@@ -302,6 +302,35 @@ describe('dispatchNotifications', () => {
     expect(android.calls).toHaveLength(5);
   });
 
+  it('a device that received makes the row sent even when another asks for retry', async () => {
+    const { seed, request } = await citizenRequest();
+    const ok = await addDevice(seed.citizenId, 'android');
+    const busy = await addDevice(seed.citizenId, 'ios');
+    const id = await queue({
+      tenantId: seed.tenantId,
+      userId: seed.citizenId,
+      kind: 'request_in_progress',
+      protocol: request.protocol,
+      requestId: request.id,
+    });
+    const android = fakeSender();
+    const ios = fakeSender({ [busy]: { kind: 'retry', reason: 'server_error_503' } });
+
+    await dispatchNotifications(deps({ android: android.sender, ios: ios.sender }));
+    const row = await outboxRow(id);
+    expect(row).toMatchObject({ status: 'sent', attempts: 1 });
+    expect(row.lastError).toContain('server_error_503');
+
+    // Nada volta à fila: quem já recebeu não recebe de novo.
+    await owner.db
+      .update(notificationOutbox)
+      .set({ nextAttemptAt: sql`now()` })
+      .where(eq(notificationOutbox.id, id));
+    expect(await dispatchNotifications(deps({ android: android.sender, ios: ios.sender }))).toBe(0);
+    expect(android.calls.map((c) => c.token)).toEqual([ok]);
+    expect(ios.calls.map((c) => c.token)).toEqual([busy]);
+  });
+
   it('a throwing sender reschedules and the loop keeps going', async () => {
     const first = await citizenRequest();
     const second = await citizenRequest();

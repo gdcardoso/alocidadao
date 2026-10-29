@@ -280,13 +280,22 @@ export function registerAppAuthRoutes(instance: FastifyInstance, deps: AuthDeps)
           .where(and(eq(sessions.id, sessionId), sql`${sessions.revokedAt} is null`))
           .returning({ installationId: sessions.installationId });
         // Quem sai do app não recebe mais push neste aparelho (a sessão do painel não tem aparelho).
-        if (session?.installationId) {
-          await tx
-            .update(devices)
-            .set({ pushToken: null })
-            .where(
-              and(eq(devices.userId, userId), eq(devices.installationId, session.installationId)),
+        // Num savepoint: falha ao apagar o token não impede a saída.
+        const installationId = session?.installationId;
+        if (installationId) {
+          try {
+            await tx.transaction((sp) =>
+              sp
+                .update(devices)
+                .set({ pushToken: null })
+                .where(and(eq(devices.userId, userId), eq(devices.installationId, installationId))),
             );
+          } catch (error) {
+            request.log.warn(
+              { error: error instanceof Error ? error.message : String(error) },
+              'Saída sem apagar o token de push do aparelho',
+            );
+          }
         }
       });
       return reply.code(204).send();

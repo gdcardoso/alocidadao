@@ -13,6 +13,7 @@ vi.mock('@alocidadao/db', async (importOriginal) => ({
 }));
 
 const { startScheduler } = await import('./scheduler.js');
+const { buildApp } = await import('../app.js');
 
 function deps() {
   const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
@@ -105,5 +106,46 @@ describe('notification scheduler', () => {
     expect(db.cleanupNotifications).toHaveBeenCalledTimes(2);
 
     await scheduler.stop();
+  });
+
+  it('closing the app waits for the running dispatch before the onClose hooks', async () => {
+    // Só os intervalos são falsos: o fechamento do Fastify usa os timers de verdade.
+    vi.useRealTimers();
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    const order: string[] = [];
+    let release!: () => void;
+    db.claimNotifications.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = () => {
+            order.push('dispatch finished');
+            resolve([]);
+          };
+        }),
+    );
+    const sender = { send: vi.fn() };
+    const app = await buildApp({
+      database: {} as Database,
+      auth: {
+        secret: 'segredo-de-teste-da-api-com-mais-de-32-caracteres',
+        email: { send: vi.fn() },
+      },
+      push: { android: sender, ios: sender },
+      notifications: { scheduler: true },
+    });
+    // Como o server.ts: o pool fecha num onClose registrado depois do buildApp.
+    app.addHook('onClose', async () => {
+      order.push('pool closed');
+    });
+    await app.ready();
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(db.claimNotifications).toHaveBeenCalledTimes(1);
+
+    const closing = app.close();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(order).toEqual([]);
+    release();
+    await closing;
+    expect(order).toEqual(['dispatch finished', 'pool closed']);
   });
 });

@@ -91,10 +91,12 @@ async function sendPush(
     }
   }
 
-  // Nova tentativa reenvia para todos os tokens da pessoa (sem registro por aparelho).
+  // Algum aparelho recebeu: a linha está enviada (nova tentativa reenviaria a quem já recebeu);
+  // as falhas dos outros ficam só no registro.
+  if (delivered > 0)
+    return { status: 'sent', error: retries.length > 0 ? retries.join('; ') : null };
   if (retries.length > 0) return retryOrFail(row.attempts, retries.join('; '));
-  if (delivered === 0) return { status: 'skipped', error: 'invalid_token' };
-  return { status: 'sent' };
+  return { status: 'skipped', error: 'invalid_token' };
 }
 
 async function sendEmail(

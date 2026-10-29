@@ -427,17 +427,15 @@ describe('equipe interna no painel (modo suporte)', () => {
       await changeManagerEmail(asStaff, manager.id, `novo.${email}`);
       expect((await userRow(manager.id)).email).toBe(`novo.${email}`);
 
-      // As recusas do alvo continuam: agente que já entrou e admin da prefeitura.
+      // A recusa do agente que já entrou continua; o admin da prefeitura a equipe troca (6b).
       await owner.db.update(users).set({ lastActiveAt: new Date() }).where(eq(users.id, agent));
       expect(await pgError(changeAgentPhone(asStaff, agent, newPhone()))).toMatchObject({
         code: '23514',
         message: 'phone_change_not_allowed',
       });
       await link(tenantA, manager.id, 'tenant_admin');
-      expect(await pgError(changeManagerEmail(asStaff, manager.id, `x.${email}`))).toMatchObject({
-        code: '23514',
-        message: 'email_change_not_allowed',
-      });
+      await changeManagerEmail(asStaff, manager.id, `x.${email}`);
+      expect((await userRow(manager.id)).email).toBe(`x.${email}`);
     }
   });
 

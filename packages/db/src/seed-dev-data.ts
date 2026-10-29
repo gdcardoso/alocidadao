@@ -12,6 +12,7 @@ import { and, asc, count, desc, eq, inArray, notInArray, sql } from 'drizzle-orm
 import { geoPoint, type Database, type Transaction } from './client.js';
 import {
   categories,
+  cityInterest,
   departmentManagers,
   departments,
   memberships,
@@ -65,6 +66,15 @@ export const DEMO_UNSERVED_CENTER: GeoPoint = {
   lng: CENTER.lng + 2 * BOUNDARY_HALF_SIDE,
 };
 const DEMO_UNSERVED_IBGE_CODE = '9999902';
+
+/**
+ * Outros dois municípios inventados sem prefeitura, longe da demo (1 e 2 graus ao norte), só para a
+ * P5 (interesse por cidade) ter uma lista.
+ */
+const DEMO_INTEREST_MUNICIPALITIES = [
+  { ibgeCode: '9999903', name: 'Serra Sem Adesão', state: 'MG', dLat: 1 },
+  { ibgeCode: '9999904', name: 'Porto Sem Adesão', state: 'RJ', dLat: 2 },
+] as const;
 
 /** Os 9 tipos da tela 5, com o ícone Lucide, o grupo e o raio de agrupamento (spec 5.2). */
 const DEMO_CATALOG: ReadonlyArray<{
@@ -1058,6 +1068,7 @@ export async function seedDev(db: Database, options: SeedDevOptions = {}): Promi
     const workOrderIds = await seedDemoWorkOrders(tx, { ...base, ...staff }, options);
     const panelWorkOrderIds = await seedDemoQueue(tx, { ...base, ...staff }, options);
     const triageIds = await seedDemoTriage(tx, base, options);
+    await seedCityInterest(tx, base.citizenId);
     if (options.reset) {
       const demoOrders = await tx
         .select({ occurrenceId: workOrders.occurrenceId })
@@ -1120,6 +1131,12 @@ async function seedMunicipalities(tx: Transaction): Promise<void> {
         state: 'SP',
         boundary: squareAround(DEMO_UNSERVED_CENTER),
       },
+      ...DEMO_INTEREST_MUNICIPALITIES.map((item) => ({
+        ibgeCode: item.ibgeCode,
+        name: item.name,
+        state: item.state,
+        boundary: squareAround({ lat: CENTER.lat + item.dLat, lng: CENTER.lng }),
+      })),
     ])
     .onConflictDoUpdate({
       target: municipalities.ibgeCode,
@@ -1129,6 +1146,41 @@ async function seedMunicipalities(tx: Transaction): Promise<void> {
         boundary: sql`excluded.boundary`,
       },
     });
+}
+
+/**
+ * Interesse por cidade (P5): os cidadãos demo pedem o app em 3 municípios sem prefeitura (3, 2 e 1
+ * pedidos, com um antigo fora dos últimos 30 dias) e no município da demo, que já é cliente.
+ * Idempotente: não mexe no que já existe.
+ */
+async function seedCityInterest(tx: Transaction, citizenId: string): Promise<void> {
+  const extras = await tx
+    .select({ id: users.id, email: users.email })
+    .from(users)
+    .where(
+      inArray(
+        users.email,
+        EXTRA_CITIZENS.map((citizen) => citizen.email),
+      ),
+    );
+  const [second, third] = EXTRA_CITIZENS.map(
+    (citizen) => extras.find((row) => row.email === citizen.email)!.id,
+  );
+  const [serra, porto] = DEMO_INTEREST_MUNICIPALITIES.map((item) => item.ibgeCode);
+  const now = Date.now();
+  const at = (days: number) => new Date(now - days * DAY_MS);
+  await tx
+    .insert(cityInterest)
+    .values([
+      { ibgeCode: DEMO_UNSERVED_IBGE_CODE, userId: citizenId, createdAt: at(45) },
+      { ibgeCode: DEMO_UNSERVED_IBGE_CODE, userId: second!, createdAt: at(12) },
+      { ibgeCode: DEMO_UNSERVED_IBGE_CODE, userId: third!, createdAt: at(2) },
+      { ibgeCode: serra!, userId: citizenId, createdAt: at(20) },
+      { ibgeCode: serra!, userId: second!, createdAt: at(5) },
+      { ibgeCode: porto!, userId: third!, createdAt: at(1) },
+      { ibgeCode: DEMO_IBGE_CODE, userId: second!, createdAt: at(60) },
+    ])
+    .onConflictDoNothing();
 }
 
 /** Cria a conta pelo CPF se faltar (a existente fica com o nome da demo); devolve o id. */

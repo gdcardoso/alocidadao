@@ -176,6 +176,20 @@
       "when": 1793048721594,
       "tag": "0024_backoffice_functions",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1793277798192,
+      "tag": "0025_audit_without_tenant",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1793277807695,
+      "tag": "0026_backoffice_6b",
+      "breakpoints": true
     }
   ]
 }

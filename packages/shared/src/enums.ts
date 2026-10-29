@@ -15,7 +15,14 @@ export type PhotoReview = (typeof PHOTO_REVIEWS)[number];
 export const ICON_GROUPS = ['infrastructure', 'environment', 'public_services'] as const;
 export type IconGroup = (typeof ICON_GROUPS)[number];
 
-export const COMMERCIAL_STATUSES = ['new', 'contacted', 'negotiating', 'won', 'lost'] as const;
+export const COMMERCIAL_STATUSES = [
+  'new',
+  'contacted',
+  'proposal_sent',
+  'negotiating',
+  'won',
+  'lost',
+] as const;
 export type CommercialStatus = (typeof COMMERCIAL_STATUSES)[number];
 
 export const PHOTO_PURPOSES = ['report', 'contest', 'completion', 'impediment'] as const;

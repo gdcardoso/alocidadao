@@ -222,14 +222,15 @@ export const tenantContracts = pgTable(
 );
 
 /**
- * O que a equipe interna fez dentro de uma prefeitura. A prefeitura lê; só inserção
- * (UPDATE e DELETE não são concedidos a app_user).
+ * O que a equipe interna fez dentro de uma prefeitura, ou no backoffice (sem prefeitura: equipe,
+ * situação comercial). A prefeitura lê as suas; só inserção (UPDATE e DELETE não são concedidos
+ * a app_user).
  */
 export const staffAuditEvents = pgTable(
   'staff_audit_events',
   {
     id: id(),
-    tenantId: tenantId(),
+    tenantId: uuid('tenant_id').references(() => tenants.id),
     staffUserId: uuid('staff_user_id')
       .notNull()
       .references(() => users.id),

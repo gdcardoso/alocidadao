@@ -266,6 +266,22 @@ describe('TeamsPage', () => {
     expect(await screen.findByText('Ana Souza adicionado à equipe.')).toBeInTheDocument();
   });
 
+  it('staff_account_not_allowed on agent shows the staff phone message', async () => {
+    addAgent.mockRejectedValueOnce(new ApiError(409, { code: 'staff_account_not_allowed' }));
+    const user = renderPage();
+    await user.click(await screen.findByRole('button', { name: 'Adicionar agente' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Adicionar agente' });
+    await user.type(within(dialog).getByLabelText('Nome'), 'Ana');
+    await user.type(within(dialog).getByLabelText('Celular'), '11988771020');
+    await user.click(within(dialog).getByRole('button', { name: 'Adicionar' }));
+    expect(
+      await within(dialog).findByText(
+        'Este número é de alguém da equipe Alô Cidadão. Use outro número.',
+      ),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByLabelText('Celular')).toHaveAttribute('aria-invalid', 'true');
+  });
+
   it('change phone is only offered to agents who never signed in', async () => {
     updateAgent.mockResolvedValue(marcos);
     const user = renderPage();

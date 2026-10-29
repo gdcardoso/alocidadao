@@ -19,13 +19,13 @@ const CHANGED_CODES = [
  * Decisões do gestor sobre uma atividade da fila (W3 e W4): controla o "pendente", mostra o aviso
  * e, dando certo ou não (atividade que mudou), recarrega a fila e os contadores para o layout
  * abrir o próximo item. Devolve `true` quando a fila foi recarregada (deu certo ou mudou).
+ *
+ * O detalhe não é apagado do cache aqui: ele continua aberto até a fila voltar, e qualquer
+ * renderização nesse meio-tempo (os contadores mudam o contexto do painel) o buscaria de novo,
+ * já fora da fila (404). Quem mostra o detalhe usa `gcTime: 0`, e ele some ao fechar.
  */
-export function useWorkOrderDecision(options: {
-  tenantId: string;
-  queueKey: QueryKey;
-  detailKey: QueryKey;
-}) {
-  const { tenantId, queueKey, detailKey } = options;
+export function useWorkOrderDecision(options: { tenantId: string; queueKey: QueryKey }) {
+  const { tenantId, queueKey } = options;
   const queryClient = useQueryClient();
   const toast = useToast();
   const [pending, setPending] = useState(false);
@@ -47,7 +47,6 @@ export function useWorkOrderDecision(options: {
     } finally {
       setPending(false);
     }
-    queryClient.removeQueries({ queryKey: detailKey });
     void queryClient.invalidateQueries({ queryKey: queueKey });
     void queryClient.invalidateQueries({ queryKey: panelCountsKey(tenantId) });
     void queryClient.invalidateQueries({ queryKey: ['occurrences'] });

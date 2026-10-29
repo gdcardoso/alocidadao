@@ -18,6 +18,7 @@ import { Button } from '../../ui/Button';
 import fields from '../../ui/Field.module.css';
 import { TopBar } from '../../ui/TopBar';
 import { useToast } from '../../ui/Toast';
+import { FrozenAccountPanel } from '../frozen/FrozenAccountPanel';
 import { useBackofficeContext } from '../use-backoffice-context';
 import { MunicipalitySearch } from './MunicipalitySearch';
 import styles from './NewTenantPage.module.css';
@@ -58,16 +59,19 @@ export function NewTenantPage() {
   const [copyCatalog, setCopyCatalog] = useState(true);
   const [errors, setErrors] = useState<Errors>({});
   const [generalError, setGeneralError] = useState<string | null>(null);
+  /** CPF e e-mail do admin quando o CPF está preso numa conta congelada. */
+  const [frozen, setFrozen] = useState<{ cpf: string; email: string } | null>(null);
 
   const create = useMutation({
     mutationFn: (body: Parameters<typeof api.backofficeCreateTenant>[0]) =>
       session.withAuth(() => api.backofficeCreateTenant(body)),
+    onMutate: () => setFrozen(null),
     onSuccess: async (created) => {
       await queryClient.invalidateQueries({ queryKey: ['backoffice', 'tenants'] });
       toast.show('Prefeitura criada. Ela está em implantação.');
       void navigate(`${LIST_PATH}/${created.id}`);
     },
-    onError: (error) => {
+    onError: (error, body) => {
       const code = errorCode(error);
       if (code === 'municipality_not_found') {
         setErrors({ municipality: 'Município não encontrado. Busque de novo.' });
@@ -82,9 +86,7 @@ export function NewTenantPage() {
       } else if (code === 'staff_account_not_allowed') {
         setErrors({ cpf: 'Esta pessoa é da equipe Alô Cidadão. Use outro CPF.' });
       } else if (code === 'cpf_unavailable') {
-        setErrors({
-          cpf: 'Este CPF está numa conta bloqueada. Fale com o suporte do Alô Cidadão.',
-        });
+        setFrozen({ cpf: body.admin.cpf, email: body.admin.email });
       } else {
         setGeneralError(generalErrorMessage(error));
       }
@@ -274,6 +276,7 @@ export function NewTenantPage() {
                   onChange={(event) => {
                     setCpf(event.target.value.replace(/\D/g, '').slice(0, 11));
                     clear('cpf');
+                    setFrozen(null);
                   }}
                 />
                 {errorText('cpf')}
@@ -293,6 +296,7 @@ export function NewTenantPage() {
                   onChange={(event) => {
                     setEmail(event.target.value);
                     clear('email');
+                    setFrozen(null);
                   }}
                 />
                 {errorText('email')}
@@ -302,6 +306,15 @@ export function NewTenantPage() {
               Ele entra no painel com o CPF e recebe o código neste e-mail. Depois cadastra
               gestores, equipes e agentes.
             </p>
+            {frozen ? (
+              // A prefeitura ainda não existe: a recuperação vai sem prefeitura.
+              <FrozenAccountPanel
+                cpf={frozen.cpf}
+                email={frozen.email}
+                tenantId={null}
+                onResolved={submit}
+              />
+            ) : null}
           </section>
         </div>
 

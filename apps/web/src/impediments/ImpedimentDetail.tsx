@@ -23,6 +23,8 @@ export function ImpedimentDetailView({ workOrderId }: { workOrderId: string }) {
   const query = useQuery({
     queryKey: impedimentKey(tenantId, workOrderId),
     queryFn: () => session.withAuth(() => api.panelImpediment(tenantId, workOrderId)),
+    // Sai do cache ao fechar: um item que volta à fila não abre com dados antigos.
+    gcTime: 0,
   });
   if (query.error) {
     return (
@@ -42,7 +44,6 @@ function ImpedimentForm({ impediment }: { impediment: ImpedimentDetail }) {
   const { pending, decide } = useWorkOrderDecision({
     tenantId,
     queueKey: impedimentQueueKey(tenantId),
-    detailKey: impedimentKey(tenantId, impediment.workOrderId),
   });
   const reason = impediment.reason ?? 'other';
   const ReasonIcon = REASON_ICONS[reason];

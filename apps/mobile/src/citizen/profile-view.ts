@@ -21,6 +21,14 @@ export function phoneChangeErrorMessage(error: unknown): string {
   return apiErrorMessage(error);
 }
 
+/** Erro do "Excluir minha conta"; o último Admin da equipe precisa passar o papel antes. */
+export function deleteAccountErrorMessage(error: unknown): string {
+  if (apiErrorCode(error) === 'last_platform_admin') {
+    return 'Você é o último Admin da equipe Alô Cidadão. Passe o papel a outra pessoa antes de excluir a conta.';
+  }
+  return apiErrorMessage(error);
+}
+
 /** Cidade do chip "Você está em": a da prefeitura ou a do município sem prefeitura. */
 export function cityFromLocate(locate: LocateResponse): string | null {
   if (locate.status === 'served') return locate.tenant.city;

@@ -8,7 +8,7 @@ import { MemoryRouter, useLocation } from 'react-router';
 import { vi } from 'vitest';
 import { createPanelSession } from '../session/panel-session';
 import { SessionProvider } from '../session/SessionProvider';
-import { PanelValueContext } from '../shell/use-panel';
+import { PanelValueContext, type PanelValue } from '../shell/use-panel';
 import { ToastProvider } from '../ui/Toast';
 
 export const tenantId = '3f2b8c1e-5a4d-4e6f-8a7b-9c0d1e2f3a4b';
@@ -23,6 +23,7 @@ export function renderAdminPage(
   page: ReactElement,
   path: string,
   role: PanelContext['role'] = 'tenant_admin',
+  support: PanelValue['support'] = null,
 ) {
   const session = createPanelSession({
     client: {
@@ -41,7 +42,7 @@ export function renderAdminPage(
   render(
     <QueryClientProvider client={queryClient}>
       <SessionProvider session={session}>
-        <PanelValueContext.Provider value={{ tenantId, context, counts: undefined, support: null }}>
+        <PanelValueContext.Provider value={{ tenantId, context, counts: undefined, support }}>
           <ToastProvider>
             <MemoryRouter initialEntries={[path]}>
               {page}

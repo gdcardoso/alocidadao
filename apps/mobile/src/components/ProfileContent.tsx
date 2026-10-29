@@ -14,10 +14,9 @@ import {
 } from 'lucide-react-native';
 import { Fragment, useState, type ReactNode } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { apiErrorMessage } from '../auth/login-flow';
 import { sessionApi } from '../auth/native-session';
 import { useSession } from '../auth/use-session';
-import { pendingCount, signOutWarning } from '../citizen/profile-view';
+import { deleteAccountErrorMessage, pendingCount, signOutWarning } from '../citizen/profile-view';
 import { openOutboxStore } from '../offline/sqlite-outbox-store';
 import { SecondaryButton, TextButton } from '../ui/Button';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
@@ -76,7 +75,7 @@ export function ProfileContent() {
       await signOut();
     } catch (e) {
       setConfirmDelete(false);
-      setError(apiErrorMessage(e));
+      setError(deleteAccountErrorMessage(e));
     } finally {
       setDeleting(false);
     }

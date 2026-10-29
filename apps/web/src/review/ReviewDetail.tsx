@@ -35,6 +35,8 @@ export function ReviewDetailView({ workOrderId }: { workOrderId: string }) {
   const query = useQuery({
     queryKey: reviewKey(tenantId, workOrderId),
     queryFn: () => session.withAuth(() => api.panelReview(tenantId, workOrderId)),
+    // Sai do cache ao fechar: um item que volta à fila não abre com o texto e as fotos antigos.
+    gcTime: 0,
   });
   if (query.error) {
     return (
@@ -61,7 +63,6 @@ function ReviewForm({ review }: { review: ReviewDetail }) {
   const { pending, decide } = useWorkOrderDecision({
     tenantId,
     queueKey: reviewQueueKey(tenantId),
-    detailKey: reviewKey(tenantId, review.workOrderId),
   });
 
   function publish() {

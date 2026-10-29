@@ -110,6 +110,8 @@ export function AddAgentDialog({ team, onClose }: AddAgentDialogProps) {
         );
       } else if (code === 'agent_already_in_team') {
         setPhoneError('Este agente já está nesta equipe.');
+      } else if (code === 'staff_account_not_allowed') {
+        setPhoneError('Este número é de alguém da equipe Alô Cidadão. Use outro número.');
       } else {
         setGeneralError(generalErrorMessage(error));
       }

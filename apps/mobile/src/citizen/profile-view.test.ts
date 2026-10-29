@@ -2,6 +2,7 @@ import { ApiError } from '@alocidadao/api-client';
 import { describe, expect, it } from 'vitest';
 import {
   cityFromLocate,
+  deleteAccountErrorMessage,
   pendingCount,
   phoneChangeErrorMessage,
   signOutWarning,
@@ -35,6 +36,15 @@ describe('profile view', () => {
     );
     expect(phoneChangeErrorMessage(new ApiError(400, { code: 'code_invalid' }))).toBe(
       'Código incorreto. Confira e tente de novo.',
+    );
+  });
+
+  it('deleting the account as last admin shows the message', () => {
+    expect(deleteAccountErrorMessage(new ApiError(409, { code: 'last_platform_admin' }))).toBe(
+      'Você é o último Admin da equipe Alô Cidadão. Passe o papel a outra pessoa antes de excluir a conta.',
+    );
+    expect(deleteAccountErrorMessage(new ApiError(500, { code: 'internal' }))).toBe(
+      'Algo deu errado. Tente de novo.',
     );
   });
 

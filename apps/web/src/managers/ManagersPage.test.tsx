@@ -1,6 +1,6 @@
 import { ApiError } from '@alocidadao/api-client';
 import type { DepartmentRow, ManagerRow } from '@alocidadao/shared';
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '../api';
 import { renderAdminPage, tenantId } from '../test/render-page';
@@ -12,6 +12,9 @@ vi.mock('../api', () => ({
     panelCreateManager: vi.fn(),
     panelUpdateManager: vi.fn(),
     panelDepartments: vi.fn(),
+    backofficeFrozenAccountCode: vi.fn(),
+    backofficeRecoverFrozenAccount: vi.fn(),
+    backofficeReleaseFrozenCpf: vi.fn(),
   },
 }));
 
@@ -19,6 +22,7 @@ const managers = vi.mocked(api.panelManagers);
 const createManager = vi.mocked(api.panelCreateManager);
 const updateManager = vi.mocked(api.panelUpdateManager);
 const departments = vi.mocked(api.panelDepartments);
+const releaseCpf = vi.mocked(api.backofficeReleaseFrozenCpf);
 
 const deptObras = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
 const deptLimpeza = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
@@ -63,6 +67,16 @@ beforeEach(() => {
     items: [dept(deptObras, 'Obras'), dept(deptLimpeza, 'Limpeza Urbana')],
   });
 });
+
+async function fillNewManager(user: ReturnType<typeof renderAdminPage>) {
+  await user.click(await screen.findByRole('button', { name: 'Novo gestor' }));
+  const dialog = await screen.findByRole('dialog', { name: 'Novo gestor' });
+  await user.type(within(dialog).getByLabelText('Nome'), 'Ana Souza');
+  await user.type(within(dialog).getByLabelText('CPF'), '52998224725');
+  await user.type(within(dialog).getByLabelText('E-mail'), 'ana@prefeitura.sp.gov.br');
+  await user.click(await within(dialog).findByRole('checkbox', { name: 'Obras' }));
+  return dialog;
+}
 
 describe('ManagersPage', () => {
   it('managers table masks the CPF and shows Todos for the admin', async () => {
@@ -157,6 +171,56 @@ describe('ManagersPage', () => {
     expect(
       await within(dialog).findByText('Esta pessoa já é gestora nesta prefeitura.'),
     ).toBeInTheDocument();
+    createManager.mockRejectedValueOnce(new ApiError(409, { code: 'staff_account_not_allowed' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Salvar' }));
+    expect(
+      await within(dialog).findByText('Esta pessoa é da equipe Alô Cidadão. Use outro CPF.'),
+    ).toBeInTheDocument();
+  });
+
+  it('in support mode cpf_unavailable shows the frozen account panel and retries', async () => {
+    createManager
+      .mockRejectedValueOnce(new ApiError(409, { code: 'cpf_unavailable' }))
+      .mockResolvedValueOnce(manager({ name: 'Ana Souza' }));
+    releaseCpf.mockResolvedValue(undefined);
+    const user = renderAdminPage(<ManagersPage />, '/equipes/gestores', 'tenant_admin', {
+      tenantId,
+      displayName: 'Prefeitura',
+    });
+    const dialog = await fillNewManager(user);
+    await user.click(within(dialog).getByRole('button', { name: 'Salvar' }));
+
+    expect(
+      await within(dialog).findByRole('region', { name: 'Conta bloqueada' }),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).queryByText(
+        'Este CPF está numa conta bloqueada. Fale com o suporte do Alô Cidadão.',
+      ),
+    ).not.toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Criar conta nova' }));
+    const confirm = await screen.findByRole('dialog', { name: 'Criar conta nova?' });
+    await user.click(within(confirm).getByRole('button', { name: 'Criar conta nova' }));
+
+    await waitFor(() => expect(createManager).toHaveBeenCalledTimes(2));
+    expect(releaseCpf).toHaveBeenCalledWith({ cpf: '52998224725', tenantId });
+    expect(await screen.findByText('Ana Souza cadastrado como gestor.')).toBeInTheDocument();
+  });
+
+  it('outside support mode cpf_unavailable keeps the 6a message', async () => {
+    createManager.mockRejectedValueOnce(new ApiError(409, { code: 'cpf_unavailable' }));
+    const user = renderAdminPage(<ManagersPage />, '/equipes/gestores');
+    const dialog = await fillNewManager(user);
+    await user.click(within(dialog).getByRole('button', { name: 'Salvar' }));
+
+    expect(
+      await within(dialog).findByText(
+        'Este CPF está numa conta bloqueada. Fale com o suporte do Alô Cidadão.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).queryByRole('region', { name: 'Conta bloqueada' }),
+    ).not.toBeInTheDocument();
   });
 
   it('edit saves email and departments; email_change_not_allowed shows the field error', async () => {

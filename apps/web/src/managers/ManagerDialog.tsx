@@ -10,6 +10,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useId, useState } from 'react';
 import { api } from '../api';
 import { maskCpfInput } from '../format/cpf';
+import { FrozenAccountPanel } from '../backoffice/frozen/FrozenAccountPanel';
 import { useSession } from '../session/SessionProvider';
 import { usePanel } from '../shell/use-panel';
 import { errorCode } from '../occurrence/use-occurrence-actions';
@@ -29,7 +30,8 @@ export interface ManagerDialogProps {
 
 /** Novo gestor e Editar gestor. */
 export function ManagerDialog({ manager, onClose }: ManagerDialogProps) {
-  const { tenantId } = usePanel();
+  // `support` vem do PanelLayout, que o lê de `getSupportTenant()`.
+  const { tenantId, support } = usePanel();
   const { session } = useSession();
   const queryClient = useQueryClient();
   const toast = useToast();
@@ -44,6 +46,8 @@ export function ManagerDialog({ manager, onClose }: ManagerDialogProps) {
   const [cpfError, setCpfError] = useState<string | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [generalError, setGeneralError] = useState<string | null>(null);
+  /** Em modo suporte, o CPF preso numa conta congelada abre a recuperação. */
+  const [frozen, setFrozen] = useState(false);
 
   const departments = useQuery({
     queryKey: departmentsKey(tenantId),
@@ -74,6 +78,7 @@ export function ManagerDialog({ manager, onClose }: ManagerDialogProps) {
         if (!createBody.success) throw new Error('invalid');
         return api.panelCreateManager(tenantId, createBody.data);
       }),
+    onMutate: () => setFrozen(false),
     onSuccess: async (saved) => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: managersKey(tenantId) }),
@@ -99,6 +104,10 @@ export function ManagerDialog({ manager, onClose }: ManagerDialogProps) {
         );
       } else if (code === 'already_manager') {
         setCpfError('Esta pessoa já é gestora nesta prefeitura.');
+      } else if (code === 'staff_account_not_allowed') {
+        setCpfError('Esta pessoa é da equipe Alô Cidadão. Use outro CPF.');
+      } else if (code === 'cpf_unavailable' && support) {
+        setFrozen(true);
       } else if (code === 'cpf_unavailable') {
         setCpfError('Este CPF está numa conta bloqueada. Fale com o suporte do Alô Cidadão.');
       } else {
@@ -182,6 +191,7 @@ export function ManagerDialog({ manager, onClose }: ManagerDialogProps) {
               onChange={(event) => {
                 setCpf(event.target.value.replace(/\D/g, '').slice(0, 11));
                 setCpfError(null);
+                setFrozen(false);
               }}
             />
             {cpfError ? (
@@ -238,6 +248,15 @@ export function ManagerDialog({ manager, onClose }: ManagerDialogProps) {
           </label>
         ))}
       </fieldset>
+
+      {frozen && support && createBody.success ? (
+        <FrozenAccountPanel
+          cpf={createBody.data.cpf}
+          email={createBody.data.email}
+          tenantId={support.tenantId}
+          onResolved={() => save.mutate()}
+        />
+      ) : null}
     </Dialog>
   );
 }

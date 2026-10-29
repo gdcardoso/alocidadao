@@ -49,9 +49,24 @@
   min-width: 0;
 }
 
+/*
+ * Coluna estreita (Central de atendimento): o rótulo fica numa linha só, como no Pencil; quebrado,
+ * ele descia o campo e o desalinhava do vizinho. A largura é a do rótulo (mínimo 140); o campo
+ * não entra nessa conta (largura 0) e ocupa a coluna toda.
+ */
 .narrow {
   flex: none;
-  width: 140px;
+  width: max-content;
+  min-width: 140px;
+}
+
+.narrow label {
+  white-space: nowrap;
+}
+
+.narrow input {
+  width: 0;
+  min-width: 100%;
 }
 
 .notice {

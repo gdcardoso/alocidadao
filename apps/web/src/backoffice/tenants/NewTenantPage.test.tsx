@@ -1,6 +1,6 @@
 import { ApiError } from '@alocidadao/api-client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -15,12 +15,17 @@ vi.mock('../../api', () => ({
     backofficeContext: vi.fn(),
     backofficeMunicipalities: vi.fn(),
     backofficeCreateTenant: vi.fn(),
+    backofficeFrozenAccountCode: vi.fn(),
+    backofficeRecoverFrozenAccount: vi.fn(),
+    backofficeReleaseFrozenCpf: vi.fn(),
   },
 }));
 
 const context = vi.mocked(api.backofficeContext);
 const search = vi.mocked(api.backofficeMunicipalities);
 const create = vi.mocked(api.backofficeCreateTenant);
+const sendCode = vi.mocked(api.backofficeFrozenAccountCode);
+const recover = vi.mocked(api.backofficeRecoverFrozenAccount);
 
 function renderPage(role: 'admin' | 'support' = 'admin') {
   context.mockResolvedValue({ platformRole: role } as never);
@@ -136,14 +141,6 @@ describe('NewTenantPage', () => {
     await user.click(submit);
     expect(await screen.findByText('Este e-mail já é de outra pessoa.')).toBeInTheDocument();
 
-    create.mockRejectedValueOnce(new ApiError(409, { code: 'cpf_unavailable' }));
-    await user.click(submit);
-    expect(
-      await screen.findByText(
-        'Este CPF está numa conta bloqueada. Fale com o suporte do Alô Cidadão.',
-      ),
-    ).toBeInTheDocument();
-
     create.mockRejectedValueOnce(new ApiError(409, { code: 'staff_account_not_allowed' }));
     await user.click(submit);
     expect(
@@ -156,6 +153,43 @@ describe('NewTenantPage', () => {
     expect(
       await screen.findByText('Este município já tem prefeitura cadastrada.'),
     ).toBeInTheDocument();
+  });
+
+  it('new tenant with frozen admin cpf offers recovery', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await pickMunicipality(user);
+    await fillRest(user);
+    create
+      .mockRejectedValueOnce(new ApiError(409, { code: 'cpf_unavailable' }))
+      .mockResolvedValueOnce({ id: 'f0f0f0f0-f0f0-4f0f-8f0f-f0f0f0f0f0f0' } as never);
+    sendCode.mockResolvedValue({
+      challengeId: 'c1c1c1c1-c1c1-4c1c-8c1c-c1c1c1c1c1c1',
+      maskedEmail: 'm***@antigo.com',
+      retryAfterSeconds: 60,
+    });
+    recover.mockResolvedValue(undefined);
+    await user.click(screen.getByRole('button', { name: 'Criar prefeitura' }));
+
+    const panel = await screen.findByRole('region', { name: 'Conta bloqueada' });
+    expect(
+      screen.queryByText('Este CPF está numa conta bloqueada. Fale com o suporte do Alô Cidadão.'),
+    ).not.toBeInTheDocument();
+    await user.click(within(panel).getByRole('button', { name: 'Recuperar conta antiga' }));
+    // A prefeitura ainda não existe: a recuperação vai sem prefeitura.
+    expect(sendCode).toHaveBeenCalledWith({ cpf: '52998224725', tenantId: null });
+    await user.click(await within(panel).findByLabelText('Dígito 1 de 6'));
+    await user.paste('123456');
+    await user.click(within(panel).getByRole('button', { name: 'Recuperar conta' }));
+
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(2));
+    expect(recover).toHaveBeenCalledWith({
+      challengeId: 'c1c1c1c1-c1c1-4c1c-8c1c-c1c1c1c1c1c1',
+      code: '123456',
+      email: 'maria@sorocaba.sp.gov.br',
+      tenantId: null,
+    });
+    expect(await screen.findByText('tela detalhe')).toBeInTheDocument();
   });
 
   it('shows municipality_not_found on the municipality field', async () => {

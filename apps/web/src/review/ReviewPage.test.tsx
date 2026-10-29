@@ -1,11 +1,13 @@
 import { ApiError } from '@alocidadao/api-client';
 import type { PanelContext, ReviewDetail, WorkQueueItem } from '@alocidadao/shared';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
+import type { ReactNode } from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, useLocation } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '../api';
+import { UNEXPECTED_ERROR_MESSAGE } from '../auth/login-errors';
 import { createPanelSession } from '../session/panel-session';
 import { SessionProvider } from '../session/SessionProvider';
 import { PanelValueContext, panelCountsKey } from '../shell/use-panel';
@@ -18,12 +20,14 @@ vi.mock('../api', () => ({
     panelReview: vi.fn(),
     panelPublish: vi.fn(),
     panelRework: vi.fn(),
+    panelCounts: vi.fn(),
   },
 }));
 
 const panelReviews = vi.mocked(api.panelReviews);
 const panelReview = vi.mocked(api.panelReview);
 const panelPublish = vi.mocked(api.panelPublish);
+const panelCounts = vi.mocked(api.panelCounts);
 
 const tenantId = '3f2b8c1e-5a4d-4e6f-8a7b-9c0d1e2f3a4b';
 const holeId = '11111111-1111-4111-8111-111111111111';
@@ -98,6 +102,19 @@ function Location() {
   return <output data-testid="location">{`${location.pathname}${location.search}`}</output>;
 }
 
+/** Como o PanelLayout: os contadores vêm de uma consulta e mudam o valor do contexto. */
+function PanelValue({ children }: { children: ReactNode }) {
+  const counts = useQuery({
+    queryKey: panelCountsKey(tenantId),
+    queryFn: () => api.panelCounts(tenantId),
+  });
+  return (
+    <PanelValueContext.Provider value={{ tenantId, context, counts: counts.data, support: null }}>
+      {children}
+    </PanelValueContext.Provider>
+  );
+}
+
 function renderPage(path = '/revisao') {
   const session = createPanelSession({
     client: {
@@ -111,14 +128,14 @@ function renderPage(path = '/revisao') {
   render(
     <QueryClientProvider client={queryClient}>
       <SessionProvider session={session}>
-        <PanelValueContext.Provider value={{ tenantId, context, counts: undefined, support: null }}>
+        <PanelValue>
           <ToastProvider>
             <MemoryRouter initialEntries={[path]}>
               <ReviewPage />
               <Location />
             </MemoryRouter>
           </ToastProvider>
-        </PanelValueContext.Provider>
+        </PanelValue>
       </SessionProvider>
     </QueryClientProvider>,
   );
@@ -132,6 +149,7 @@ beforeEach(() => {
     id === holeId ? detail(hole) : detail(tree, { distanceM: 250, agentNote: null }),
   );
   panelPublish.mockResolvedValue({ workOrderId: holeId, status: 'completed' });
+  panelCounts.mockResolvedValue({ triage: 0, awaitingReview: 2, impeded: 0 });
 });
 
 const publishButton = () => screen.getByRole('button', { name: 'Publicar para os cidadãos' });
@@ -213,6 +231,37 @@ describe('ReviewPage', () => {
     expect(screen.getByTestId('location')).toHaveTextContent(`atividade=${treeId}`);
     expect(invalidate).toHaveBeenCalledWith({ queryKey: panelCountsKey(tenantId) });
     expect(panelReviews).toHaveBeenCalledTimes(2);
+  });
+
+  it('publishing a review does not refetch the published detail', async () => {
+    const { user } = renderPage();
+    await screen.findByText('Fotos do serviço');
+    // Depois de publicar, o detalhe some do endpoint: buscá-lo de novo dá 404.
+    panelReview.mockImplementation(async (_tenant, id) => {
+      if (id === holeId) throw new ApiError(404, { code: 'work_order_not_found' });
+      return detail(tree);
+    });
+    // A fila demora a voltar: o item publicado continua aberto nesse meio-tempo.
+    let resolveQueue: (value: { total: number; items: WorkQueueItem[] }) => void = () => {};
+    panelReviews.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveQueue = resolve;
+        }),
+    );
+    // Os contadores voltam antes da fila (como no painel): o contexto muda e o detalhe renderiza.
+    panelCounts.mockResolvedValue({ triage: 0, awaitingReview: 1, impeded: 0 });
+    await user.click(publishButton());
+    await screen.findByText('Publicado para os cidadãos.');
+    await waitFor(() => expect(panelReviews).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(panelCounts).toHaveBeenCalledTimes(2));
+
+    expect(panelReview.mock.calls.filter(([, id]) => id === holeId)).toHaveLength(1);
+    expect(screen.queryByText(UNEXPECTED_ERROR_MESSAGE)).not.toBeInTheDocument();
+
+    resolveQueue({ total: 1, items: [tree] });
+    await screen.findByRole('heading', { name: 'Poda de árvore' });
+    expect(panelReview.mock.calls.filter(([, id]) => id === holeId)).toHaveLength(1);
   });
 
   it('409 work_order_unavailable shows the notice and refetches', async () => {

@@ -1,9 +1,15 @@
 import { z } from 'zod';
 import { cpfSchema } from './cpf.js';
-import { TENANT_STATUSES, type IconGroup, type TenantStatus } from './enums.js';
+import {
+  COMMERCIAL_STATUSES,
+  TENANT_STATUSES,
+  type CommercialStatus,
+  type IconGroup,
+  type TenantStatus,
+} from './enums.js';
 import { PLATFORM_ROLES, type PlatformRole } from './roles.js';
 
-// Backoffice da equipe interna (Plano 6a): contratos de prefeituras, contrato e auditoria.
+// Backoffice da equipe interna (Planos 6a e 6b): prefeituras, contrato, auditoria, interesse por cidade, equipe e conta congelada.
 
 export const INCLUDED_USERS_MAX = 10000;
 
@@ -24,6 +30,15 @@ export const TENANT_STATUS_LABELS: Record<TenantStatus, string> = {
 export const PLATFORM_ROLE_LABELS: Record<PlatformRole, string> = {
   admin: 'Admin',
   support: 'Suporte',
+};
+
+export const COMMERCIAL_STATUS_LABELS: Record<CommercialStatus, string> = {
+  new: 'Sem contato',
+  contacted: 'Contatado',
+  proposal_sent: 'Proposta enviada',
+  negotiating: 'Em negociação',
+  won: 'Fechado',
+  lost: 'Perdido',
 };
 
 /** Ações gravadas em `staff_audit_events`. */
@@ -53,6 +68,13 @@ export const STAFF_AUDIT_ACTIONS = [
   'category.update',
   'department.create',
   'department.update',
+  'staff.create',
+  'staff.update',
+  'staff.role_change',
+  'staff.remove',
+  'lead.update',
+  'account.recover',
+  'account.release_cpf',
 ] as const;
 export type StaffAuditAction = (typeof STAFF_AUDIT_ACTIONS)[number];
 
@@ -82,6 +104,13 @@ export const STAFF_AUDIT_ACTION_LABELS: Record<StaffAuditAction, string> = {
   'category.update': 'Alterou uma categoria',
   'department.create': 'Criou um setor',
   'department.update': 'Alterou um setor',
+  'staff.create': 'Adicionou uma pessoa à equipe',
+  'staff.update': 'Editou uma pessoa da equipe',
+  'staff.role_change': 'Trocou o papel de uma pessoa da equipe',
+  'staff.remove': 'Removeu uma pessoa da equipe',
+  'lead.update': 'Mudou a situação comercial',
+  'account.recover': 'Recuperou uma conta congelada',
+  'account.release_cpf': 'Liberou o CPF de uma conta congelada',
 };
 
 /** Catálogo copiado para a prefeitura nova (os raios são os do seed de desenvolvimento). */
@@ -308,3 +337,168 @@ export const tenantStatusBodySchema = z.object({
   action: z.enum(['activate', 'suspend', 'reactivate']),
 });
 export type TenantStatusBody = z.infer<typeof tenantStatusBodySchema>;
+
+// Interesse por cidade (P5)
+
+const commercialStatusSchema = z.enum(COMMERCIAL_STATUSES);
+
+export const cityInterestRowSchema = z.object({
+  ibgeCode: z.string(),
+  name: z.string(),
+  state: z.string(),
+  requestCount: count,
+  last30Days: count,
+  firstAt: z.iso.datetime(),
+  commercialStatus: commercialStatusSchema,
+  isCustomer: z.boolean(),
+});
+export type CityInterestRow = z.infer<typeof cityInterestRowSchema>;
+
+export const cityInterestResponseSchema = z.object({ items: z.array(cityInterestRowSchema) });
+export type CityInterestResponse = z.infer<typeof cityInterestResponseSchema>;
+
+export const leadStatusBodySchema = z.object({ status: commercialStatusSchema });
+export type LeadStatusBody = z.infer<typeof leadStatusBodySchema>;
+
+const csvDateFormat = new Intl.DateTimeFormat('pt-BR', {
+  timeZone: 'America/Sao_Paulo',
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+});
+
+/** Aspas só quando o texto tem separador, aspas ou quebra de linha. */
+function csvCell(value: string): string {
+  return /[;"\r\n]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value;
+}
+
+/** CSV do interesse por cidade: `;`, UTF-8 com BOM, datas dd/mm/aaaa, linhas em ordem de posição. */
+export function cityInterestCsv(rows: CityInterestRow[]): string {
+  const header = [
+    'Posição',
+    'Município',
+    'UF',
+    'Pedidos',
+    'Últimos 30 dias',
+    'Primeiro pedido',
+    'Situação comercial',
+    'Já é cliente',
+  ];
+  const lines = rows.map((row, index) =>
+    [
+      String(index + 1),
+      row.name,
+      row.state,
+      String(row.requestCount),
+      String(row.last30Days),
+      csvDateFormat.format(new Date(row.firstAt)),
+      COMMERCIAL_STATUS_LABELS[row.commercialStatus],
+      row.isCustomer ? 'Sim' : 'Não',
+    ]
+      .map(csvCell)
+      .join(';'),
+  );
+  return `\uFEFF${[header.join(';'), ...lines].join('\r\n')}\r\n`;
+}
+
+// Equipe (P6)
+
+export const staffMemberSchema = z.object({
+  userId: z.uuid(),
+  name: z.string(),
+  maskedCpf: z.string(),
+  email: z.string(),
+  platformRole: platformRoleSchema,
+  lastActiveAt: z.iso.datetime().nullable(),
+});
+export type StaffMember = z.infer<typeof staffMemberSchema>;
+
+export const staffListResponseSchema = z.object({ items: z.array(staffMemberSchema) });
+export type StaffListResponse = z.infer<typeof staffListResponseSchema>;
+
+const staffNameSchema = z.string().trim().min(2).max(80);
+const lowercaseEmailSchema = z.email().transform((value) => value.toLowerCase());
+
+export const staffCreateBodySchema = z.object({
+  name: staffNameSchema,
+  cpf: cpfSchema,
+  email: lowercaseEmailSchema,
+  platformRole: platformRoleSchema,
+});
+export type StaffCreateBody = z.infer<typeof staffCreateBodySchema>;
+
+export const staffCreateResponseSchema = z.object({ id: z.uuid() });
+export type StaffCreateResponse = z.infer<typeof staffCreateResponseSchema>;
+
+export const staffUpdateBodySchema = z
+  .object({
+    name: staffNameSchema.optional(),
+    email: lowercaseEmailSchema.optional(),
+    platformRole: platformRoleSchema.optional(),
+  })
+  .refine((body) => Object.values(body).some((value) => value !== undefined), {
+    message: 'Informe ao menos um campo.',
+  });
+export type StaffUpdateBody = z.infer<typeof staffUpdateBodySchema>;
+
+// Auditoria (P7)
+
+export const AUDIT_PAGE_SIZE = 50;
+
+export const auditQuerySchema = z.object({
+  tenantId: z.uuid().optional(),
+  staffUserId: z.uuid().optional(),
+  from: z.iso.date().optional(),
+  to: z.iso.date().optional(),
+  page: z.coerce.number().int().min(1).default(1),
+});
+export type AuditQuery = z.infer<typeof auditQuerySchema>;
+
+export const auditRowSchema = z.object({
+  id: z.uuid(),
+  at: z.iso.datetime(),
+  staffName: z.string(),
+  tenantId: z.uuid().nullable(),
+  tenantName: z.string().nullable(),
+  action: z.string(),
+  targetType: z.string().nullable(),
+  targetLabel: z.string(),
+});
+export type AuditRow = z.infer<typeof auditRowSchema>;
+
+export const auditResponseSchema = z.object({
+  items: z.array(auditRowSchema),
+  total: count,
+  page: count,
+  pageSize: count,
+});
+export type AuditResponse = z.infer<typeof auditResponseSchema>;
+
+// Conta congelada (CPF preso)
+
+export const frozenAccountCodeBodySchema = z.object({
+  cpf: cpfSchema,
+  tenantId: z.uuid().nullable(),
+});
+export type FrozenAccountCodeBody = z.infer<typeof frozenAccountCodeBodySchema>;
+
+export const frozenAccountCodeResponseSchema = z.object({
+  challengeId: z.uuid(),
+  maskedEmail: z.string(),
+  retryAfterSeconds: count,
+});
+export type FrozenAccountCodeResponse = z.infer<typeof frozenAccountCodeResponseSchema>;
+
+export const frozenAccountRecoverBodySchema = z.object({
+  challengeId: z.uuid(),
+  code: z.string().regex(/^\d{6}$/),
+  email: lowercaseEmailSchema,
+  tenantId: z.uuid().nullable(),
+});
+export type FrozenAccountRecoverBody = z.infer<typeof frozenAccountRecoverBodySchema>;
+
+export const frozenAccountReleaseBodySchema = z.object({
+  cpf: cpfSchema,
+  tenantId: z.uuid().nullable(),
+});
+export type FrozenAccountReleaseBody = z.infer<typeof frozenAccountReleaseBodySchema>;

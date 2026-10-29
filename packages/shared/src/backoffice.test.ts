@@ -1,9 +1,15 @@
 import { describe, expect, it } from 'vitest';
+import { COMMERCIAL_STATUSES } from './enums.js';
 import {
+  COMMERCIAL_STATUS_LABELS,
   DEFAULT_CATALOG,
   STAFF_AUDIT_ACTIONS,
   STAFF_AUDIT_ACTION_LABELS,
+  cityInterestCsv,
   formatChange,
+  frozenAccountRecoverBodySchema,
+  staffCreateBodySchema,
+  staffUpdateBodySchema,
   tenantCreateBodySchema,
 } from './backoffice.js';
 
@@ -73,6 +79,82 @@ describe('backoffice contracts', () => {
     for (const action of STAFF_AUDIT_ACTIONS) {
       expect(STAFF_AUDIT_ACTION_LABELS[action]).toBeTruthy();
     }
-    expect(STAFF_AUDIT_ACTIONS).toHaveLength(25);
+    expect(STAFF_AUDIT_ACTIONS).toHaveLength(32);
+  });
+
+  it('every commercial status and staff audit action has a label', () => {
+    for (const status of COMMERCIAL_STATUSES) {
+      expect(COMMERCIAL_STATUS_LABELS[status]).toBeTruthy();
+    }
+    expect(COMMERCIAL_STATUS_LABELS.proposal_sent).toBe('Proposta enviada');
+    expect(STAFF_AUDIT_ACTION_LABELS['staff.role_change']).toBe(
+      'Trocou o papel de uma pessoa da equipe',
+    );
+    expect(STAFF_AUDIT_ACTION_LABELS['account.release_cpf']).toBe(
+      'Liberou o CPF de uma conta congelada',
+    );
+  });
+
+  it('city interest csv uses semicolons, BOM, pt-BR dates and Sim/Não', () => {
+    const csv = cityInterestCsv([
+      {
+        ibgeCode: '3550308',
+        name: 'São Paulo',
+        state: 'SP',
+        requestCount: 12,
+        last30Days: 5,
+        firstAt: '2026-03-07T15:00:00.000Z',
+        commercialStatus: 'proposal_sent',
+        isCustomer: true,
+      },
+      {
+        ibgeCode: '3304557',
+        name: 'Rio; "Janeiro"',
+        state: 'RJ',
+        requestCount: 3,
+        last30Days: 0,
+        firstAt: '2026-10-01T12:00:00.000Z',
+        commercialStatus: 'new',
+        isCustomer: false,
+      },
+    ]);
+    expect(csv.startsWith('﻿')).toBe(true);
+    const lines = csv.slice(1).split('\r\n');
+    expect(lines[0]).toBe(
+      'Posição;Município;UF;Pedidos;Últimos 30 dias;Primeiro pedido;Situação comercial;Já é cliente',
+    );
+    expect(lines[1]).toBe('1;São Paulo;SP;12;5;07/03/2026;Proposta enviada;Sim');
+    expect(lines[2]).toBe('2;"Rio; ""Janeiro""";RJ;3;0;01/10/2026;Sem contato;Não');
+  });
+
+  it('staff update body requires at least one field', () => {
+    expect(staffUpdateBodySchema.safeParse({}).success).toBe(false);
+    expect(staffUpdateBodySchema.safeParse({ platformRole: 'support' }).success).toBe(true);
+    expect(staffUpdateBodySchema.parse({ email: 'A@B.com' }).email).toBe('a@b.com');
+  });
+
+  it('staff create body validates cpf and lowercases the email', () => {
+    const ok = staffCreateBodySchema.parse({
+      name: '  Ana Souza ',
+      cpf: '529.982.247-25',
+      email: 'Ana@Alo.com',
+      platformRole: 'admin',
+    });
+    expect(ok.name).toBe('Ana Souza');
+    expect(ok.email).toBe('ana@alo.com');
+    expect(staffCreateBodySchema.safeParse({ ...ok, cpf: '111.111.111-11' }).success).toBe(false);
+  });
+
+  it('frozen account recover body needs a 6-digit code and a lowercase email', () => {
+    const base = {
+      challengeId: '3f1c2b4e-8a7d-4c6b-9e2f-1a2b3c4d5e6f',
+      code: '123456',
+      email: 'Novo@Mail.com',
+      tenantId: null,
+    };
+    expect(frozenAccountRecoverBodySchema.parse(base).email).toBe('novo@mail.com');
+    expect(frozenAccountRecoverBodySchema.safeParse({ ...base, code: '12345' }).success).toBe(
+      false,
+    );
   });
 });

@@ -87,7 +87,7 @@ O suporte resolve pelas mesmas janelas do painel, em modo suporte (decisão do u
 3. **CPF em conta congelada** ao cadastrar gestor (`cpf_unavailable`) ou admin na P2 (minha decisão incluir a P2): em modo suporte (ou na P2, para a equipe interna) o aviso vira "Este CPF está numa conta congelada." e oferece dois caminhos (decisão do usuário: nunca dar a alguém acesso à conta de outra pessoa sem verificação):
    - **Recuperar a conta antiga:** um código vai para o e-mail guardado na conta congelada; a pessoa repassa o código ao suporte, que o digita na janela. Código certo → a conta é descongelada (histórico mantido), o e-mail passa a ser o informado no cadastro e o cadastro segue com ela. Só aparece se a conta congelada tem e-mail.
    - **Criar conta nova:** quando a conta congelada não tem e-mail ou a pessoa não consegue o código. Tira o CPF da conta congelada (que continua congelada) e o cadastro segue com uma conta nova. Pede confirmação.
-   Os dois caminhos viram linhas de auditoria próprias. Limite de tentativas do código igual ao do login.
+     Os dois caminhos viram linhas de auditoria próprias. Limite de tentativas do código igual ao do login.
 
 A permissão é dada no banco (função própria ou checagem de `app.platform_role` dentro da função existente), nunca só na tela. Cada uma das três vira linha de auditoria com ação própria e sem dado pessoal em `details`. Textos finais saem do Pencil (seção 3).
 

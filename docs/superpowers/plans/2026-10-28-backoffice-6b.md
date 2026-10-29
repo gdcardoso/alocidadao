@@ -22,15 +22,15 @@
   - rótulos: `Sem contato`, `Contatado`, `Proposta enviada`, `Em negociação`, `Fechado`, `Perdido`.
 - **Ações novas da auditoria e rótulos**, que vão à lista de textos para o usuário confirmar:
 
-  | Ação | Rótulo |
-  | --- | --- |
-  | `staff.create` | `Adicionou uma pessoa à equipe` |
-  | `staff.update` | `Editou uma pessoa da equipe` |
-  | `staff.role_change` | `Trocou o papel de uma pessoa da equipe` |
-  | `staff.remove` | `Removeu uma pessoa da equipe` |
-  | `lead.update` | `Mudou a situação comercial` |
-  | `account.recover` | `Recuperou uma conta congelada` |
-  | `account.release_cpf` | `Liberou o CPF de uma conta congelada` |
+  | Ação                  | Rótulo                                   |
+  | --------------------- | ---------------------------------------- |
+  | `staff.create`        | `Adicionou uma pessoa à equipe`          |
+  | `staff.update`        | `Editou uma pessoa da equipe`            |
+  | `staff.role_change`   | `Trocou o papel de uma pessoa da equipe` |
+  | `staff.remove`        | `Removeu uma pessoa da equipe`           |
+  | `lead.update`         | `Mudou a situação comercial`             |
+  | `account.recover`     | `Recuperou uma conta congelada`          |
+  | `account.release_cpf` | `Liberou o CPF de uma conta congelada`   |
 
 - **Alvos novos da auditoria (`target_type`):**
   - `staff` (id da conta);

@@ -14,6 +14,10 @@ export interface PanelValue {
 /** Chave dos contadores; as ações do painel a invalidam para atualizar o menu. */
 export const panelCountsKey = (tenantId: string) => ['panel', 'counts', tenantId] as const;
 
+/** Chave dos avisos do sino. */
+export const panelNotificationsKey = (tenantId: string) =>
+  ['panel', 'notifications', tenantId] as const;
+
 export const PanelValueContext = createContext<PanelValue | null>(null);
 
 export function usePanel(): PanelValue {

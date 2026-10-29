@@ -1,11 +1,20 @@
 import { randomUUID } from 'node:crypto';
-import { and, asc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDatabase, geoPoint, withContext } from './client.js';
+import {
+  autoConfirmRequests,
+  claimNotifications,
+  claimPushToken,
+  cleanupNotifications,
+  clearPushToken,
+  finishNotification,
+} from './notifications.js';
 import {
   categories,
   departmentManagers,
   departments,
+  devices,
   memberships,
   notificationOutbox,
   occurrences,
@@ -352,7 +361,9 @@ async function seedTown(): Promise<Town> {
 /** Quem recebe o sino desta prefeitura: gestores do setor e admins, ativos. */
 const bellRecipients = () => [town.admin, town.manager, town.managerAdmin].toSorted();
 
-async function newOccurrence(status: 'triage' | 'in_progress' = 'triage') {
+async function newOccurrence(
+  status: 'triage' | 'in_progress' | 'awaiting_confirmation' = 'triage',
+) {
   const [occurrence] = await owner
     .insert(occurrences)
     .values({
@@ -1027,5 +1038,404 @@ describe('gatilho dos avisos', () => {
     const rows = await bell(occurrenceId);
     expect(rows.length).toBeGreaterThan(0);
     expect(rows.every((row) => row.protocol === oldest.protocol)).toBe(true);
+  });
+});
+
+// Fila, aparelhos e confirmação automática (0034): as funções que a API chama como app_user.
+
+const MINUTE_MS = 60 * 1000;
+const DAY_MS = 24 * 60 * MINUTE_MS;
+const ago = (ms: number) => new Date(Date.now() - ms);
+
+/** Tira da frente o que outros testes deixaram pendente: cada teste da fila vê só as próprias linhas. */
+async function clearQueue() {
+  await owner
+    .update(notificationOutbox)
+    .set({ status: 'skipped' })
+    .where(eq(notificationOutbox.status, 'pending'));
+}
+
+async function queued(
+  userId: string,
+  values: Partial<typeof notificationOutbox.$inferInsert> = {},
+) {
+  const [row] = await owner
+    .insert(notificationOutbox)
+    .values({
+      tenantId: town.tenantId,
+      userId,
+      channel: 'push',
+      kind: 'request_in_progress',
+      protocol: 'P-FILA',
+      ...values,
+    })
+    .returning();
+  return row!;
+}
+
+async function device(userId: string, platform: 'android' | 'ios', pushToken: string | null) {
+  const [row] = await owner
+    .insert(devices)
+    .values({ userId, installationId: randomUUID(), platform, appVersion: '1.0.0', pushToken })
+    .returning();
+  return row!.id;
+}
+
+async function outboxRow(id: string) {
+  const [row] = await owner.select().from(notificationOutbox).where(eq(notificationOutbox.id, id));
+  return row!;
+}
+
+/** Segundos entre a próxima tentativa e agora, pelo relógio do banco. */
+async function secondsUntilNextAttempt(id: string) {
+  const { rows } = await owner.execute<{ seconds: number }>(sql`
+    select extract(epoch from next_attempt_at - now())::float8 as seconds
+    from notification_outbox where id = ${id}
+  `);
+  return rows[0]!.seconds;
+}
+
+async function pushTokenOf(deviceId: string) {
+  const [row] = await owner
+    .select({ pushToken: devices.pushToken })
+    .from(devices)
+    .where(eq(devices.id, deviceId));
+  return row!.pushToken;
+}
+
+/** Solicitação aguardando confirmação desde `since`. */
+async function awaiting(occurrenceId: string, since: Date) {
+  const citizen = await seedUser('cidadao-aguarda');
+  const request = await newRequest(occurrenceId, citizen, 'awaiting_confirmation');
+  await owner.update(requests).set({ statusChangedAt: since }).where(eq(requests.id, request.id));
+  return request;
+}
+
+async function requestStatus(id: string) {
+  const [row] = await owner
+    .select({ status: requests.status, statusChangedAt: requests.statusChangedAt })
+    .from(requests)
+    .where(eq(requests.id, id));
+  return row!;
+}
+
+async function occurrenceStatus(id: string) {
+  const [row] = await owner
+    .select({ status: occurrences.status })
+    .from(occurrences)
+    .where(eq(occurrences.id, id));
+  return row!.status;
+}
+
+async function eventsOf(occurrenceId: string) {
+  return owner
+    .select({
+      requestId: statusEvents.requestId,
+      workOrderId: statusEvents.workOrderId,
+      fromStatus: statusEvents.fromStatus,
+      toStatus: statusEvents.toStatus,
+      actorUserId: statusEvents.actorUserId,
+    })
+    .from(statusEvents)
+    .where(eq(statusEvents.occurrenceId, occurrenceId))
+    .orderBy(asc(statusEvents.createdAt), asc(statusEvents.requestId));
+}
+
+describe('fila, aparelhos e confirmação automática', () => {
+  beforeAll(async () => {
+    town ??= await seedTown();
+  });
+
+  it('duas pegadas simultâneas não pegam a mesma linha', async () => {
+    await clearQueue();
+    const person = await seedUser('pessoa-fila');
+    await device(person, 'android', `tok-${randomUUID()}`);
+    const ids: string[] = [];
+    for (let index = 0; index < 20; index++) ids.push((await queued(person)).id);
+
+    // Duas conexões do pool, como duas instâncias da API.
+    const [first, second] = await Promise.all([
+      claimNotifications(app, 15),
+      claimNotifications(app, 15),
+    ]);
+    const firstIds = first.map((row) => row.id);
+    const secondIds = second.map((row) => row.id);
+    expect(firstIds.filter((id) => secondIds.includes(id))).toEqual([]);
+    expect([...firstIds, ...secondIds].toSorted()).toEqual(ids.toSorted());
+    // Quem já foi pego fica travado por 10 minutos: uma terceira pegada não traz nada.
+    expect(await claimNotifications(app, 50)).toEqual([]);
+    const rows = await owner
+      .select({ attempts: notificationOutbox.attempts })
+      .from(notificationOutbox)
+      .where(inArray(notificationOutbox.id, ids));
+    expect(rows.every((row) => row.attempts === 1)).toBe(true);
+
+    // Pegada ainda sem commit: a outra conexão pula as linhas travadas e não espera por elas.
+    const more: string[] = [];
+    for (let index = 0; index < 4; index++) more.push((await queued(person)).id);
+    await app.transaction(async (tx) => {
+      const held = await claimNotifications(tx, 2);
+      const meanwhile = await claimNotifications(app, 50);
+      expect(held).toHaveLength(2);
+      expect(meanwhile).toHaveLength(2);
+      expect([...held, ...meanwhile].map((row) => row.id).toSorted()).toEqual(more.toSorted());
+    });
+  });
+
+  it('pegada traz os tokens distintos da pessoa e o e-mail', async () => {
+    await clearQueue();
+    const person = await seedUser('pessoa-tokens');
+    const [user] = await owner.select().from(users).where(eq(users.id, person));
+    const shared = `tok-a-${randomUUID()}`;
+    const ios = `tok-i-${randomUUID()}`;
+    await device(person, 'android', shared);
+    await device(person, 'android', shared);
+    await device(person, 'ios', ios);
+    await device(person, 'android', null);
+    const other = await seedUser('pessoa-outra');
+    await device(other, 'android', `tok-o-${randomUUID()}`);
+    const row = await queued(person, { channel: 'email', kind: 'request_awaiting_confirmation' });
+
+    const claimed = await claimNotifications(app, 10);
+    expect(claimed).toHaveLength(1);
+    const [item] = claimed;
+    expect({
+      ...item,
+      pushTokens: item!.pushTokens.toSorted((a, b) => a.token.localeCompare(b.token)),
+    }).toEqual({
+      id: row.id,
+      channel: 'email',
+      kind: 'request_awaiting_confirmation',
+      protocol: 'P-FILA',
+      tenantId: town.tenantId,
+      requestId: null,
+      workOrderId: null,
+      details: null,
+      attempts: 1,
+      pushTokens: [
+        { platform: 'android', token: shared },
+        { platform: 'ios', token: ios },
+      ].toSorted((a, b) => a.token.localeCompare(b.token)),
+      email: user!.email,
+    });
+    const seconds = await secondsUntilNextAttempt(row.id);
+    expect(seconds).toBeGreaterThan(9 * 60);
+    expect(seconds).toBeLessThanOrEqual(10 * 60);
+  });
+
+  it('pegada pula conta congelada ou excluída', async () => {
+    await clearQueue();
+    const active = await seedUser('pessoa-ativa');
+    const frozen = await seedUser('pessoa-congelada');
+    const deleted = await seedUser('pessoa-excluida');
+    await owner.update(users).set({ accountStatus: 'frozen' }).where(eq(users.id, frozen));
+    await owner.update(users).set({ deletedAt: new Date() }).where(eq(users.id, deleted));
+    const activeRow = await queued(active);
+    const frozenRow = await queued(frozen);
+    const deletedRow = await queued(deleted);
+
+    const claimed = await claimNotifications(app, 10);
+    expect(claimed.map((row) => row.id)).toEqual([activeRow.id]);
+    expect((await outboxRow(frozenRow.id)).status).toBe('skipped');
+    expect((await outboxRow(deletedRow.id)).status).toBe('skipped');
+
+    // Descongelar depois não traz o aviso de volta.
+    await owner.update(users).set({ accountStatus: 'active' }).where(eq(users.id, frozen));
+    await owner
+      .update(notificationOutbox)
+      .set({ nextAttemptAt: ago(MINUTE_MS) })
+      .where(eq(notificationOutbox.id, frozenRow.id));
+    expect(await claimNotifications(app, 10)).toEqual([]);
+  });
+
+  it('nova tentativa volta à fila no tempo pedido', async () => {
+    await clearQueue();
+    const person = await seedUser('pessoa-tentativa');
+    const row = await queued(person);
+    await claimNotifications(app, 10);
+
+    await finishNotification(app, row.id, {
+      status: 'retry',
+      retryInSeconds: 300,
+      error: 'timeout',
+    });
+    expect(await outboxRow(row.id)).toMatchObject({
+      status: 'pending',
+      attempts: 1,
+      lastError: 'timeout',
+    });
+    const seconds = await secondsUntilNextAttempt(row.id);
+    expect(seconds).toBeGreaterThan(295);
+    expect(seconds).toBeLessThanOrEqual(300);
+    expect(await claimNotifications(app, 10)).toEqual([]);
+
+    // Passado o tempo, volta a ser pega, com a tentativa contada.
+    await owner
+      .update(notificationOutbox)
+      .set({ nextAttemptAt: ago(MINUTE_MS) })
+      .where(eq(notificationOutbox.id, row.id));
+    const again = await claimNotifications(app, 10);
+    expect(again.map((item) => [item.id, item.attempts])).toEqual([[row.id, 2]]);
+
+    await finishNotification(app, row.id, { status: 'sent' });
+    const sent = await outboxRow(row.id);
+    expect(sent).toMatchObject({ status: 'sent', lastError: null });
+    expect(sent.sentAt).not.toBeNull();
+    // Depois de enviada, uma nova tentativa atrasada não a devolve à fila.
+    await finishNotification(app, row.id, { status: 'retry', retryInSeconds: 60 });
+    expect((await outboxRow(row.id)).status).toBe('sent');
+
+    const failed = await queued(person);
+    await claimNotifications(app, 10);
+    await finishNotification(app, failed.id, { status: 'failed', error: 'fcm_down' });
+    expect(await outboxRow(failed.id)).toMatchObject({
+      status: 'failed',
+      lastError: 'fcm_down',
+      sentAt: null,
+    });
+  });
+
+  it('token reivindicado sai de outra conta', async () => {
+    const token = `tok-r-${randomUUID()}`;
+    const previous = await seedUser('dono-anterior');
+    const current = await seedUser('dono-atual');
+    const previousDevice = await device(previous, 'android', token);
+    const oldDevice = await device(current, 'android', token);
+    const keptDevice = await device(current, 'ios', `tok-k-${randomUUID()}`);
+    const newDevice = await device(current, 'android', null);
+
+    // Como o registro do aparelho na API: reivindica e grava no próprio aparelho, na mesma transação.
+    await withContext(app, { userId: current }, async (tx) => {
+      await claimPushToken(tx, token);
+      await tx.update(devices).set({ pushToken: token }).where(eq(devices.id, newDevice));
+    });
+    expect(await pushTokenOf(previousDevice)).toBeNull();
+    expect(await pushTokenOf(oldDevice)).toBeNull();
+    expect(await pushTokenOf(newDevice)).toBe(token);
+    expect(await pushTokenOf(keptDevice)).not.toBeNull();
+
+    // Sem pessoa no contexto, nada muda.
+    await expect(withContext(app, {}, (tx) => claimPushToken(tx, token))).rejects.toThrow();
+    expect(await pushTokenOf(newDevice)).toBe(token);
+
+    // Token recusado pelo provedor: sai de onde estiver.
+    await clearPushToken(app, token);
+    expect(await pushTokenOf(newDevice)).toBeNull();
+  });
+
+  it('confirmação automática confirma depois de 7 dias e não antes', async () => {
+    const oldOccurrence = await newOccurrence('awaiting_confirmation');
+    const old = await awaiting(oldOccurrence, ago(7 * DAY_MS + MINUTE_MS));
+    const recentOccurrence = await newOccurrence('awaiting_confirmation');
+    const recent = await awaiting(recentOccurrence, ago(7 * DAY_MS - 10 * MINUTE_MS));
+
+    expect(await autoConfirmRequests(app)).toBeGreaterThanOrEqual(1);
+
+    const confirmed = await requestStatus(old.id);
+    expect(confirmed.status).toBe('completed');
+    expect(Date.now() - confirmed.statusChangedAt.getTime()).toBeLessThan(MINUTE_MS);
+    expect(await occurrenceStatus(oldOccurrence)).toBe('completed');
+    expect(await eventsOf(oldOccurrence)).toEqual([
+      {
+        requestId: old.id,
+        workOrderId: null,
+        fromStatus: 'awaiting_confirmation',
+        toStatus: 'completed',
+        actorUserId: null,
+      },
+      {
+        requestId: null,
+        workOrderId: null,
+        fromStatus: 'awaiting_confirmation',
+        toStatus: 'completed',
+        actorUserId: null,
+      },
+    ]);
+
+    expect((await requestStatus(recent.id)).status).toBe('awaiting_confirmation');
+    expect(await occurrenceStatus(recentOccurrence)).toBe('awaiting_confirmation');
+    expect(await eventsOf(recentOccurrence)).toEqual([]);
+  });
+
+  it('confirmação automática roda duas vezes sem duplicar', async () => {
+    const occurrenceId = await newOccurrence('awaiting_confirmation');
+    const request = await awaiting(occurrenceId, ago(8 * DAY_MS));
+
+    // Duas instâncias ao mesmo tempo, e depois mais uma rodada.
+    await Promise.all([autoConfirmRequests(app), autoConfirmRequests(app)]);
+    expect(await autoConfirmRequests(app)).toBe(0);
+
+    expect((await requestStatus(request.id)).status).toBe('completed');
+    const rows = await eventsOf(occurrenceId);
+    expect(rows.filter((row) => row.requestId === request.id)).toHaveLength(1);
+    expect(rows.filter((row) => row.requestId === null)).toHaveLength(1);
+  });
+
+  it('ocorrência só fecha sem outra aguardando', async () => {
+    const occurrenceId = await newOccurrence('awaiting_confirmation');
+    const old = await awaiting(occurrenceId, ago(8 * DAY_MS));
+    const recent = await awaiting(occurrenceId, ago(DAY_MS));
+
+    await autoConfirmRequests(app);
+    expect((await requestStatus(old.id)).status).toBe('completed');
+    expect((await requestStatus(recent.id)).status).toBe('awaiting_confirmation');
+    expect(await occurrenceStatus(occurrenceId)).toBe('awaiting_confirmation');
+    expect((await eventsOf(occurrenceId)).filter((row) => row.requestId === null)).toEqual([]);
+
+    // Vencido o prazo da outra, a ocorrência fecha.
+    await owner
+      .update(requests)
+      .set({ statusChangedAt: ago(8 * DAY_MS) })
+      .where(eq(requests.id, recent.id));
+    await autoConfirmRequests(app);
+    expect((await requestStatus(recent.id)).status).toBe('completed');
+    expect(await occurrenceStatus(occurrenceId)).toBe('completed');
+    expect((await eventsOf(occurrenceId)).filter((row) => row.requestId === null)).toHaveLength(1);
+  });
+
+  it('confirmação automática não gera push', async () => {
+    const occurrenceId = await newOccurrence('awaiting_confirmation');
+    const request = await awaiting(occurrenceId, ago(8 * DAY_MS));
+    await autoConfirmRequests(app);
+    expect((await requestStatus(request.id)).status).toBe('completed');
+    expect(await outbox({ requestId: request.id })).toEqual([]);
+    expect(await bell(occurrenceId)).toEqual([]);
+  });
+
+  it('limpeza apaga avisos do sino com mais de 90 dias', async () => {
+    const occurrenceId = await newOccurrence();
+    const person = await seedUser('pessoa-limpeza');
+    const bellRow = (createdAt: Date) => ({
+      tenantId: town.tenantId,
+      userId: person,
+      kind: 'occurrence_new',
+      protocol: 'P-LIMPEZA',
+      occurrenceId,
+      createdAt,
+    });
+    const [, recentBell] = await owner
+      .insert(panelNotifications)
+      .values([bellRow(ago(91 * DAY_MS)), bellRow(ago(89 * DAY_MS))])
+      .returning();
+    for (const status of ['sent', 'skipped', 'failed'] as const) {
+      await queued(person, { status, createdAt: ago(31 * DAY_MS) });
+    }
+    const oldPending = await queued(person, { status: 'pending', createdAt: ago(31 * DAY_MS) });
+    const recentSent = await queued(person, { status: 'sent', createdAt: ago(29 * DAY_MS) });
+
+    await cleanupNotifications(app);
+
+    const bells = await owner
+      .select({ id: panelNotifications.id })
+      .from(panelNotifications)
+      .where(eq(panelNotifications.userId, person));
+    expect(bells.map((row) => row.id)).toEqual([recentBell!.id]);
+    const queue = await owner
+      .select({ id: notificationOutbox.id })
+      .from(notificationOutbox)
+      .where(eq(notificationOutbox.userId, person));
+    expect(queue.map((row) => row.id).toSorted()).toEqual(
+      [oldPending.id, recentSent.id].toSorted(),
+    );
   });
 });

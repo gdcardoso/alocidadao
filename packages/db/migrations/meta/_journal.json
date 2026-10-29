@@ -239,6 +239,13 @@
       "when": 1793304783968,
       "tag": "0033_notify_from_status_event",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1793305462783,
+      "tag": "0034_notification_functions",
+      "breakpoints": true
     }
   ]
 }

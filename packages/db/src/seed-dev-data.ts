@@ -17,6 +17,7 @@ import {
   departments,
   memberships,
   municipalities,
+  notificationOutbox,
   occurrences,
   requests,
   statusEvents,
@@ -1077,6 +1078,7 @@ export async function seedDev(db: Database, options: SeedDevOptions = {}): Promi
       const keep = [...demoOrders.map((order) => order.occurrenceId), ...triageIds];
       await retireStrayOccurrences(tx, { tenantId: base.tenantId, ...staff }, keep);
     }
+    await skipSeedNotifications(tx);
     return {
       tenantId: base.tenantId,
       teamId: base.teamId,
@@ -1086,6 +1088,20 @@ export async function seedDev(db: Database, options: SeedDevOptions = {}): Promi
       panelWorkOrderIds,
     };
   });
+}
+
+/**
+ * Os eventos da demo passam pelo gatilho dos avisos (0033). O que esta execução pôs na fila
+ * (created_at = now(), o início da transação do seed) vai a 'skipped': aparelhos e e-mails de
+ * demonstração não recebem nada quando o FCM estiver configurado. Avisos de antes ficam como estão.
+ */
+async function skipSeedNotifications(tx: Transaction): Promise<void> {
+  await tx
+    .update(notificationOutbox)
+    .set({ status: 'skipped', lastError: 'seed_dev' })
+    .where(
+      and(eq(notificationOutbox.status, 'pending'), eq(notificationOutbox.createdAt, sql`now()`)),
+    );
 }
 
 /**

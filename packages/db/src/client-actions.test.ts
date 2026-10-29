@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { and, asc, eq, inArray, or } from 'drizzle-orm';
+import { and, asc, eq, gte, inArray, or, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDatabase, withContext, type Database } from './client.js';
 import { DEMO_ADDRESSES, DEMO_UNSERVED_CENTER, seedDev } from './seed-dev-data.js';
@@ -468,5 +468,43 @@ describe('dados de demonstração', () => {
     ]);
     // Sem reset, a próxima execução reencontra as novas.
     expect(await seedDev(owner.db)).toEqual(after);
+  });
+  it('avisos gerados pelo seed não ficam na fila; os de antes ficam', async () => {
+    const before = await seedDev(owner.db);
+    const [earlier] = await owner.db
+      .insert(notificationOutbox)
+      .values({
+        tenantId: before.tenantId,
+        userId: before.agentId,
+        channel: 'push',
+        kind: 'work_order_assigned',
+        protocol: 'P-ANTES',
+      })
+      .returning();
+    // Relógio do banco, em texto para não perder os microssegundos: o created_at da fila vem dele.
+    const { rows } = await owner.db.execute<{ started: string }>(
+      sql`select clock_timestamp()::text as started`,
+    );
+    const started = rows[0]!.started;
+
+    await seedDev(owner.db, { reset: true });
+
+    const created = await owner.db
+      .select({ id: notificationOutbox.id, status: notificationOutbox.status })
+      .from(notificationOutbox)
+      .where(
+        and(
+          eq(notificationOutbox.tenantId, before.tenantId),
+          gte(notificationOutbox.createdAt, sql`${started}::timestamptz`),
+        ),
+      );
+    // O reset atribui de novo: o gatilho gera avisos, e o seed os tira da fila.
+    expect(created.length).toBeGreaterThan(0);
+    expect(created.every((row) => row.status === 'skipped')).toBe(true);
+    const [kept] = await owner.db
+      .select({ status: notificationOutbox.status })
+      .from(notificationOutbox)
+      .where(eq(notificationOutbox.id, earlier!.id));
+    expect(kept!.status).toBe('pending');
   });
 });

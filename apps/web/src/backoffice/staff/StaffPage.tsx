@@ -4,11 +4,9 @@ import { UserPlus } from 'lucide-react';
 import { useState } from 'react';
 import { Navigate } from 'react-router';
 import { api } from '../../api';
-import { formatLastActive } from '../../format/last-active';
+import { formatLastAccess } from '../../format/last-active';
 import { useNow } from '../../format/use-now';
-import { errorCode } from '../../occurrence/use-occurrence-actions';
 import { useSession } from '../../session/SessionProvider';
-import { generalErrorMessage } from '../../teams/team-errors';
 import { Badge } from '../../ui/Badge';
 import { Button } from '../../ui/Button';
 import { ConfirmDialog } from '../../ui/ConfirmDialog';
@@ -18,6 +16,7 @@ import { useToast } from '../../ui/Toast';
 import { TopBar } from '../../ui/TopBar';
 import { useBackofficeContext } from '../use-backoffice-context';
 import { StaffDialog } from './StaffDialog';
+import { staffErrorMessage } from './staff-errors';
 import { STAFF_KEY } from './staff-keys';
 import styles from './StaffPage.module.css';
 
@@ -30,20 +29,6 @@ type Dialogs =
   | { kind: 'remove'; member: StaffMember };
 
 const otherRole = (role: PlatformRole): PlatformRole => (role === 'admin' ? 'support' : 'admin');
-
-/** Recusas da API (troca de papel e remoção) em texto. */
-function actionErrorMessage(error: unknown): string {
-  switch (errorCode(error)) {
-    case 'last_platform_admin':
-      return 'A equipe precisa de ao menos um Admin. Passe o papel de Admin a outra pessoa antes.';
-    case 'self_change_not_allowed':
-      return 'Você não pode trocar o próprio papel nem se remover da equipe.';
-    case 'staff_not_found':
-      return 'Esta pessoa não está mais na equipe.';
-    default:
-      return generalErrorMessage(error);
-  }
-}
 
 /** P6 · Equipe Alô Cidadão: só o Admin; o Suporte volta para as prefeituras. */
 export function StaffPage() {
@@ -74,7 +59,7 @@ export function StaffPage() {
       setDialog(null);
     },
     onError: (error) => {
-      setActionError(actionErrorMessage(error));
+      setActionError(staffErrorMessage(error));
       setDialog(null);
     },
   });
@@ -88,7 +73,7 @@ export function StaffPage() {
       setDialog(null);
     },
     onError: (error) => {
-      setActionError(actionErrorMessage(error));
+      setActionError(staffErrorMessage(error));
       setDialog(null);
     },
   });
@@ -98,7 +83,10 @@ export function StaffPage() {
   function menuItems(row: StaffMember): RowMenuItem[] {
     const edit: RowMenuItem = {
       label: 'Editar',
-      onSelect: () => setDialog({ kind: 'edit', member: row }),
+      onSelect: () => {
+        setActionError(null);
+        setDialog({ kind: 'edit', member: row });
+      },
     };
     // Ninguém troca o próprio papel nem se remove (a API também recusa).
     if (row.userId === selfId) return [edit];
@@ -157,7 +145,7 @@ export function StaffPage() {
       width: 160,
       render: (row) => (
         <span className={styles.muted}>
-          {formatLastActive(row.lastActiveAt ? new Date(row.lastActiveAt) : null, now)}
+          {formatLastAccess(row.lastActiveAt ? new Date(row.lastActiveAt) : null, now)}
         </span>
       ),
     },
@@ -181,7 +169,10 @@ export function StaffPage() {
             <Button
               size="md"
               icon={<UserPlus size={16} aria-hidden />}
-              onClick={() => setDialog({ kind: 'create' })}
+              onClick={() => {
+                setActionError(null);
+                setDialog({ kind: 'create' });
+              }}
             >
               Adicionar pessoa
             </Button>

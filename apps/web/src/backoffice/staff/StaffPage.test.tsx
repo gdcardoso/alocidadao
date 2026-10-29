@@ -225,6 +225,37 @@ describe('StaffPage', () => {
     );
   });
 
+  it('opening add clears the last action error', async () => {
+    const user = renderPage();
+    remove.mockRejectedValue(new ApiError(409, { code: 'last_platform_admin' }));
+    await user.click(await screen.findByRole('button', { name: 'Ações de Marina Dias' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Remover da equipe' }));
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Remover' }));
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Adicionar pessoa' }));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('edit of someone who left the team shows the staff message', async () => {
+    const user = renderPage();
+    update.mockRejectedValue(new ApiError(404, { code: 'staff_not_found' }));
+    await user.click(await screen.findByRole('button', { name: 'Ações de Marina Dias' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Editar' }));
+    const dialog = screen.getByRole('dialog', { name: 'Editar pessoa' });
+    await user.click(within(dialog).getByRole('button', { name: 'Salvar' }));
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'Esta pessoa não está mais na equipe.',
+    );
+  });
+
+  it('last access uses the relative format of the design', async () => {
+    const threeDaysAgo = new Date(Date.now() - 3 * 86_400_000).toISOString();
+    list.mockResolvedValue({ items: [lucas, { ...marina, lastActiveAt: threeDaysAgo }] });
+    renderPage();
+    const row = (await screen.findByText('Marina Dias')).closest('tr')!;
+    expect(within(row).getByText('há 3 dias')).toBeInTheDocument();
+  });
+
   it('edit sends only name and email', async () => {
     const user = renderPage();
     update.mockResolvedValue(undefined);

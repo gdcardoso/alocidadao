@@ -2,7 +2,6 @@ import {
   INCLUDED_USERS_MAX,
   PLANS,
   PLAN_LABELS,
-  formatCpf,
   tenantCreateBodySchema,
   type MunicipalityOption,
 } from '@alocidadao/shared';
@@ -11,6 +10,7 @@ import { FilePenLine, Map as MapIcon, Tags, UserCog } from 'lucide-react';
 import { useId, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router';
 import { api } from '../../api';
+import { maskCpfInput } from '../../format/cpf';
 import { errorCode } from '../../occurrence/use-occurrence-actions';
 import { useSession } from '../../session/SessionProvider';
 import { apiErrorField, generalErrorMessage } from '../../teams/team-errors';
@@ -36,13 +36,6 @@ type FieldKey =
 type Errors = Partial<Record<FieldKey, string>>;
 
 const REQUIRED_TEXT = 'Preencha este campo.';
-
-function maskCpfInput(digits: string): string {
-  if (digits.length <= 3) return digits;
-  if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`;
-  if (digits.length <= 9) return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
-  return formatCpf(digits.padEnd(11, ' ')).trimEnd().replace(/[-.]$/, '');
-}
 
 /** P2: cadastro de prefeitura, só para o admin da equipe interna. */
 export function NewTenantPage() {

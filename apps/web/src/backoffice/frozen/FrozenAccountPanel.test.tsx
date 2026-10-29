@@ -102,6 +102,17 @@ describe('FrozenAccountPanel', () => {
     expect(onResolved).not.toHaveBeenCalled();
   });
 
+  it('unknown tenant shows its own message', async () => {
+    const user = userEvent.setup();
+    sendCode.mockRejectedValue(new ApiError(404, { code: 'tenant_not_found' }));
+    const { onResolved } = renderPanel('5a4d3f2b-8c1e-4e6f-8a7b-9c0d1e2f3a4b');
+    await user.click(screen.getByRole('button', { name: 'Recuperar conta antiga' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Esta prefeitura não foi encontrada. Volte ao backoffice e tente de novo.',
+    );
+    expect(onResolved).not.toHaveBeenCalled();
+  });
+
   it('frozen account panel without email offers only a new account', async () => {
     const user = userEvent.setup();
     sendCode.mockRejectedValue(new ApiError(409, { code: 'frozen_account_without_email' }));

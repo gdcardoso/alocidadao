@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatLastActive } from './last-active';
+import { formatLastAccess, formatLastActive } from './last-active';
 
 // 2026-10-26 15:00 em Brasília.
 const now = new Date('2026-10-26T18:00:00Z');
@@ -17,5 +17,16 @@ describe('formatLastActive', () => {
     expect(
       formatLastActive(new Date('2026-10-27T02:30:00Z'), new Date('2026-10-27T03:30:00Z')),
     ).toBe('ontem, 23:30');
+  });
+});
+
+describe('formatLastAccess', () => {
+  it('last access shows today, yesterday, days ago, a date or never', () => {
+    expect(formatLastAccess(new Date('2026-10-26T12:40:00Z'), now)).toBe('hoje, 09:40');
+    expect(formatLastAccess(new Date('2026-10-25T19:30:00Z'), now)).toBe('ontem, 16:30');
+    expect(formatLastAccess(new Date('2026-10-23T15:00:00Z'), now)).toBe('há 3 dias');
+    expect(formatLastAccess(new Date('2026-09-26T15:00:00Z'), now)).toBe('há 30 dias');
+    expect(formatLastAccess(new Date('2026-09-25T15:00:00Z'), now)).toBe('25 set 2026');
+    expect(formatLastAccess(null, now)).toBe('nunca entrou');
   });
 });

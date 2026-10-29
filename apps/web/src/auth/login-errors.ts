@@ -29,12 +29,15 @@ function retryAfter(body: unknown): number {
   return typeof body.retryAfterSeconds === 'number' ? body.retryAfterSeconds : 0;
 }
 
+/** Aviso do 429 no pedido de código: `Aguarde 0:45 para pedir outro código.` */
+export function codeRateLimitMessage(error: ApiError): string {
+  return `Aguarde ${formatCountdown(retryAfter(error.body))} para pedir outro código.`;
+}
+
 /** Mensagem do login para um erro do pedido de código ou da verificação. */
 export function loginErrorMessage(error: unknown): string {
   if (!(error instanceof ApiError)) return NETWORK_ERROR_MESSAGE;
-  if (error.status === 429) {
-    return `Aguarde ${formatCountdown(retryAfter(error.body))} para pedir outro código.`;
-  }
+  if (error.status === 429) return codeRateLimitMessage(error);
   const code = errorCode(error.body);
   return (code && MESSAGES[code]) ?? UNEXPECTED_ERROR_MESSAGE;
 }

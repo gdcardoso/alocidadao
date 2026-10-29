@@ -9,6 +9,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useId, useState } from 'react';
 import { api } from '../api';
+import { maskCpfInput } from '../format/cpf';
 import { useSession } from '../session/SessionProvider';
 import { usePanel } from '../shell/use-panel';
 import { errorCode } from '../occurrence/use-occurrence-actions';
@@ -19,14 +20,6 @@ import fields from '../ui/Field.module.css';
 import { useToast } from '../ui/Toast';
 import { departmentsKey, managersKey } from './managers-keys';
 import styles from './Managers.module.css';
-
-/** Máscara do CPF enquanto digita: `123`, `123.456`, `123.456.789`, `123.456.789-09`. */
-function maskCpfInput(digits: string): string {
-  if (digits.length <= 3) return digits;
-  if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`;
-  if (digits.length <= 9) return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
-  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9, 11)}`;
-}
 
 export interface ManagerDialogProps {
   /** Sem `manager`, cadastra; com `manager`, edita e-mail e setores. */

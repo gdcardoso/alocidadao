@@ -2,10 +2,10 @@ import { ApiError } from '@alocidadao/api-client';
 import type { FrozenAccountCodeResponse } from '@alocidadao/shared';
 import { useMutation } from '@tanstack/react-query';
 import { TriangleAlert } from 'lucide-react';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { api } from '../../api';
 import { CODE_LENGTH, CodeInput } from '../../auth/CodeInput';
-import { formatCountdown } from '../../auth/login-errors';
+import { codeRateLimitMessage } from '../../auth/login-errors';
 import { errorCode } from '../../occurrence/use-occurrence-actions';
 import { useSession } from '../../session/SessionProvider';
 import { generalErrorMessage } from '../../teams/team-errors';
@@ -27,18 +27,13 @@ export interface FrozenAccountPanelProps {
 
 const emptyCode = () => Array.from({ length: CODE_LENGTH }, () => '');
 
-function retryAfter(error: unknown): number {
-  if (!(error instanceof ApiError)) return 0;
-  const value = (error.body as { retryAfterSeconds?: unknown } | null)?.retryAfterSeconds;
-  return typeof value === 'number' ? value : 0;
-}
-
 /**
  * CPF preso numa conta congelada: recuperar a conta antiga (código no e-mail dela, que só
  * aparece mascarado) ou criar uma conta nova (libera o CPF; a antiga continua congelada).
  */
 export function FrozenAccountPanel({ cpf, email, tenantId, onResolved }: FrozenAccountPanelProps) {
   const { session } = useSession();
+  const ids = useId();
   const [challenge, setChallenge] = useState<FrozenAccountCodeResponse | null>(null);
   const [withoutEmail, setWithoutEmail] = useState(false);
   const [digits, setDigits] = useState<string[]>(emptyCode);
@@ -53,8 +48,11 @@ export function FrozenAccountPanel({ cpf, email, tenantId, onResolved }: FrozenA
       onResolved();
       return null;
     }
-    if (code === 'code_rate_limited') {
-      return `Aguarde ${formatCountdown(retryAfter(failure))} para pedir outro código.`;
+    if (code === 'code_rate_limited' && failure instanceof ApiError) {
+      return codeRateLimitMessage(failure);
+    }
+    if (code === 'tenant_not_found') {
+      return 'Esta prefeitura não foi encontrada. Volte ao backoffice e tente de novo.';
     }
     if (code === 'invalid_code') return 'Código incorreto ou expirado. Confira ou peça um novo.';
     if (code === 'email_in_use') return 'Este e-mail já é de outra pessoa.';
@@ -124,8 +122,10 @@ export function FrozenAccountPanel({ cpf, email, tenantId, onResolved }: FrozenA
           <p className={fields.hint}>
             Enviamos um código para {challenge.maskedEmail}, o e-mail da conta antiga.
           </p>
-          <div className={fields.field}>
-            <span className={fields.label}>Código</span>
+          <div className={fields.field} role="group" aria-labelledby={`${ids}-code`}>
+            <span id={`${ids}-code`} className={fields.label}>
+              Código
+            </span>
             <CodeInput
               digits={digits}
               onChange={setDigits}

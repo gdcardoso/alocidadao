@@ -9,23 +9,17 @@ import {
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useId, useState } from 'react';
 import { api } from '../../api';
+import { maskCpfInput } from '../../format/cpf';
 import { errorCode } from '../../occurrence/use-occurrence-actions';
 import { useSession } from '../../session/SessionProvider';
-import { apiErrorField, generalErrorMessage } from '../../teams/team-errors';
+import { apiErrorField } from '../../teams/team-errors';
 import { Button } from '../../ui/Button';
 import { Dialog } from '../../ui/Dialog';
 import fields from '../../ui/Field.module.css';
 import { useToast } from '../../ui/Toast';
 import { FrozenAccountPanel } from '../frozen/FrozenAccountPanel';
+import { staffErrorMessage } from './staff-errors';
 import { STAFF_KEY } from './staff-keys';
-
-/** Máscara do CPF enquanto digita: `123`, `123.456`, `123.456.789`, `123.456.789-09`. */
-function maskCpfInput(digits: string): string {
-  if (digits.length <= 3) return digits;
-  if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`;
-  if (digits.length <= 9) return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
-  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9, 11)}`;
-}
 
 export interface StaffDialogProps {
   /** Sem `member`, adiciona; com `member`, edita nome e e-mail (o papel tem ação própria). */
@@ -90,7 +84,7 @@ export function StaffDialog({ member, onClose }: StaffDialogProps) {
       } else if (code === 'cpf_unavailable') {
         setFrozen(true);
       } else {
-        setGeneralError(generalErrorMessage(error));
+        setGeneralError(staffErrorMessage(error));
       }
     },
   });

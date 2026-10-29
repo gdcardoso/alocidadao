@@ -6,6 +6,7 @@ import { Navigate, useNavigate } from 'react-router';
 import { api } from '../api';
 import panelLoginImage from '../assets/painel-login.png';
 import symbolImage from '../assets/simbolo.png';
+import { maskCpfInput } from '../format/cpf';
 import { useSession } from '../session/SessionProvider';
 import { Button } from '../ui/Button';
 import { CODE_LENGTH, CodeInput } from './CodeInput';
@@ -16,14 +17,6 @@ const HOME_PATH = '/mapa';
 const BACKOFFICE_PATH = '/backoffice/prefeituras';
 
 const emptyCode = (): string[] => Array.from({ length: CODE_LENGTH }, () => '');
-
-/** Máscara do CPF enquanto digita: `123`, `123.456`, `123.456.789`, `123.456.789-09`. */
-function maskCpf(digits: string): string {
-  if (digits.length <= 3) return digits;
-  if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`;
-  if (digits.length <= 9) return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
-  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9, 11)}`;
-}
 
 type Step = { kind: 'cpf' } | { kind: 'code'; challenge: PanelChallengeResponse; resendAt: number };
 
@@ -173,7 +166,7 @@ export function LoginPage() {
                 inputMode="numeric"
                 autoComplete="off"
                 autoFocus
-                value={maskCpf(cpfDigits)}
+                value={maskCpfInput(cpfDigits)}
                 aria-invalid={error ? true : undefined}
                 aria-describedby={error ? `${errorId} ${cpfHelpId}` : cpfHelpId}
                 onChange={(event) => {

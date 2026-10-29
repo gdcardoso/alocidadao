@@ -468,4 +468,158 @@ describe('backoffice calls', () => {
     await searchApi.backofficeMunicipalities('São Paulo');
     expect(search.calls[0]?.url).toBe('http://api/backoffice/municipalities?q=S%C3%A3o+Paulo');
   });
+
+  it('6b backoffice methods call the right paths without x-tenant-id', async () => {
+    const U = '7c1d2e3f-4a5b-4c6d-8e7f-901234567891';
+    const row = {
+      id: U,
+      at: '2026-10-28T10:00:00.000Z',
+      staffName: 'Ana',
+      tenantId: null,
+      tenantName: null,
+      action: 'staff.create',
+      targetType: 'staff',
+      targetLabel: 'Bia',
+    };
+    const member = {
+      userId: U,
+      name: 'Ana',
+      maskedCpf: '***.456.789-**',
+      email: 'ana@exemplo.com',
+      platformRole: 'admin',
+      lastActiveAt: null,
+    };
+    const csv = '\uFEFFPosição;Município\r\n1;Exemplo\r\n';
+    const cases: {
+      name: string;
+      call: (api: ReturnType<typeof createApiClient>) => Promise<unknown>;
+      method: string;
+      path: string;
+      body?: unknown;
+      response: () => Response;
+      result?: unknown;
+    }[] = [
+      {
+        name: 'city interest',
+        call: (a) => a.backofficeCityInterest(),
+        method: 'GET',
+        path: '/backoffice/city-interest',
+        response: () => Response.json({ items: [] }),
+        result: { items: [] },
+      },
+      {
+        name: 'csv',
+        call: (a) => a.backofficeCityInterestCsv(),
+        method: 'GET',
+        path: '/backoffice/city-interest.csv',
+        response: () => new Response(csv, { headers: { 'content-type': 'text/csv' } }),
+        result: csv,
+      },
+      {
+        name: 'lead status',
+        call: (a) => a.backofficeSetLeadStatus('3550308', 'won'),
+        method: 'PUT',
+        path: '/backoffice/city-interest/3550308/status',
+        body: { status: 'won' },
+        response: () => new Response(null, { status: 204 }),
+      },
+      {
+        name: 'staff list',
+        call: (a) => a.backofficeStaff(),
+        method: 'GET',
+        path: '/backoffice/staff',
+        response: () => Response.json({ items: [member] }),
+        result: { items: [member] },
+      },
+      {
+        name: 'staff add',
+        call: (a) =>
+          a.backofficeAddStaff({
+            name: 'Bia',
+            cpf: '52998224725',
+            email: 'bia@exemplo.com',
+            platformRole: 'support',
+          }),
+        method: 'POST',
+        path: '/backoffice/staff',
+        body: {
+          name: 'Bia',
+          cpf: '52998224725',
+          email: 'bia@exemplo.com',
+          platformRole: 'support',
+        },
+        response: () => Response.json({ id: U }, { status: 201 }),
+        result: { id: U },
+      },
+      {
+        name: 'staff update',
+        call: (a) => a.backofficeUpdateStaff(U, { platformRole: 'admin' }),
+        method: 'PATCH',
+        path: `/backoffice/staff/${U}`,
+        body: { platformRole: 'admin' },
+        response: () => new Response(null, { status: 204 }),
+      },
+      {
+        name: 'staff remove',
+        call: (a) => a.backofficeRemoveStaff(U),
+        method: 'DELETE',
+        path: `/backoffice/staff/${U}`,
+        response: () => new Response(null, { status: 204 }),
+      },
+      {
+        name: 'audit',
+        call: (a) => a.backofficeAudit({ tenantId: U, from: '2026-10-01', page: 2 }),
+        method: 'GET',
+        path: `/backoffice/audit?tenantId=${U}&from=2026-10-01&page=2`,
+        response: () => Response.json({ items: [row], total: 1, page: 2, pageSize: 50 }),
+        result: { items: [row], total: 1, page: 2, pageSize: 50 },
+      },
+      {
+        name: 'frozen code',
+        call: (a) => a.backofficeFrozenAccountCode({ cpf: '52998224725', tenantId: null }),
+        method: 'POST',
+        path: '/backoffice/frozen-accounts/recovery-code',
+        body: { cpf: '52998224725', tenantId: null },
+        response: () =>
+          Response.json({ challengeId: U, maskedEmail: 'a***@exemplo.com', retryAfterSeconds: 60 }),
+        result: { challengeId: U, maskedEmail: 'a***@exemplo.com', retryAfterSeconds: 60 },
+      },
+      {
+        name: 'frozen recover',
+        call: (a) =>
+          a.backofficeRecoverFrozenAccount({
+            challengeId: U,
+            code: '123456',
+            email: 'novo@exemplo.com',
+            tenantId: U,
+          }),
+        method: 'POST',
+        path: '/backoffice/frozen-accounts/recover',
+        body: { challengeId: U, code: '123456', email: 'novo@exemplo.com', tenantId: U },
+        response: () => new Response(null, { status: 204 }),
+      },
+      {
+        name: 'frozen release',
+        call: (a) => a.backofficeReleaseFrozenCpf({ cpf: '52998224725', tenantId: null }),
+        method: 'POST',
+        path: '/backoffice/frozen-accounts/release-cpf',
+        body: { cpf: '52998224725', tenantId: null },
+        response: () => new Response(null, { status: 204 }),
+      },
+    ];
+    for (const c of cases) {
+      const { calls, fakeFetch } = recorder(c.response);
+      const api = createApiClient({ baseUrl: 'http://api', fetch: fakeFetch, getToken: () => 't' });
+      const result = await c.call(api);
+      const call = calls[0];
+      expect(call?.url, c.name).toBe(`http://api${c.path}`);
+      expect(call?.init?.method, c.name).toBe(c.method);
+      const headers = new Headers(call?.init?.headers);
+      expect(headers.get('x-tenant-id'), c.name).toBeNull();
+      expect(headers.get('Authorization'), c.name).toBe('Bearer t');
+      if (c.body !== undefined)
+        expect(JSON.parse(String(call?.init?.body)), c.name).toEqual(c.body);
+      if (c.result !== undefined) expect(result, c.name).toEqual(c.result);
+    }
+  });
 });

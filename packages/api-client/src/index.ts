@@ -1,11 +1,28 @@
 import {
+  auditResponseSchema,
+  cityInterestResponseSchema,
+  frozenAccountCodeResponseSchema,
+  staffCreateResponseSchema,
+  staffListResponseSchema,
   backofficeContextSchema,
   municipalitySearchResponseSchema,
   tenantCreateResponseSchema,
   tenantDetailSchema,
   tenantListResponseSchema,
   tenantSummarySchema,
+  type AuditQuery,
+  type AuditResponse,
   type BackofficeContext,
+  type CityInterestResponse,
+  type CommercialStatus,
+  type FrozenAccountCodeBody,
+  type FrozenAccountCodeResponse,
+  type FrozenAccountRecoverBody,
+  type FrozenAccountReleaseBody,
+  type StaffCreateBody,
+  type StaffCreateResponse,
+  type StaffListResponse,
+  type StaffUpdateBody,
   type MunicipalitySearchResponse,
   type TenantCreateBody,
   type TenantCreateResponse,
@@ -233,7 +250,12 @@ export function createApiClient({
   timeoutMs = DEFAULT_TIMEOUT_MS,
   credentials,
 }: ApiClientOptions) {
-  async function request(path: string, init: RequestInit = {}, auth: Auth = 'session') {
+  async function request(
+    path: string,
+    init: RequestInit = {},
+    auth: Auth = 'session',
+    asText = false,
+  ) {
     const callerSignal = init.signal ?? null;
     if (callerSignal?.aborted) throw abortError(callerSignal);
 
@@ -262,9 +284,17 @@ export function createApiClient({
         headers,
         signal: controller.signal,
       });
-      const body = response.status === 204 ? null : parseBody(await response.text());
+      // `response.text()` descarta o BOM do CSV; decodificar à mão o mantém (o Excel precisa dele).
+      const text =
+        response.status === 204
+          ? null
+          : asText
+            ? new TextDecoder('utf-8', { ignoreBOM: true }).decode(await response.arrayBuffer())
+            : await response.text();
+      const body = text === null ? null : parseBody(text);
       if (!response.ok) throw new ApiError(response.status, body);
-      return body;
+      // Resposta em texto (CSV): devolve o corpo cru, sem tentar ler como JSON.
+      return asText ? (text ?? '') : body;
     } catch (error) {
       if (timedOut && !(error instanceof ApiError)) throw new ApiTimeoutError();
       throw error;
@@ -285,6 +315,15 @@ export function createApiClient({
       ...(options.tenantId && { headers: { 'x-tenant-id': options.tenantId } }),
       signal: options.signal ?? null,
     });
+
+  /** GET autenticado que devolve o corpo como texto (download de CSV). */
+  const sendText = (path: string, options: RequestOptions = {}): Promise<string> =>
+    request(
+      path,
+      { method: 'GET', signal: options.signal ?? null },
+      'session',
+      true,
+    ) as Promise<string>;
 
   const requestPath = (id: string, action?: string) =>
     `/citizen/requests/${encodeURIComponent(id)}${action ? `/${action}` : ''}`;
@@ -484,6 +523,79 @@ export function createApiClient({
 
     backofficeLeaveSupport: async (id: string, options?: RequestOptions): Promise<void> => {
       await send('POST', tenantPath(id, 'support/leave'), undefined, options);
+    },
+
+    backofficeCityInterest: async (options?: RequestOptions): Promise<CityInterestResponse> =>
+      cityInterestResponseSchema.parse(
+        await send('GET', '/backoffice/city-interest', undefined, options),
+      ),
+
+    /** Texto do CSV (com BOM); a tela monta o Blob, porque o download precisa do token. */
+    backofficeCityInterestCsv: (options?: RequestOptions): Promise<string> =>
+      sendText('/backoffice/city-interest.csv', options),
+
+    backofficeSetLeadStatus: async (
+      ibgeCode: string,
+      status: CommercialStatus,
+      options?: RequestOptions,
+    ): Promise<void> => {
+      await send(
+        'PUT',
+        `/backoffice/city-interest/${encodeURIComponent(ibgeCode)}/status`,
+        { status },
+        options,
+      );
+    },
+
+    backofficeStaff: async (options?: RequestOptions): Promise<StaffListResponse> =>
+      staffListResponseSchema.parse(await send('GET', '/backoffice/staff', undefined, options)),
+
+    backofficeAddStaff: async (
+      body: StaffCreateBody,
+      options?: RequestOptions,
+    ): Promise<StaffCreateResponse> =>
+      staffCreateResponseSchema.parse(await send('POST', '/backoffice/staff', body, options)),
+
+    backofficeUpdateStaff: async (
+      userId: string,
+      body: StaffUpdateBody,
+      options?: RequestOptions,
+    ): Promise<void> => {
+      await send('PATCH', `/backoffice/staff/${encodeURIComponent(userId)}`, body, options);
+    },
+
+    backofficeRemoveStaff: async (userId: string, options?: RequestOptions): Promise<void> => {
+      await send('DELETE', `/backoffice/staff/${encodeURIComponent(userId)}`, undefined, options);
+    },
+
+    backofficeAudit: async (
+      params: Partial<AuditQuery> = {},
+      options?: RequestOptions,
+    ): Promise<AuditResponse> =>
+      auditResponseSchema.parse(
+        await send('GET', `/backoffice/audit${panelQuery({ ...params })}`, undefined, options),
+      ),
+
+    backofficeFrozenAccountCode: async (
+      body: FrozenAccountCodeBody,
+      options?: RequestOptions,
+    ): Promise<FrozenAccountCodeResponse> =>
+      frozenAccountCodeResponseSchema.parse(
+        await send('POST', '/backoffice/frozen-accounts/recovery-code', body, options),
+      ),
+
+    backofficeRecoverFrozenAccount: async (
+      body: FrozenAccountRecoverBody,
+      options?: RequestOptions,
+    ): Promise<void> => {
+      await send('POST', '/backoffice/frozen-accounts/recover', body, options);
+    },
+
+    backofficeReleaseFrozenCpf: async (
+      body: FrozenAccountReleaseBody,
+      options?: RequestOptions,
+    ): Promise<void> => {
+      await send('POST', '/backoffice/frozen-accounts/release-cpf', body, options);
     },
 
     panelContext: async (tenantId: string, options?: RequestOptions): Promise<PanelContext> =>

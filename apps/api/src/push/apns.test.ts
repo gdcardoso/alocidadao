@@ -1,11 +1,14 @@
 import { decodeJwt, decodeProtectedHeader, exportPKCS8, generateKeyPair } from 'jose';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { createApnsSender, type Http2Request } from './apns.js';
-import { statusPushMessage } from './message.js';
+import { notificationPushMessage } from './message.js';
 
 const KEY_ID = 'ABC123DEFG';
 const TEAM_ID = 'TEAM123456';
-const message = statusPushMessage('2026-000123', 'in_progress');
+const message = notificationPushMessage('request_in_progress', '2026-000123', {
+  tenantId: 't-1',
+  requestId: 'r-1',
+});
 
 let privateKeyPem: string;
 beforeAll(async () => {
@@ -58,8 +61,7 @@ describe('apns sender', () => {
     expect(calls[0]!.headers['apns-priority']).toBe('10');
     expect(JSON.parse(calls[0]!.body)).toEqual({
       aps: { alert: { title: message.title, body: message.body }, sound: 'default' },
-      protocol: '2026-000123',
-      status: 'in_progress',
+      ...message.data,
     });
   });
 
@@ -73,6 +75,7 @@ describe('apns sender', () => {
     [410, 'Unregistered', 'invalid_token'],
     [400, 'BadDeviceToken', 'invalid_token'],
     [400, 'Unregistered', 'invalid_token'],
+    [400, 'DeviceTokenNotForTopic', 'invalid_token'],
     [429, 'TooManyRequests', 'retry'],
     [503, 'ServiceUnavailable', 'retry'],
   ])('maps %i %s to %s', async (status, reason, kind) => {
@@ -105,5 +108,24 @@ describe('apns sender', () => {
     const [a, b, c] = calls.map((x) => x.headers.authorization);
     expect(b).toBe(a);
     expect(c).not.toBe(a);
+  });
+
+  it('apns encodes the device token in the path', async () => {
+    const { request, calls } = fakeRequest(200, '');
+    await sender(request).send('a/b?c d', message);
+    expect(calls[0]!.url).toBe('https://api.sandbox.push.apple.com/3/device/a%2Fb%3Fc%20d');
+  });
+
+  it('apns uses the configured bundle id', async () => {
+    const { request, calls } = fakeRequest(200, '');
+    await createApnsSender({
+      teamId: TEAM_ID,
+      keyId: KEY_ID,
+      privateKeyPem,
+      bundleId: 'com.exemplo.outro',
+      production: false,
+      request,
+    }).send('t', message);
+    expect(calls[0]!.headers['apns-topic']).toBe('com.exemplo.outro');
   });
 });

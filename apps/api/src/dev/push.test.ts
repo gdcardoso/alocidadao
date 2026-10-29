@@ -13,7 +13,12 @@ function fakeSender(result: PushResult) {
   return { sender, calls };
 }
 
-const body = { platform: 'android', token: 'tok', protocol: '2026-000123', status: 'in_progress' };
+const body = {
+  platform: 'android',
+  token: 'tok',
+  kind: 'request_in_progress',
+  protocol: '2026-000123',
+};
 
 describe('POST /dev/push', () => {
   it('responds 503 when the platform sender is not configured', async () => {
@@ -25,7 +30,19 @@ describe('POST /dev/push', () => {
     await app.close();
   });
 
-  it('sends the status message and returns the result', async () => {
+  it('responds 503 when the platform only has the log sender', async () => {
+    const { sender, calls } = fakeSender({ kind: 'sent' });
+    const app = await buildApp({
+      devRoutes: true,
+      push: { android: sender, configured: { android: false, ios: false } },
+    });
+    const res = await app.inject({ method: 'POST', url: '/dev/push', payload: body });
+    expect(res.statusCode).toBe(503);
+    expect(calls).toHaveLength(0);
+    await app.close();
+  });
+
+  it('sends the notification message and returns the result', async () => {
     const { sender, calls } = fakeSender({ kind: 'retry', reason: 'network' });
     const app = await buildApp({ devRoutes: true, push: { android: sender } });
     const res = await app.inject({ method: 'POST', url: '/dev/push', payload: body });
@@ -36,8 +53,13 @@ describe('POST /dev/push', () => {
         token: 'tok',
         message: {
           title: 'Alô Cidadão',
-          body: 'Solicitação 2026-000123: Em atendimento',
-          data: { protocol: '2026-000123', status: 'in_progress' },
+          body: 'Solicitação 2026-000123: em atendimento',
+          data: {
+            kind: 'request_in_progress',
+            tenantId: 'dev',
+            requestId: 'dev',
+            workOrderId: 'dev',
+          },
         },
       },
     ]);
@@ -68,7 +90,7 @@ describe('POST /dev/push', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/dev/push',
-      payload: { ...body, status: 'nope' },
+      payload: { ...body, kind: 'nope' },
     });
     expect(res.statusCode).toBe(400);
     await app.close();

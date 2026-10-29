@@ -7,17 +7,26 @@ export interface FcmSenderOptions {
 }
 
 interface FcmErrorBody {
-  error?: { status?: string; details?: { errorCode?: string }[] };
+  error?: {
+    status?: string;
+    message?: string;
+    details?: { errorCode?: string; fieldViolations?: { field?: string }[] }[];
+  };
 }
 
-function errorCodes(body: string): string[] {
+function parseError(body: string): { codes: string[]; tokenInvalid: boolean } {
   try {
-    const parsed = JSON.parse(body) as FcmErrorBody;
-    const codes = (parsed.error?.details ?? []).flatMap((d) => (d.errorCode ? [d.errorCode] : []));
-    if (parsed.error?.status) codes.push(parsed.error.status);
-    return codes;
+    const error = (JSON.parse(body) as FcmErrorBody).error;
+    const details = error?.details ?? [];
+    const codes = details.flatMap((d) => (d.errorCode ? [d.errorCode] : []));
+    if (error?.status) codes.push(error.status);
+    // INVALID_ARGUMENT também vem de payload ruim: só conta como token inválido se apontar o token.
+    const tokenInvalid =
+      /registration token/i.test(error?.message ?? '') ||
+      details.some((d) => (d.fieldViolations ?? []).some((v) => v.field === 'message.token'));
+    return { codes, tokenInvalid };
   } catch {
-    return [];
+    return { codes: [], tokenInvalid: false };
   }
 }
 
@@ -63,10 +72,13 @@ export function createFcmSender({
       }
 
       if (status === 200) return { kind: 'sent' };
-      const codes = errorCodes(text);
+      const { codes, tokenInvalid } = parseError(text);
       if (status === 404 || codes.includes('UNREGISTERED')) return { kind: 'invalid_token' };
-      // No spike, todo 400 INVALID_ARGUMENT conta como erro de token.
-      if (status === 400 && codes.includes('INVALID_ARGUMENT')) return { kind: 'invalid_token' };
+      if (status === 400 && codes.includes('INVALID_ARGUMENT')) {
+        return tokenInvalid
+          ? { kind: 'invalid_token' }
+          : { kind: 'retry', reason: 'invalid_argument' };
+      }
       if (status === 429) return { kind: 'retry', reason: 'rate_limited' };
       if (status >= 500) return { kind: 'retry', reason: `server_error_${status}` };
       return { kind: 'retry', reason: String(status) };

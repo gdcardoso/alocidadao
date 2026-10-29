@@ -62,7 +62,7 @@ export function createApnsSender({
       let response: { status: number; body: string };
       try {
         response = await request(
-          `${origin}/3/device/${token}`,
+          `${origin}/3/device/${encodeURIComponent(token)}`,
           {
             authorization: `bearer ${jwt}`,
             'apns-topic': bundleId,
@@ -83,7 +83,12 @@ export function createApnsSender({
       if (status === 200) return { kind: 'sent' };
       const reason = apnsReason(response.body);
       if (status === 410) return { kind: 'invalid_token' };
-      if (status === 400 && (reason === 'BadDeviceToken' || reason === 'Unregistered')) {
+      if (
+        status === 400 &&
+        (reason === 'BadDeviceToken' ||
+          reason === 'Unregistered' ||
+          reason === 'DeviceTokenNotForTopic')
+      ) {
         return { kind: 'invalid_token' };
       }
       if (status === 429) return { kind: 'retry', reason: 'rate_limited' };

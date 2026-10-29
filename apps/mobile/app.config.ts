@@ -6,7 +6,7 @@ import type { ConfigContext, ExpoConfig } from 'expo/config';
 // o build continua funcionando, só que sem push no Android.
 export default ({ config }: ConfigContext): ExpoConfig => {
   const googleServicesFile = process.env.GOOGLE_SERVICES_JSON ?? './google-services.json';
-  const hasGoogleServices = existsSync(resolve(process.cwd(), googleServicesFile));
+  const hasGoogleServices = existsSync(resolve(__dirname, googleServicesFile));
 
   return {
     ...config,

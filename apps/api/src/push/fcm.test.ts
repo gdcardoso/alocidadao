@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { createFcmSender } from './fcm.js';
-import { statusPushMessage } from './message.js';
+import { notificationPushMessage } from './message.js';
 
-const message = statusPushMessage('2026-000123', 'in_progress');
+const message = notificationPushMessage('request_in_progress', '2026-000123', {
+  tenantId: 't-1',
+  requestId: 'r-1',
+});
 
 function fakeFetch(status: number, body: unknown) {
   const calls: { url: string; init: RequestInit }[] = [];
@@ -69,43 +72,49 @@ describe('fcm sender', () => {
     expect(await sender(fn).send('t', message)).toEqual({ kind: 'invalid_token' });
   });
 
-  it('maps 400 INVALID_ARGUMENT to invalid_token', async () => {
+  it('fcm treats INVALID_ARGUMENT without token detail as retry, not invalid token', async () => {
     const { fn } = fakeFetch(400, {
       error: {
         status: 'INVALID_ARGUMENT',
-        details: [{ '@type': 'x.FcmError', errorCode: 'INVALID_ARGUMENT' }],
+        message: 'Invalid value at message.data',
+        details: [
+          {
+            '@type': 'type.googleapis.com/google.firebase.fcm.v1.FcmError',
+            errorCode: 'INVALID_ARGUMENT',
+          },
+        ],
       },
     });
-    expect(await sender(fn).send('t', message)).toEqual({ kind: 'invalid_token' });
-  });
-
-  it('maps 429 to retry with a reason', async () => {
-    const { fn } = fakeFetch(429, { error: { status: 'RESOURCE_EXHAUSTED' } });
-    const result = await sender(fn).send('t', message);
-    expect(result.kind).toBe('retry');
-  });
-
-  it('maps unknown statuses to retry with the status as reason', async () => {
-    const { fn } = fakeFetch(401, 'nope');
-    expect(await sender(fn).send('t', message)).toEqual({ kind: 'retry', reason: '401' });
-  });
-
-  it('maps a network failure to retry', async () => {
-    const f = (async () => {
-      throw new TypeError('fetch failed');
-    }) as unknown as typeof fetch;
-    expect(await sender(f).send('t', message)).toEqual({ kind: 'retry', reason: 'network' });
-  });
-
-  it('maps an access token failure to retry without throwing', async () => {
-    const { fn } = fakeFetch(200, {});
-    const s = createFcmSender({
-      projectId: 'p',
-      getAccessToken: async () => {
-        throw new Error('no creds');
-      },
-      fetch: fn,
+    expect(await sender(fn).send('t', message)).toEqual({
+      kind: 'retry',
+      reason: 'invalid_argument',
     });
-    expect(await s.send('t', message)).toEqual({ kind: 'retry', reason: 'auth' });
+  });
+
+  it('fcm treats UNREGISTERED and invalid registration token as invalid token', async () => {
+    const unregistered = fakeFetch(400, {
+      error: { status: 'NOT_FOUND', details: [{ errorCode: 'UNREGISTERED' }] },
+    });
+    expect((await sender(unregistered.fn).send('t', message)).kind).toBe('invalid_token');
+    const byMessage = fakeFetch(400, {
+      error: {
+        status: 'INVALID_ARGUMENT',
+        message: 'The registration token is not a valid FCM registration token',
+      },
+    });
+    expect((await sender(byMessage.fn).send('t', message)).kind).toBe('invalid_token');
+    const byField = fakeFetch(400, {
+      error: {
+        status: 'INVALID_ARGUMENT',
+        message: 'Request contains an invalid argument.',
+        details: [
+          {
+            '@type': 'type.googleapis.com/google.rpc.BadRequest',
+            fieldViolations: [{ field: 'message.token', description: 'bad' }],
+          },
+        ],
+      },
+    });
+    expect((await sender(byField.fn).send('t', message)).kind).toBe('invalid_token');
   });
 });

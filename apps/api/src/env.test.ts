@@ -88,6 +88,12 @@ describe('parseEnv', () => {
     expect(() => parseEnv({ APNS_TEAM_ID: 't' })).toThrow(/APNS_KEY_ID/);
   });
 
+  it('defaults APNS_BUNDLE_ID and accepts an override', () => {
+    const base = { APNS_TEAM_ID: 't', APNS_KEY_ID: 'k', APNS_KEY_FILE: './k.p8' };
+    expect(parseEnv(base).apns?.bundleId).toBe('br.com.alocidadao.app');
+    expect(parseEnv({ ...base, APNS_BUNDLE_ID: 'com.x.y' }).apns?.bundleId).toBe('com.x.y');
+  });
+
   it('accepts the real .env.example as copied', () => {
     const example = parseEnvFile(readFileSync(new URL('../.env.example', import.meta.url), 'utf8'));
     const env = parseEnv(example);

@@ -1,6 +1,5 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { createDatabase } from '@alocidadao/db';
-import { GoogleAuth } from 'google-auth-library';
 import { buildApp } from './app.js';
 import { parseEnv, type ApiEnv } from './env.js';
 import {
@@ -8,8 +7,7 @@ import {
   createResendEmailSender,
   type EmailSender,
 } from './messaging/email.js';
-import { createApnsSender } from './push/apns.js';
-import { createFcmSender } from './push/fcm.js';
+import { buildPushSenders } from './push/senders.js';
 import { createStorage } from './storage/s3.js';
 
 // O servidor roda com o diretório de trabalho em apps/api. Variáveis já definidas no
@@ -29,49 +27,36 @@ const storage = env.s3 ? createStorage(env.s3) : undefined;
 const databaseHandle = env.databaseUrl ? createDatabase(env.databaseUrl) : undefined;
 
 // Os caminhos dos arquivos são relativos a apps/api (o diretório de trabalho do servidor).
-const fcm = env.fcm
-  ? (() => {
-      const { projectId, serviceAccountFile } = env.fcm;
-      const auth = new GoogleAuth({
-        keyFile: serviceAccountFile,
-        scopes: ['https://www.googleapis.com/auth/firebase.messaging'],
-      });
-      return createFcmSender({
-        projectId,
-        getAccessToken: async () => {
-          const token = await auth.getAccessToken();
-          if (!token) throw new Error('FCM: sem token de acesso');
-          return token;
-        },
-      });
-    })()
-  : undefined;
-
-const apns = env.apns
-  ? createApnsSender({
-      teamId: env.apns.teamId,
-      keyId: env.apns.keyId,
-      privateKeyPem: readFileSync(env.apns.keyFile, 'utf8'),
-      bundleId: 'br.com.alocidadao.app',
-      production: env.apns.production,
-    })
-  : undefined;
-
 // Sem Resend (só fora de produção), o e-mail sai no log da aplicação, criada logo abaixo.
 const email: EmailSender = env.email.resendApiKey
   ? createResendEmailSender({ apiKey: env.email.resendApiKey, from: env.email.from })
   : { send: (msg) => createLogEmailSender(app.log).send(msg) };
+
+// O logger da aplicação nasce em buildApp: os avisos de antes dele ficam numa fila.
+const queuedLogs: { level: 'info' | 'warn'; obj: object; msg: string }[] = [];
+let appLog:
+  { info: (o: object, m: string) => void; warn: (o: object, m: string) => void } | undefined;
+const pushLog = {
+  info: (obj: object, msg: string) =>
+    appLog ? appLog.info(obj, msg) : queuedLogs.push({ level: 'info', obj, msg }),
+  warn: (obj: object, msg: string) =>
+    appLog ? appLog.warn(obj, msg) : queuedLogs.push({ level: 'warn', obj, msg }),
+};
+const push = buildPushSenders(env, pushLog);
 
 const app = await buildApp({
   logger: true,
   corsOrigin: env.corsOrigin,
   storage,
   database: databaseHandle?.db,
-  push: { android: fcm, ios: apns },
+  push,
   devRoutes: env.devRoutes,
   // Não há provedor de SMS: fora de produção o código sai no log; em produção, 503.
   auth: env.auth && databaseHandle ? { ...env.auth, email } : undefined,
 });
+
+appLog = app.log;
+for (const { level, obj, msg } of queuedLogs) app.log[level](obj, msg);
 
 // Fecha o pool do banco junto com o servidor.
 if (databaseHandle) app.addHook('onClose', async () => databaseHandle.pool.end());

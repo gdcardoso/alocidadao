@@ -21,7 +21,11 @@ export function createHttp2Request(): Http2Request {
     };
     session.on('error', drop);
     session.on('close', drop);
-    session.on('goaway', drop);
+    session.on('goaway', () => {
+      drop();
+      // Deixa as requisições em curso terminarem e fecha a sessão; a próxima abre outra.
+      session.close();
+    });
     session.unref();
     sessions.set(origin, session);
     return session;

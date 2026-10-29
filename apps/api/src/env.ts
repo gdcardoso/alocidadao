@@ -15,7 +15,13 @@ export interface ApiEnv {
   };
   // Os caminhos dos arquivos ficam como texto; quem lê o arquivo é o server.ts.
   fcm?: { projectId: string; serviceAccountFile: string };
-  apns?: { teamId: string; keyId: string; keyFile: string; production: boolean };
+  apns?: {
+    teamId: string;
+    keyId: string;
+    keyFile: string;
+    production: boolean;
+    bundleId: string;
+  };
   /** Login sem senha. Presente quando AUTH_SECRET está definida. */
   auth?: { secret: string; devFixedCode?: string };
   /** Sem chave do Resend, o e-mail sai no log (só fora de produção). */
@@ -51,6 +57,7 @@ const schema = z.object({
   APNS_KEY_ID: optionalText,
   APNS_KEY_FILE: optionalText,
   APNS_PRODUCTION: optionalText,
+  APNS_BUNDLE_ID: optionalText,
   AUTH_SECRET: z.preprocess(
     (v) => (v === '' ? undefined : v),
     z.string().min(32, 'deve ter no mínimo 32 caracteres').optional(),
@@ -149,6 +156,7 @@ export function parseEnv(source: Record<string, string | undefined>): ApiEnv {
             keyId: e.APNS_KEY_ID,
             keyFile: e.APNS_KEY_FILE,
             production: e.APNS_PRODUCTION === 'true',
+            bundleId: e.APNS_BUNDLE_ID ?? 'br.com.alocidadao.app',
           }
         : undefined,
     auth: e.AUTH_SECRET

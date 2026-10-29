@@ -39,3 +39,17 @@ export function formatDate(date: Date): string {
   const year = YEAR_PARTS.formatToParts(date).find((part) => part.type === 'year')?.value ?? '';
   return `${formatDayMonth(date)} ${year}`;
 }
+
+const NUMERIC_PARTS = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'America/Sao_Paulo',
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+});
+
+/** Data numérica no horário de Brasília: `12/08/2026`. */
+export function formatNumericDate(date: Date): string {
+  const parts = NUMERIC_PARTS.formatToParts(date);
+  const pick = (type: string) => parts.find((part) => part.type === type)?.value ?? '';
+  return `${pick('day')}/${pick('month')}/${pick('year')}`;
+}

@@ -112,12 +112,9 @@ describe('BackofficeLayout', () => {
     expect(screen.queryByRole('link', { name: 'Auditoria' })).not.toBeInTheDocument();
   });
 
-  it.each([
-    ['/backoffice/interesse', 'Interesse por cidade'],
-    ['/backoffice/auditoria', 'Auditoria'],
-  ])('coming soon pages show the item title and the text (%s)', async (path, title) => {
-    renderApp(path);
-    expect(await screen.findByRole('heading', { name: title })).toBeInTheDocument();
+  it('coming soon page shows the item title and the text', async () => {
+    renderApp('/backoffice/auditoria');
+    expect(await screen.findByRole('heading', { name: 'Auditoria' })).toBeInTheDocument();
     expect(screen.getByText('Esta tela chega na próxima etapa do backoffice.')).toBeInTheDocument();
   });
 });

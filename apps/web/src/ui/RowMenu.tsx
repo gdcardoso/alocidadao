@@ -1,4 +1,4 @@
-import { Ellipsis } from 'lucide-react';
+import { Check, Ellipsis } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 import styles from './RowMenu.module.css';
 
@@ -6,6 +6,8 @@ export interface RowMenuItem {
   label: string;
   onSelect: () => void;
   tone?: 'danger';
+  /** Item atual (ex.: a situação já escolhida): `aria-current` e um visto. */
+  current?: boolean;
 }
 
 export interface RowMenuProps {
@@ -71,6 +73,7 @@ export function RowMenu({ label, items }: RowMenuProps) {
               <button
                 type="button"
                 role="menuitem"
+                aria-current={item.current ? 'true' : undefined}
                 className={`${styles.item} ${item.tone === 'danger' ? styles.danger : ''}`}
                 onClick={(event) => {
                   event.stopPropagation();
@@ -79,6 +82,7 @@ export function RowMenu({ label, items }: RowMenuProps) {
                 }}
               >
                 {item.label}
+                {item.current ? <Check size={16} aria-hidden="true" /> : null}
               </button>
             </li>
           ))}

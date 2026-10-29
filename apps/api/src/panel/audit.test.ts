@@ -14,7 +14,7 @@ import { panelAuthHeader } from '../test/panel.js';
 import { panelFixtures } from '../test/panel-fixtures.js';
 import { testAuthOptions } from '../test/session.js';
 import { API_TEST_APP_URL, API_TEST_OWNER_URL } from '../test/urls.js';
-import { PANEL_AUDIT_ACTIONS } from './audit.js';
+import { PANEL_AUDIT_ACTIONS, PANEL_UNAUDITED_ROUTES } from './audit.js';
 import { addDays, todayInSaoPaulo } from './occurrences.js';
 import { registerPanelRoutes } from './routes.js';
 
@@ -83,7 +83,10 @@ describe('auditoria do modo suporte', () => {
     probe.addHook('onRoute', (route) => {
       const methods = Array.isArray(route.method) ? route.method : [route.method];
       for (const method of methods) {
-        if (method !== 'GET' && method !== 'HEAD') routes.push(`${method} ${route.url}`);
+        const key = `${method} ${route.url}`;
+        if (method !== 'GET' && method !== 'HEAD' && !PANEL_UNAUDITED_ROUTES.includes(key)) {
+          routes.push(key);
+        }
       }
     });
     registerPanelRoutes(probe, { db: appDb.db });

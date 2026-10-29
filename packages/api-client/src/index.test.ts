@@ -316,6 +316,25 @@ describe('panel calls', () => {
     expect(calls[0]?.url).toBe(`http://api/panel/occurrences/${REQUEST_ID}/reject`);
   });
 
+  it('panelNotifications parses the bell list', async () => {
+    const { calls, fakeFetch } = recorder(() => Response.json({ items: [], unreadCount: 0 }));
+    const api = createApiClient({ baseUrl: 'http://api', fetch: fakeFetch });
+    expect(await api.panelNotifications(TENANT_ID)).toEqual({ items: [], unreadCount: 0 });
+    expect(calls[0]?.url).toBe('http://api/panel/notifications');
+    expect(new Headers(calls[0]?.init?.headers).get('x-tenant-id')).toBe(TENANT_ID);
+  });
+
+  it('panelReadNotification and panelReadAllNotifications post and resolve on 204', async () => {
+    const { calls, fakeFetch } = recorder(() => new Response(null, { status: 204 }));
+    const api = createApiClient({ baseUrl: 'http://api', fetch: fakeFetch });
+    await expect(api.panelReadNotification(TENANT_ID, REQUEST_ID)).resolves.toBeUndefined();
+    await expect(api.panelReadAllNotifications(TENANT_ID)).resolves.toBeUndefined();
+    expect(calls.map((c) => [c.init?.method, c.url])).toEqual([
+      ['POST', `http://api/panel/notifications/${REQUEST_ID}/read`],
+      ['POST', 'http://api/panel/notifications/read-all'],
+    ]);
+  });
+
   it('panelCategoryOptions gets the scoped options', async () => {
     const { calls, fakeFetch } = recorder(() =>
       Response.json({ items: [{ id: REQUEST_ID, name: 'Buraco' }] }),

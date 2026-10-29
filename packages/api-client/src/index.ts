@@ -61,6 +61,7 @@ import {
   panelChallengeResponseSchema,
   panelContextSchema,
   panelCountsSchema,
+  panelNotificationsResponseSchema,
   panelRefreshResponseSchema,
   panelSearchResponseSchema,
   panelSessionResponseSchema,
@@ -129,6 +130,7 @@ import {
   type PanelChallengeResponse,
   type PanelContext,
   type PanelCounts,
+  type PanelNotificationsResponse,
   type PanelRefreshResponse,
   type PanelSearchResponse,
   type PanelSessionResponse,
@@ -607,6 +609,32 @@ export function createApiClient({
       panelCountsSchema.parse(
         await send('GET', '/panel/counts', undefined, { ...options, tenantId }),
       ),
+
+    panelNotifications: async (
+      tenantId: string,
+      options?: RequestOptions,
+    ): Promise<PanelNotificationsResponse> =>
+      panelNotificationsResponseSchema.parse(
+        await send('GET', '/panel/notifications', undefined, { ...options, tenantId }),
+      ),
+
+    panelReadNotification: async (
+      tenantId: string,
+      id: string,
+      options?: RequestOptions,
+    ): Promise<void> => {
+      await send('POST', `/panel/notifications/${encodeURIComponent(id)}/read`, undefined, {
+        ...options,
+        tenantId,
+      });
+    },
+
+    panelReadAllNotifications: async (
+      tenantId: string,
+      options?: RequestOptions,
+    ): Promise<void> => {
+      await send('POST', '/panel/notifications/read-all', undefined, { ...options, tenantId });
+    },
 
     panelOccurrences: async (
       tenantId: string,

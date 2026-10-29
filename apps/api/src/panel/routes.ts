@@ -16,6 +16,7 @@ import {
   occurrenceMapResponseSchema,
   panelContextSchema,
   panelCountsSchema,
+  panelNotificationsResponseSchema,
   panelSearchResponseSchema,
   impedimentDetailSchema,
   categoryOptionsResponseSchema,
@@ -58,6 +59,11 @@ import { registerAdminRoutes } from './admin.js';
 import { loadPanelContext, loadPanelCounts } from './context.js';
 import { loadCategoryOptions, loadInProgress, loadRequestList } from './lists.js';
 import { requirePanelMember } from './member.js';
+import {
+  loadNotifications,
+  markAllNotificationsRead,
+  markNotificationRead,
+} from './notifications.js';
 import {
   loadOccurrenceDetail,
   loadOccurrenceMap,
@@ -151,6 +157,49 @@ export function registerPanelRoutes(instance: FastifyInstance, deps: PanelDeps) 
       const identity = await requirePanelMember(db, request, reply);
       if (!identity) return reply;
       return loadPanelCounts(db, identity);
+    },
+  );
+
+  app.get(
+    '/panel/notifications',
+    {
+      preHandler: panelAuth,
+      schema: { response: { 200: panelNotificationsResponseSchema, ...panelErrors } },
+    },
+    async (request, reply) => {
+      const identity = await requirePanelMember(db, request, reply);
+      if (!identity) return reply;
+      return loadNotifications(db, identity);
+    },
+  );
+
+  app.post(
+    '/panel/notifications/read-all',
+    { preHandler: panelAuth, schema: { response: { 204: z.null(), ...panelErrors } } },
+    async (request, reply) => {
+      const identity = await requirePanelMember(db, request, reply);
+      if (!identity) return reply;
+      await markAllNotificationsRead(db, identity);
+      return reply.code(204).send(null);
+    },
+  );
+
+  app.post(
+    '/panel/notifications/:id/read',
+    {
+      preHandler: panelAuth,
+      schema: {
+        params: z.object({ id: z.uuid() }),
+        response: { 204: z.null(), ...panelErrors, 404: apiErrorSchema },
+      },
+    },
+    async (request, reply) => {
+      const identity = await requirePanelMember(db, request, reply);
+      if (!identity) return reply;
+      if (!(await markNotificationRead(db, identity, request.params.id))) {
+        return reply.code(404).send({ code: 'notification_not_found' });
+      }
+      return reply.code(204).send(null);
     },
   );
 

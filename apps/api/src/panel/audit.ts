@@ -48,6 +48,15 @@ export const PANEL_AUDIT_ACTIONS: Record<string, StaffAuditAction> = {
   'PATCH /panel/departments/:id': 'department.update',
 };
 
+/**
+ * Rotas que alteram dados mas não são auditadas: marcar o próprio sino como lido. No modo
+ * suporte elas não fazem nada (204 sem efeito), então não há ação a registrar.
+ */
+export const PANEL_UNAUDITED_ROUTES: readonly string[] = [
+  'POST /panel/notifications/:id/read',
+  'POST /panel/notifications/read-all',
+];
+
 /** Tipo do alvo pelo trecho da url antes do parâmetro (`/panel/teams/:id/agents` → equipe). */
 const TARGET_TYPES: Record<string, string> = {
   occurrences: 'occurrence',
@@ -130,6 +139,7 @@ export function registerPanelAudit(app: FastifyInstance, db: Database): void {
     if (reply.statusCode < 200 || reply.statusCode >= 300) return;
 
     const route = `${request.method} ${request.routeOptions.url}`;
+    if (PANEL_UNAUDITED_ROUTES.includes(route)) return;
     const action = request.auditAction ?? PANEL_AUDIT_ACTIONS[route];
     if (!action) {
       request.log.error({ route }, 'rota do painel sem ação de auditoria');

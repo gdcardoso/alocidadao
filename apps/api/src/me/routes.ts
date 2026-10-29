@@ -1,5 +1,6 @@
 import {
   changePhone,
+  claimPushToken,
   consumeCode,
   deleteAccount,
   findUserByPhone,
@@ -177,6 +178,9 @@ export function registerMeRoutes(instance: FastifyInstance, deps: MeDeps) {
       const { installationId } = request.params;
       const { platform, appVersion, pushToken } = request.body;
       const result = await asActiveUser(db, userId, async (tx) => {
+        // O token passa a ser só deste aparelho: sai de qualquer outro registro (de outra conta
+        // que usou o celular, por exemplo) antes de ser gravado aqui, na mesma transação.
+        if (pushToken) await claimPushToken(tx, pushToken);
         await tx
           .insert(devices)
           .values({ userId, installationId, platform, appVersion, pushToken: pushToken ?? null })

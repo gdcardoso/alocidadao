@@ -21,6 +21,7 @@ import { registerDevWorkOrders } from './dev/work-orders.js';
 import type { EmailSender } from './messaging/email.js';
 import { createLogSmsSender, type SmsSender } from './messaging/sms.js';
 import { registerMeRoutes } from './me/routes.js';
+import { startScheduler, type Scheduler } from './notifications/scheduler.js';
 import { registerPanelAudit } from './panel/audit.js';
 import { registerPanelRoutes } from './panel/routes.js';
 import type { Storage } from './storage/s3.js';
@@ -49,6 +50,12 @@ export interface AppOptions {
   push?: PushSenders;
   /** Registra as rotas /dev/*; nunca em produção. */
   devRoutes?: boolean;
+  /**
+   * Agendador dos avisos (envio da fila, confirmação automática e limpeza). Desligado por padrão
+   * (testes chamam o envio direto); precisa de `database`, `auth` (o e-mail) e dos dois senders
+   * de `push`. Começa com o servidor pronto e para no fechamento.
+   */
+  notifications?: { scheduler: boolean };
   /**
    * Login sem senha. As rotas /auth/*, /me*, /panel/*, /backoffice/* e /citizen/* só existem com `auth` e `database`;
    * as /agent/*, só com `auth`.
@@ -87,6 +94,7 @@ export async function buildApp({
   push,
   devRoutes = false,
   auth,
+  notifications,
 }: AppOptions = {}) {
   const app = Fastify({ logger }).withTypeProvider<ZodTypeProvider>();
   app.setValidatorCompiler(validatorCompiler);
@@ -169,6 +177,27 @@ export async function buildApp({
       registerDevManagerActions(app, database);
     }
     registerDevPush(app, push);
+  }
+
+  if (notifications?.scheduler) {
+    const android = push?.android;
+    const ios = push?.ios;
+    if (!database || !auth || !android || !ios) {
+      app.log.warn('Agendador dos avisos desligado: falta banco, login ou envio de push');
+    } else {
+      let scheduler: Scheduler | undefined;
+      app.addHook('onReady', async () => {
+        scheduler = startScheduler({
+          db: database,
+          push: { android, ios },
+          email: auth.email,
+          log: app.log,
+        });
+      });
+      app.addHook('onClose', async () => {
+        await scheduler?.stop();
+      });
+    }
   }
 
   return app;

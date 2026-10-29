@@ -73,7 +73,10 @@ export function createFcmSender({
 
       if (status === 200) return { kind: 'sent' };
       const { codes, tokenInvalid } = parseError(text);
-      if (status === 404 || codes.includes('UNREGISTERED')) return { kind: 'invalid_token' };
+      if (codes.includes('UNREGISTERED')) return { kind: 'invalid_token' };
+      // 404 sem UNREGISTERED vem de configuração errada (FCM_PROJECT_ID, por exemplo), não do
+      // token: apagá-lo tiraria o push de quem ainda tem o app.
+      if (status === 404) return { kind: 'retry', reason: 'not_found' };
       if (status === 400 && codes.includes('INVALID_ARGUMENT')) {
         return tokenInvalid
           ? { kind: 'invalid_token' }

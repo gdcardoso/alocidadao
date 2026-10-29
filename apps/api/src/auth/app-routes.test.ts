@@ -512,6 +512,40 @@ describe('app auth routes', () => {
     expect(after.json()).toEqual({ code: 'session_expired' });
   });
 
+  it('logout clears the push token of the session device', async () => {
+    const phone = newPhone();
+    const userId = await createUser({ phone });
+    const device = newDevice();
+    const other = newDevice();
+    const verified = await signInByPhone(phone, device);
+    if (verified.status !== 'signed_in') throw new Error(`status ${verified.status}`);
+    const { accessToken } = verified.session;
+    const headers = { authorization: `Bearer ${accessToken}` };
+    for (const [d, pushToken] of [
+      [device, `push-${randomUUID()}`],
+      [other, `push-${randomUUID()}`],
+    ] as const) {
+      const res = await app.inject({
+        method: 'PUT',
+        url: `/me/devices/${d.installationId}`,
+        headers,
+        payload: { platform: d.platform, appVersion: d.appVersion, pushToken },
+      });
+      expect(res.statusCode).toBe(204);
+    }
+
+    const logout = await app.inject({ method: 'POST', url: '/auth/logout', headers });
+    expect(logout.statusCode).toBe(204);
+
+    const saved = await owner.db
+      .select({ installationId: devices.installationId, pushToken: devices.pushToken })
+      .from(devices)
+      .where(eq(devices.userId, userId));
+    expect(saved.find((d) => d.installationId === device.installationId)?.pushToken).toBeNull();
+    // O outro aparelho da conta continua recebendo.
+    expect(saved.find((d) => d.installationId === other.installationId)?.pushToken).not.toBeNull();
+  });
+
   it('auth rate limit per IP', async () => {
     const limited = await build({ max: 3, timeWindowMs: 60_000 });
     try {

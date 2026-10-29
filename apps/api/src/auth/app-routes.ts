@@ -35,7 +35,7 @@ import { requireAuth } from './plugin.js';
 import { startSession } from './session.js';
 import { hashRefreshToken, signAccessToken, signSignupToken, verifySignupToken } from './tokens.js';
 
-const { users, sessions } = schema;
+const { users, sessions, devices } = schema;
 
 export interface AuthDeps {
   db: Database;
@@ -273,12 +273,22 @@ export function registerAppAuthRoutes(instance: FastifyInstance, deps: AuthDeps)
     { preHandler: requireAuth(['app', 'panel']) },
     async (request, reply) => {
       const { userId, sessionId } = request.auth!;
-      await withContext(db, { userId }, (tx) =>
-        tx
+      await withContext(db, { userId }, async (tx) => {
+        const [session] = await tx
           .update(sessions)
           .set({ revokedAt: sql`now()` })
-          .where(and(eq(sessions.id, sessionId), sql`${sessions.revokedAt} is null`)),
-      );
+          .where(and(eq(sessions.id, sessionId), sql`${sessions.revokedAt} is null`))
+          .returning({ installationId: sessions.installationId });
+        // Quem sai do app não recebe mais push neste aparelho (a sessão do painel não tem aparelho).
+        if (session?.installationId) {
+          await tx
+            .update(devices)
+            .set({ pushToken: null })
+            .where(
+              and(eq(devices.userId, userId), eq(devices.installationId, session.installationId)),
+            );
+        }
+      });
       return reply.code(204).send();
     },
   );

@@ -72,6 +72,17 @@ describe('fcm sender', () => {
     expect(await sender(fn).send('t', message)).toEqual({ kind: 'invalid_token' });
   });
 
+  it('fcm treats a 404 without UNREGISTERED as retry, not invalid token', async () => {
+    // Projeto errado (FCM_PROJECT_ID) também responde 404: não pode apagar os tokens.
+    const { fn } = fakeFetch(404, { error: { status: 'NOT_FOUND', message: 'Not found' } });
+    expect(await sender(fn).send('t', message)).toEqual({ kind: 'retry', reason: 'not_found' });
+    const empty = fakeFetch(404, null);
+    expect(await sender(empty.fn).send('t', message)).toEqual({
+      kind: 'retry',
+      reason: 'not_found',
+    });
+  });
+
   it('fcm treats INVALID_ARGUMENT without token detail as retry, not invalid token', async () => {
     const { fn } = fakeFetch(400, {
       error: {

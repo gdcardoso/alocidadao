@@ -1,3 +1,4 @@
+import { completionEmail } from '@alocidadao/shared';
 import type { FastifyBaseLogger } from 'fastify';
 
 export interface EmailMessage {
@@ -50,4 +51,9 @@ export function codeEmail(to: string, code: string): EmailMessage {
     subject: 'Seu código do Alô Cidadão',
     text: `Seu código é ${code}. Ele vale por 10 minutos. Se você não pediu este código, ignore este e-mail.`,
   };
+}
+
+/** Aviso da conclusão ao cidadão: a prefeitura concluiu e ele confere as fotos no app. */
+export function completionEmailMessage(to: string, protocol: string): EmailMessage {
+  return { to, ...completionEmail(protocol) };
 }

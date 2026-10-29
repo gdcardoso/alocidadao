@@ -281,6 +281,46 @@ describe('me routes', () => {
     });
   });
 
+  it('registering a push token removes it from another account', async () => {
+    const previous = await createUser();
+    const previousDevice = randomUUID();
+    const previousSession = await signIn(previous.phone, previousDevice);
+    const token = `push-${randomUUID()}`;
+    const first = await app.inject({
+      method: 'PUT',
+      url: `/me/devices/${previousDevice}`,
+      headers: bearer(previousSession),
+      payload: { platform: 'android', appVersion: '1.0.0', pushToken: token },
+    });
+    expect(first.statusCode).toBe(204);
+
+    // Outra conta entra no mesmo celular (mesmo token de push).
+    const next = await createUser();
+    const nextDevice = randomUUID();
+    const nextSession = await signIn(next.phone, nextDevice);
+    const register = async () => {
+      const res = await app.inject({
+        method: 'PUT',
+        url: `/me/devices/${nextDevice}`,
+        headers: bearer(nextSession),
+        payload: { platform: 'android', appVersion: '1.0.0', pushToken: token },
+      });
+      expect(res.statusCode).toBe(204);
+    };
+    await register();
+
+    const holders = () =>
+      owner.db
+        .select({ userId: devices.userId, installationId: devices.installationId })
+        .from(devices)
+        .where(eq(devices.pushToken, token));
+    expect(await holders()).toEqual([{ userId: next.id, installationId: nextDevice }]);
+
+    // Registrar de novo o mesmo token mantém o aparelho atual com ele.
+    await register();
+    expect(await holders()).toEqual([{ userId: next.id, installationId: nextDevice }]);
+  });
+
   it('phone change needs the code sent to the new number', async () => {
     const user = await createUser();
     const session = await signIn(user.phone);

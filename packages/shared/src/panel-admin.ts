@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { phoneSchema } from './auth.js';
 import { cpfSchema } from './cpf.js';
-import { ICON_GROUPS, MEMBERSHIP_STATUSES, type IconGroup } from './enums.js';
+import { PLANS } from './backoffice.js';
+import { ICON_GROUPS, MEMBERSHIP_STATUSES, TENANT_STATUSES, type IconGroup } from './enums.js';
 import { geoPointSchema } from './geo.js';
 import { PANEL_ROLES } from './panel.js';
 
@@ -193,3 +194,28 @@ export type DepartmentsResponse = z.infer<typeof departmentsResponseSchema>;
 
 export const departmentBodySchema = z.object({ name: nameSchema(DEPARTMENT_NAME_MAX) });
 export type DepartmentBody = z.infer<typeof departmentBodySchema>;
+
+// Dados da prefeitura (leitura; quem altera é a equipe interna)
+
+export const tenantProfileSchema = z.object({
+  displayName: z.string(),
+  city: z.string(),
+  state: z.string(),
+  ibgeCode: z.string(),
+  centralPhone: z.string().nullable(),
+  status: z.enum(TENANT_STATUSES),
+  contract: z
+    .object({
+      plan: z.enum(PLANS),
+      startsOn: z.string(),
+      endsOn: z.string().nullable(),
+      includedPanelUsers: z.number().int(),
+    })
+    .nullable(),
+  panelUserCount: z.number().int(),
+  neighborhoods: z.object({
+    count: z.number().int(),
+    source: z.enum(['ibge', 'tenant']).nullable(),
+  }),
+});
+export type TenantProfile = z.infer<typeof tenantProfileSchema>;

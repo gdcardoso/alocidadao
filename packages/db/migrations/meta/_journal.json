@@ -267,6 +267,13 @@
       "when": 1793472061534,
       "tag": "0037_neighborhoods_access",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1793473991215,
+      "tag": "0038_panel_tenant_profile",
+      "breakpoints": true
     }
   ]
 }

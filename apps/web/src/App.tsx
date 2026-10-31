@@ -15,6 +15,7 @@ import { MapPage } from './map/MapPage';
 import { ImpedimentsPage } from './impediments/ImpedimentsPage';
 import { InProgressPage } from './lists/InProgressPage';
 import { ManagersPage } from './managers/ManagersPage';
+import { TenantProfilePage } from './profile/TenantProfilePage';
 import { RequestsPage } from './lists/RequestsPage';
 import { ReviewPage } from './review/ReviewPage';
 import { TeamsPage } from './teams/TeamsPage';
@@ -41,6 +42,7 @@ export default function App() {
           <Route path="/em-atendimento" element={<InProgressPage />} />
           <Route path="/solicitacoes" element={<RequestsPage />} />
           <Route path="/equipes" element={<TeamsPage />} />
+          <Route path="/dados" element={<TenantProfilePage />} />
           <Route element={<AdminOnly fallback="/equipes" />}>
             <Route path="/equipes/gestores" element={<ManagersPage />} />
           </Route>

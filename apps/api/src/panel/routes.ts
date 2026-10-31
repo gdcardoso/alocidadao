@@ -17,6 +17,7 @@ import {
   occurrenceSummaryQuerySchema,
   occurrenceSummarySchema,
   neighborhoodsResponseSchema,
+  tenantProfileSchema,
   panelContextSchema,
   panelCountsSchema,
   panelNotificationsResponseSchema,
@@ -67,6 +68,7 @@ import {
   markAllNotificationsRead,
   markNotificationRead,
 } from './notifications.js';
+import { loadTenantProfile } from './profile.js';
 import {
   loadOccurrenceDetail,
   loadNeighborhoods,
@@ -266,6 +268,21 @@ export function registerPanelRoutes(instance: FastifyInstance, deps: PanelDeps) 
       const identity = await requirePanelMember(db, request, reply);
       if (!identity) return reply;
       return loadCategoryOptions(db, identity);
+    },
+  );
+
+  app.get(
+    '/panel/tenant-profile',
+    {
+      preHandler: panelAuth,
+      schema: { response: { 200: tenantProfileSchema, ...panelErrors } },
+    },
+    async (request, reply) => {
+      const identity = await requirePanelMember(db, request, reply);
+      if (!identity) return reply;
+      const profile = await loadTenantProfile(db, identity);
+      if (!profile) return reply.code(403).send({ code: 'not_a_member' });
+      return profile;
     },
   );
 

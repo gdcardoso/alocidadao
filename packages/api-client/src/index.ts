@@ -43,6 +43,7 @@ import {
   managersResponseSchema,
   categoryOptionsResponseSchema,
   neighborhoodsResponseSchema,
+  tenantProfileSchema,
   requestListResponseSchema,
   reviewDetailSchema,
   teamSummarySchema,
@@ -101,6 +102,7 @@ import {
   type RequestListQuery,
   type CategoryOptionsResponse,
   type NeighborhoodsResponse,
+  type TenantProfile,
   type RequestListResponse,
   type RescheduleBody,
   type ReviewDetail,
@@ -860,6 +862,14 @@ export function createApiClient({
     ): Promise<NeighborhoodsResponse> =>
       neighborhoodsResponseSchema.parse(
         await send('GET', '/panel/neighborhoods', undefined, { ...options, tenantId }),
+      ),
+
+    panelTenantProfile: async (
+      tenantId: string,
+      options?: RequestOptions,
+    ): Promise<TenantProfile> =>
+      tenantProfileSchema.parse(
+        await send('GET', '/panel/tenant-profile', undefined, { ...options, tenantId }),
       ),
 
     panelRequests: async (

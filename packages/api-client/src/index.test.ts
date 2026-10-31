@@ -368,6 +368,26 @@ describe('panel calls', () => {
     expect(result).toEqual({ items: ['Centro'], source: 'tenant' });
   });
 
+  it('panelTenantProfile gets the tenant profile', async () => {
+    const profile = {
+      displayName: 'Prefeitura de Teste',
+      city: 'Teste',
+      state: 'PR',
+      ibgeCode: '4100000',
+      centralPhone: null,
+      status: 'active',
+      contract: { plan: 'essential', startsOn: '2026-01-01', endsOn: null, includedPanelUsers: 5 },
+      panelUserCount: 3,
+      neighborhoods: { count: 2, source: 'ibge' },
+    };
+    const { calls, fakeFetch } = recorder(() => Response.json(profile));
+    const api = createApiClient({ baseUrl: 'http://api', fetch: fakeFetch });
+    const result = await api.panelTenantProfile(TENANT_ID);
+    expect(calls[0]?.url).toBe('http://api/panel/tenant-profile');
+    expect(new Headers(calls[0]?.init?.headers).get('x-tenant-id')).toBe(TENANT_ID);
+    expect(result).toEqual(profile);
+  });
+
   it('panelRequests serializes days null as all and page as text', async () => {
     const { calls, fakeFetch } = recorder(() =>
       Response.json({ total: 0, page: 2, pageSize: 50, items: [] }),

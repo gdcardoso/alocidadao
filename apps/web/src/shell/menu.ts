@@ -1,5 +1,6 @@
 import type { PanelContext, PanelCounts } from '@alocidadao/shared';
 import {
+  Building2,
   ClipboardCheck,
   HardHat,
   Inbox,
@@ -65,6 +66,7 @@ export const MENU_GROUPS: MenuGroup[] = [
     items: [
       { to: '/equipes', label: 'Equipes e agentes', icon: Users },
       { to: '/categorias', label: 'Categorias', icon: Tags, adminOnly: true },
+      { to: '/dados', label: 'Dados da prefeitura', icon: Building2 },
     ],
   },
 ];

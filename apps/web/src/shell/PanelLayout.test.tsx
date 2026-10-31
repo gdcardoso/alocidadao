@@ -1,7 +1,7 @@
 import { ApiError } from '@alocidadao/api-client';
 import type { PanelContext } from '@alocidadao/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, render, screen, within } from '@testing-library/react';
+import { act, cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { MemoryRouter } from 'react-router';
@@ -169,6 +169,22 @@ describe('menu by role', () => {
     await renderApp('/equipes/gestores');
     expect(
       await screen.findByText('Nenhuma equipe cadastrada. Crie a primeira em "Nova equipe".'),
+    ).toBeInTheDocument();
+  });
+
+  it('menu shows "Dados da prefeitura" for manager and admin', async () => {
+    await renderApp();
+    const managerNav = await screen.findByRole('navigation');
+    expect(
+      await within(managerNav).findByRole('link', { name: 'Dados da prefeitura' }),
+    ).toHaveAttribute('href', '/dados');
+    cleanup();
+
+    panelContext.mockResolvedValue(context({ role: 'tenant_admin', departments: [] }));
+    await renderApp();
+    const adminNav = await screen.findByRole('navigation');
+    expect(
+      await within(adminNav).findByRole('link', { name: 'Dados da prefeitura' }),
     ).toBeInTheDocument();
   });
 

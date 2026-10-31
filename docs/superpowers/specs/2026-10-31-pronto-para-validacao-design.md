@@ -46,12 +46,12 @@ O gestor continua entrando pelo mapa (opção A dos esboços, escolhida pelo usu
 
 **Prazo de uma ocorrência** é o `due_at` da atividade ativa dela (`work_orders`). A ocorrência na triagem não tem atividade, logo **não tem prazo** (decisão do usuário).
 
-| Situação | Quando | Cor do pino |
-| --- | --- | --- |
-| Sem prazo | na triagem, ou com atividade sem `due_at` | cinza |
-| No prazo | dia do prazo depois de depois de amanhã | verde |
-| Vencendo | dia do prazo hoje, amanhã ou depois de amanhã, sem ter passado | amarelo |
-| Atrasada | `due_at` já passou | vermelho |
+| Situação  | Quando                                                         | Cor do pino |
+| --------- | -------------------------------------------------------------- | ----------- |
+| Sem prazo | na triagem, ou com atividade sem `due_at`                      | cinza       |
+| No prazo  | dia do prazo depois de depois de amanhã                        | verde       |
+| Vencendo  | dia do prazo hoje, amanhã ou depois de amanhã, sem ter passado | amarelo     |
+| Atrasada  | `due_at` já passou                                             | vermelho    |
 
 - A conta é feita em **dias do calendário de São Paulo**, como o `due-date.ts` atual e as etiquetas "Vence hoje" e "Vence em 3 dias", e não em horas. Atrasada compara o `due_at` exato com o agora. **Escolha minha.** A regra mora num lugar só (no banco ou na API, quem executa decide), e o pino, a faixa, o filtro e as listas leem dali.
 - Janela de 2 dias para "vencendo": **escolha minha**. Fica numa constante do `shared`, para mudar sem caçar números no código.
@@ -75,11 +75,13 @@ Visual: os mesmos tokens e componentes do painel atual. Esboço de referência e
 **Origem:** uma tabela de bairros com nome e contorno por município. A carga inicial vem da **Malha de Bairros do Censo 2022 do IBGE** (cerca de 17,5 mil bairros, só dos municípios que têm bairros definidos em lei). O arquivo vem por UF ou para o Brasil inteiro, em shapefile ou GeoPackage, no site de malhas do IBGE. Assim como `import-municipalities.ts`, há um script rodado à mão com o dono do banco.
 
 **Duas camadas** (escolha minha):
+
 - A malha do IBGE é **dado de referência por município**, como `municipalities`: fica fora do isolamento por prefeitura e é só leitura para `app_user`. Uma prefeitura criada depois num município que está na malha já começa com bairros.
 - A carga enviada pela prefeitura é uma **camada própria da prefeitura**, com RLS. Quando ela existe, vale no lugar da malha do IBGE para aquela prefeitura. Apagar a camada própria volta para a malha do IBGE.
 - "Bairros da prefeitura" = a camada própria, se houver, senão a malha do IBGE do município dela. A origem que o painel mostra sai daí.
 
 **Carga pela prefeitura:** se a prefeitura não está na malha do IBGE (ou quer a lista dela), ela envia a lista ou o mapa e a **equipe Alô Cidadão** carrega. **Escolha minha:**
+
 - A carga é feita no backoffice, na aba Contrato da P3 (seção 6), por um arquivo GeoJSON com um polígono por bairro e o nome numa propriedade.
 - Cada carga substitui inteira a camada própria anterior.
 - Há também a ação "Voltar para a malha do IBGE", que apaga a camada própria.
@@ -87,6 +89,7 @@ Visual: os mesmos tokens e componentes do painel atual. Esboço de referência e
 - Uma lista só de nomes, sem mapa, não basta, porque sem contorno não dá para decidir o bairro pelo ponto. Nesse caso a equipe transforma a lista em mapa antes de carregar.
 
 **Bairro da solicitação:** o servidor decide o bairro pelo ponto da ocorrência (em qual contorno ele cai) e grava na ocorrência. Fica igual no iPhone, no Android e no registro offline. **Escolhas minhas:**
+
 - O bairro é guardado na ocorrência, não em cada solicitação, porque o mapa e as listas filtram ocorrências.
 - Ponto fora de todos os contornos fica "sem bairro".
 - Ao carregar ou trocar os bairros de uma prefeitura (carga própria, volta ao IBGE ou importação nova da malha), as ocorrências afetadas são recalculadas. Uma prefeitura nova não tem ocorrências, então não há o que recalcular.
@@ -101,6 +104,7 @@ O texto de endereço que o celular devolve continua sendo mostrado como está. E
 Item novo "Dados da prefeitura" no grupo **CONFIGURAR** do menu, para admin e gestor. **Escolha minha:** os dois veem, e o modo suporte também.
 
 Só leitura, em blocos:
+
 - **Prefeitura:** nome de exibição, município e UF, código IBGE, central de atendimento e situação (em implantação, ativa).
 - **Contrato:** plano, vigência e usuários do painel ("{n} de {incluídos} incluídos").
 - **Bairros:** "{n} bairros cadastrados" com a origem (IBGE ou enviada pela prefeitura), ou "Nenhum bairro cadastrado".
@@ -113,14 +117,14 @@ A contagem de "usuários do painel" ainda não tem regra (pergunta aberta da P3:
 
 As seis abas que hoje não existem passam a existir:
 
-| Aba | O que faz |
-| --- | --- |
-| **Contrato** | Edita os dados cadastrais e o contrato: nome de exibição, central, plano, vigência e usuários incluídos. Também faz a carga dos bairros (seção 4). Só Admin e Suporte da equipe, com auditoria. |
-| **Equipes e agentes** | Lista das equipes e dos agentes, só leitura, com botão "Abrir no painel" que entra no modo suporte nessa tela. |
-| **Gestores** | Lista dos gestores e admins, só leitura, com "Abrir no painel". |
-| **Categorias** | Lista das categorias, só leitura, com "Abrir no painel". |
-| **Cidadãos** | Lista dos cidadãos da cidade (abaixo). |
-| **Auditoria** | A tela de Auditoria (P7) já filtrada por esta prefeitura. |
+| Aba                   | O que faz                                                                                                                                                                                       |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Contrato**          | Edita os dados cadastrais e o contrato: nome de exibição, central, plano, vigência e usuários incluídos. Também faz a carga dos bairros (seção 4). Só Admin e Suporte da equipe, com auditoria. |
+| **Equipes e agentes** | Lista das equipes e dos agentes, só leitura, com botão "Abrir no painel" que entra no modo suporte nessa tela.                                                                                  |
+| **Gestores**          | Lista dos gestores e admins, só leitura, com "Abrir no painel".                                                                                                                                 |
+| **Categorias**        | Lista das categorias, só leitura, com "Abrir no painel".                                                                                                                                        |
+| **Cidadãos**          | Lista dos cidadãos da cidade (abaixo).                                                                                                                                                          |
+| **Auditoria**         | A tela de Auditoria (P7) já filtrada por esta prefeitura.                                                                                                                                       |
 
 O "Gerenciar" dos cartões da Visão geral leva à aba correspondente. **Escolhas minhas:** a edição do contrato altera o contrato vigente (não cria histórico de contratos), e as listas só leitura reaproveitam as consultas do painel.
 

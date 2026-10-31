@@ -291,6 +291,13 @@ describe('número reaproveitado', () => {
       lastActiveAt: daysAgo(91),
     });
     const tokenHash = await createSession(stale);
+    await owner.db.insert(devices).values({
+      userId: stale,
+      installationId: randomUUID(),
+      platform: 'android',
+      appVersion: '1.0.0',
+      pushToken: `push-${randomUUID()}`,
+    });
     // O contexto é o da conta nova, que está sendo criada na mesma transação.
     const newAccount = randomUUID();
 
@@ -299,6 +306,9 @@ describe('número reaproveitado', () => {
     );
 
     expect(frozen).toBe(true);
+    // Congelar revoga as sessões e apaga o token de push dos aparelhos da conta antiga.
+    const saved = await owner.db.select().from(devices).where(eq(devices.userId, stale));
+    expect(saved.map((d) => d.pushToken)).toEqual([null]);
     expect(await findUserByPhone(app.db, phone, randomUUID())).toBeNull();
     expect(await sessionForRefresh(app.db, tokenHash)).toBeNull();
   });

@@ -11,6 +11,7 @@ import {
   municipalityLeads,
   occurrences,
   requests,
+  devices,
   sessions,
   staffAuditEvents,
   statusEvents,
@@ -1011,11 +1012,24 @@ describe('conta congelada', () => {
       await call(asSupport(), sql`select * from platform_frozen_account_by_cpf(${activeCpf})`),
     ).toEqual([]);
 
+    await owner.db.insert(devices).values({
+      userId: frozen,
+      installationId: randomUUID(),
+      platform: 'ios',
+      appVersion: '1.0.0',
+      pushToken: `push-${randomUUID()}`,
+    });
     const inSupport: DbContext = { ...asSupport(), tenantId: seed.tenantId };
     await call(
       inSupport,
       sql`select platform_recover_frozen_account(${frozen}, 'novo@gelo6b.dev', ${seed.tenantId})`,
     );
+    // Recuperar revoga as sessões e apaga o token de push dos aparelhos antigos.
+    expect(
+      (await owner.db.select().from(devices).where(eq(devices.userId, frozen))).map(
+        (d) => d.pushToken,
+      ),
+    ).toEqual([null]);
     const row = await userRow(frozen);
     expect(row).toMatchObject({ accountStatus: 'active', email: 'novo@gelo6b.dev', cpf });
     expect(row.lastActiveAt).not.toBeNull();

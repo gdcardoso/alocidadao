@@ -281,6 +281,13 @@
       "when": 1793475676997,
       "tag": "0039_fixes_validation",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1793475979087,
+      "tag": "0040_clear_push_on_revoke",
+      "breakpoints": true
     }
   ]
 }

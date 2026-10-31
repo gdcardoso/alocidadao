@@ -1285,6 +1285,16 @@ describe('fila, aparelhos e confirmação automática', () => {
     expect((await outboxRow(demotedRow.id)).status).toBe('skipped');
   });
 
+  it('pegada pula work_order_* sem atividade', async () => {
+    await clearQueue();
+    const agent = await seedUser('agente-sem-atividade');
+    await role(town.tenantId, agent, 'field_agent');
+    const row = await queued(agent, { kind: 'work_order_assigned', workOrderId: null });
+
+    expect(await claimNotifications(app, 10)).toEqual([]);
+    expect((await outboxRow(row.id)).status).toBe('skipped');
+  });
+
   it('nova tentativa volta à fila no tempo pedido', async () => {
     await clearQueue();
     const person = await seedUser('pessoa-tentativa');

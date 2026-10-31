@@ -185,13 +185,13 @@ As telas do 6b foram feitas no código antes do Pencil (o limite de uso do pen.d
 
 - **Task 1b, 31/10/2026:** passar as telas do 6b (P5 com menu, P6 com janela e confirmações, P7, bloco de conta bloqueada) e o sino de avisos do painel (Plano 7, captura `docs/superpowers/specs/telas-painel/sino-avisos.png`) para o Pencil e validar lá. As capturas do código em `docs/superpowers/specs/telas-backoffice/` são substituídas pelas exportações do Pencil.
 - Encerrar o modo suporte por tempo sem atividade. Hoje a saída implícita só grava `support.leave` ao entrar de novo no modo suporte ou no painel por login.
-- Abas da P3 além de Visão geral (Contrato, Equipes e agentes, Gestores, Categorias, Cidadãos, Auditoria): sem Pencil e sem tela.
+- [x] Abas da P3 além de Visão geral (Contrato, Equipes e agentes, Gestores, Categorias, Cidadãos, Auditoria): feitas no pronto para validação (sem Pencil; ver a seção "Pronto para validação").
 - O último Admin pode ser congelado pelo número reaproveitado: um Admin com telefone (cidadão que virou equipe), parado há 90 dias, é congelado quando alguém cadastra o número (`auth_freeze_stale_account`, da 0014). `platform_require_other_admin` só conta contas ativas, mas nada impede o congelamento. Pouco provável; caminho sugerido: `auth_freeze_stale_account` pular contas com `platform_role`.
 - P7: o filtro 'Pessoa' lista só quem está na equipe hoje (`platform_staff_list`). Quem saiu ou excluiu a conta não dá para filtrar. Caminho sugerido: uma função só do admin com os `staff_user_id` distintos de `staff_audit_events`.
-- A tabela de gestores do painel tem cabeçalho `⋯` na coluna do menu (pendência antiga do 5b, vista de novo na passada do 6b).
-- Corte do menu ⋯ (`RowMenu`) não conferido na `ManagersPage`, na `AgentsTable` e na `DepartmentsPage`: a correção do 6b (`flex: 1` em `.content`) foi só na P5 e na P6.
+- [x] A tabela de gestores do painel tem cabeçalho `⋯` na coluna do menu (pendência antiga do 5b, vista de novo na passada do 6b): corrigido no pronto para validação (Task 12). A tabela de setores ainda tem o `⋯` no cabeçalho (ver "Em aberto depois do pronto para validação").
+- [x] Corte do menu ⋯ (`RowMenu`) não conferido na `ManagersPage`, na `AgentsTable` e na `DepartmentsPage`: conferido no navegador na passada do pronto para validação; o menu da última linha das três telas abre inteiro, sem corte.
 - 'Último Admin' na P6 não dá para provocar pela tela (ninguém troca o próprio papel nem se remove); só a exclusão da conta no app chega a `last_platform_admin`.
-- Recuperar uma conta congelada cujo CPF já foi liberado (código pedido antes da liberação) dá 500 (`users_phone_or_cpf_check`), sem gravar nada. Caminho sugerido: `AND u.cpf IS NOT NULL` na busca de `platform_recover_frozen_account`, que vira `invalid_code`.
+- [x] Recuperar uma conta congelada cujo CPF já foi liberado (código pedido antes da liberação) dava 500 (`users_phone_or_cpf_check`): corrigido no pronto para validação (Task 11, migração 0039): `AND u.cpf IS NOT NULL` na busca, e a API responde `invalid_code`.
 - Menores das revisões, agrupados:
   - Banco: corridas estreitas (trava condicional em `account_delete`; gatilho de `memberships` sem trava contra `platform_staff_add`; `support.leave` implícito e `support.enter` em transações separadas); `p_limit`/`p_offset` sem validação; 23505 ambíguo em `platform_staff_add`; recuperar confia na conferência do desafio pela API.
   - API: testes que faltam (token do app nas rotas novas, 401 e corpo inválido, erros do CSV, `DELETE` 404 só confere o status); mapa de erros da equipe duplicado; segunda leitura do e-mail mascarado sem trava; `tenantId` em maiúsculas dá `support_tenant_mismatch` falso (só pedido feito à mão); `agent.phone_change` gravado mesmo sem mudar o número; teste de último Admin muda todos os admins do banco de teste.
@@ -231,14 +231,77 @@ Feito no Plano 7 (`2026-10-29-notificacoes.md`): avisos gerados no banco por gat
   - App: id do push sem conferência estrita de UUID; `openNotificationRoute` sem teste; `usePathname` faz a pilha da raiz renderizar de novo; a prefeitura do push não vai para a tela da atividade.
 - Menores da revisão final do Plano 7 que ficaram (relatório em `.superpowers/sdd/2026-10-29-notificacoes/final-review.md`; os itens 2, 3 e 4 foram corrigidos na migração 0035, no agendador e no despachante):
   - Grants das funções da fila (`0034`) para `app_user`: defesa em profundidade; fazer um papel `notifier` com pool próprio para o agendador e mover os grants para ele.
-  - Falha do banco: o agendador loga um erro a cada 5 s por instância, sem recuo; fazer recuo exponencial ou logar só na mudança de estado (`scheduler.ts`).
+  - [x] Falha do banco: o agendador logava um erro a cada 5 s por instância: corrigido no pronto para validação (Task 11); loga só a primeira falha e avisa quando volta. Sem recuo exponencial.
   - Destinatários do sino (`0033`, `FROM users u WHERE EXISTS (memberships ...)`): confirmar o plano com `EXPLAIN` num banco com dados ou reescrever partindo de `memberships` com `DISTINCT u.id`.
-  - A pegada da fila (`0034`) só confere `account_status` e `deleted_at`: reconferir o vínculo `field_agent` na pegada para os avisos `work_order_*` (quem saiu da equipe ainda recebe nas novas tentativas, até cerca de 2 h depois).
+  - [x] A pegada da fila (`0034`) só conferia `account_status` e `deleted_at`: corrigido no pronto para validação (Task 11, 0039): `work_order_*` exige agente `field_agent` ativo e presença na equipe da atividade, senão vira `skipped` (`not_in_team`).
   - O e-mail do cidadão não é verificado (`apps/api/src/me/routes.ts`), mas a conclusão passa a ser enviada a ele: decisão de produto (verificar o e-mail ou enviar só aos verificados).
-  - Sino que abre atividade já fora da fila cai em outra atividade sem aviso (`apps/web/src/work/WorkQueueLayout.tsx`): mostrar "Esta atividade já saiu da fila" em vez de abrir a primeira ou a última.
-  - Sessão revogada no servidor, expirada ou encerrada pelo logout offline deixa o token do aparelho no lugar (`apps/api/src/auth/app-routes.ts`): apagar o token do aparelho ao revogar a sessão no servidor.
+  - [x] Sino que abre atividade já fora da fila caía em outra atividade sem aviso: corrigido no pronto para validação (Task 12); mostra "Esta atividade já saiu da fila." (conferido no navegador).
+  - [x] Sessão revogada no servidor, expirada ou encerrada pelo logout offline deixava o token do aparelho no lugar: corrigido no pronto para validação (Task 11, 0039 e 0040): o congelamento e a recuperação de conta apagam o token ao revogar, e a renovação recusada apaga o token do aparelho da sessão morta. Sessão revogada que nunca tenta renovar mantém o token até o próximo logout ou registro.
   - Ordem de implantação: o gatilho da 0033 enche a fila assim que a migração roda; rodar a migração e subir a API juntas, ou anotar no checklist de deploy.
 - **Entrega real de push com Firebase e Apple** (seções 3 e 4 do `0002`): continua no fim, depois dos testes em aparelho real.
+
+## Pronto para validação
+
+Feito no pronto para validação (`2026-10-31-pronto-para-validacao.md`, spec `docs/superpowers/specs/2026-10-31-pronto-para-validacao-design.md`): bairros no banco (malha do IBGE em `ibge_neighborhoods`, camada da prefeitura em `tenant_neighborhoods`, gatilho em `occurrences`), carga e volta da malha pelo backoffice, filtro de bairro no mapa e na lista do painel, mapa com a situação do prazo (quatro cores), faixa de números do dia e filtro de prazo, Dados da prefeitura (leitura, para o gestor e para o modo suporte), as seis abas novas da P3 (Contrato com edição e bairros, Equipes e agentes, Gestores, Categorias, Cidadãos mascarados pela API, Auditoria), correções de banco e API (Task 11) e do painel (Task 12). Capturas da passada em `docs/superpowers/plans/resultado-pronto-para-validacao/`.
+
+- [x] Filtro por bairro no mapa e na lista do painel, sobre a lista consolidada (nenhum caminho grava o bairro a partir do texto do endereço).
+- [x] Mapa do painel: pontos por situação do prazo (No prazo, Vence em até 2 dias, Atrasada, Na triagem), faixa de números clicável e filtro de prazo.
+- [x] Dados da prefeitura (`/dados`), só leitura, para gestor e modo suporte.
+- [x] P3: as seis abas além de Visão geral. Contrato e bairros só do Admin (muda o spec, que dizia "Admin e Suporte"); o Suporte vê o Contrato só para leitura e não vê a aba Auditoria.
+- [x] Correções das seções 6b e Plano 7 marcadas nelas com `[x]`: recuperar conta com CPF liberado, pegada da fila, agendador, token de push, atividade fora da fila, cabeçalho `⋯` dos gestores, corte do menu `⋯`, abas da P3.
+
+### Passada no navegador, 31/10/2026
+
+Seed de desenvolvimento (`pnpm db:seed:dev`), `pnpm dev`, login com o código fixo. Bairros: a malha real do IBGE não foi importada (precisa de download e `mapshaper`); a passada usou um GeoJSON de quatro retângulos que cobre a área das ocorrências do seed (Vila Norte-Oeste, Jardim Nordeste, Bairro Sudoeste, Parque Sudeste), carregado pelo "Carregar arquivo de bairros" do backoffice. Por isso a fonte aparece como "enviados pela prefeitura". A importação da malha real do IBGE por UF (`import:neighborhoods`) só tem teste, sem execução real.
+
+| Item                                       | Resultado                                                                                                                                                                                                                              |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Mapa sem bairros (`01`)                    | OK: sem o filtro "Bairro"; mapa, faixa e legenda carregam.                                                                                                                                                                             |
+| Quatro cores e faixa (`02`)                | OK: verde, laranja, vermelho e cinza no zoom da cidade; faixa 'Na triagem 3', 'Em atendimento 7', 'Vencem em 2 dias 5', 'Atrasadas 1'.                                                                                                 |
+| Clique no ponto (`03`)                     | OK: painel do ponto com 'Atrasada há 1 dia', relatos e 'Recusar'.                                                                                                                                                                      |
+| Filtro de prazo (`04`, `05`)               | OK: 'Vencendo' reduz a 5 ocorrências; clicar 'Atrasadas' na faixa vai a `?status=em-atendimento&prazo=atrasadas` e mostra 1.                                                                                                           |
+| Lista sem bairros (`06`)                   | OK: sem o filtro de bairro.                                                                                                                                                                                                            |
+| Dados da prefeitura, gestor (`07`, `27`)   | OK: 'Nenhum bairro cadastrado' antes; '4 bairros cadastrados · enviados pela prefeitura' depois.                                                                                                                                       |
+| Menu ⋯ da última linha (`08`, `09`, `10`)  | OK: Agentes, Gestores e Setores abrem o menu inteiro, sem corte; Gestores sem `⋯` no cabeçalho.                                                                                                                                        |
+| P3 como Admin (`11` a `17`)                | OK: sete abas (Visão geral, Contrato, Equipes e agentes, Gestores, Categorias, Cidadãos, Auditoria). 'Consultou os cidadãos' aparece na auditoria depois de abrir Cidadãos.                                                            |
+| Carga e volta da malha (`18` a `21`)       | OK: '4 bairros · enviados pela prefeitura'; confirmação de voltar; depois 'Nenhum bairro carregado.' (o seed não tem malha do IBGE); arquivo sem polígono recusado com o aviso do plano.                                               |
+| Cidadãos mascarados (`22`)                 | OK: a resposta de `/backoffice/tenants/:id/citizens` só traz `phoneMasked` e `emailMasked`, sem CPF e sem celular ou e-mail inteiros.                                                                                                  |
+| Mapa e lista com bairro (`23` a `26`)      | OK: filtro 'Bairro: todos / quatro bairros / Sem bairro'; `?bairro=Jardim+Nordeste` dá 2 ocorrências no mapa; 'Sem bairro' dá `?bairro=__none__`; a lista filtra (132 solicitações). A lista não ganhou coluna de bairro, só o filtro. |
+| P3 como Suporte (`28`, `29`)               | OK: seis abas (sem Auditoria), Contrato só leitura, Cidadãos mascarados.                                                                                                                                                               |
+| Dados da prefeitura em modo suporte (`30`) | OK: mesmo conteúdo, com a faixa do modo suporte.                                                                                                                                                                                       |
+| Correção da Task 12 (`31`)                 | OK: `/revisao?atividade=<id fora da fila>` mostra 'Esta atividade já saiu da fila.' sem abrir outra.                                                                                                                                   |
+
+Achados da passada:
+
+- **API devolve CPF e e-mail inteiros ao Suporte e Admin** em `GET /backoffice/tenants/:id/managers` (campos `cpf` e `email` sem máscara; a tela mascara o CPF). O pedido era mascarar dado pessoal na API. Não corrigido nesta task; entra no "Em aberto".
+- **Selo do prazo no painel do ponto**: 'Atrasada há 1 dia' sai no mesmo tom de aviso (amarelo) de 'Vence em até 2 dias'; atrasada e no prazo não se distinguem pela cor (`03`). Já anotado na Task 6.
+- **Painel do ponto some o selo do prazo** quando o filtro de prazo deixa o ponto aberto fora dos resultados (`04`).
+- **Mensagem de arquivo inválido com acentos graves** ('nome' e 'name' entre crases) aparece literal na tela (`21`); o texto aprovado do plano traz as crases.
+- **Vigência do contrato do seed começa em 01/11/2026**, amanhã, por isso a P3 mostra 'cliente desde 01/11/2026' para uma prefeitura ativa (só dado do seed).
+- **Setores**: o cabeçalho da coluna do menu ainda mostra `⋯` (`10`).
+
+### Textos novos para o usuário confirmar
+
+Os textos das Decisões do plano já foram aprovados. Abaixo, só o que quem implementou criou fora delas, mais o que a passada mostrou.
+
+- **Dados da prefeitura (Task 7):** rótulos 'Nome de exibição', 'Município e UF', 'Código IBGE', 'Central de atendimento', 'Situação', 'Plano', 'Vigência', 'Usuários do painel'; 'A partir de dd/mm/aaaa' (contrato sem data final); 'Carregando…'; 'Não foi possível carregar os dados da prefeitura.'; '—' para campo vazio; 'Cidade · UF'.
+- **Bairros na P3 (Task 8):** 'Nenhum bairro carregado.'; '{n} bairros · enviados pela prefeitura' ('· IBGE' para a malha do IBGE); nome acessível 'Arquivo de bairros' do campo de arquivo; 'Confira os dados e tente de novo.' (erro genérico da carga).
+- **Vistos na passada:** 'Equipes da prefeitura e quantos agentes cada uma tem.', 'Gestores e admins da prefeitura, com os setores de cada um.', 'Categorias que o cidadão vê no app, com setor e prazo.' (aberturas das abas da P3, só leitura); 'Esta atividade já saiu da fila.' (Task 12, já estava nas Decisões).
+- **Escolha de comportamento para confirmar:** o Suporte não vê a aba Auditoria da P3 nem o botão de salvar contrato (Contrato, bairros e Auditoria são só do Admin).
+
+### Em aberto depois do pronto para validação
+
+- **Mascarar CPF e e-mail na rota de gestores do backoffice** (`GET /backoffice/tenants/:id/managers`), do lado da API (Task 9; achado da passada).
+- **Importar a malha real do IBGE** por UF (`pnpm --filter @alocidadao/db import:neighborhoods`) e conferir o tempo e o resultado com um município real; só a carga por arquivo da prefeitura foi vista no navegador.
+- **Selo do prazo atrasada** com tom próprio (vermelho) no painel do ponto, e manter o selo quando o ponto aberto sai dos resultados do filtro.
+- **Seed:** vigência do contrato da Prefeitura Demo A começando amanhã.
+- **Setores:** tirar o `⋯` do cabeçalho da `DepartmentsPage`.
+- **Task 4:** `?bairro=` com valor fora da lista da prefeitura aparece como opção; o plano diz "nomes só da lista consolidada" (ignorar como no caso sem bairros).
+- **Task 10:** a leitura da lista de cidadãos só grava auditoria na primeira página, sem busca e sem filtro de situação; uma chamada direta com filtro não audita. Auditar a página 1 sem busca em qualquer situação e dar `staleTime` à consulta para a tela não auditar de novo ao refazer a busca.
+- Menores das revisões, agrupados:
+  - Banco: `replace_tenant_neighborhoods` aceita nome vazio, geometria que não é polígono e duplicata (23505 cru) e `[]` equivale a limpar (a API valida antes); `refresh` calcula `neighborhood_at` duas vezes por linha; texto de erro do `toMultiPolygon` fala "Município" para bairro; testes que faltam (`upsertIbge` recalculando ocorrências existentes, `refresh` com contagem > 0, `app_user` sem execução de `neighborhood_at`/`effective_neighborhoods` fora de contexto, membro comum chamando `replace`/`clear`); resumo do mapa com subconsulta correlacionada repetida e junção de categorias desnecessária; janela de ~1 s de erro perto das 23:59:59 de São Paulo nos testes do prazo.
+  - API: corpo JSON malformado ou vazio no envio de bairros dá o 400 nativo do Fastify (sem `{ code }`) e o 413 acima de 10 MB não tem teste; `neighborhoodFeatureName` cai no `name` quando `nome` é vazio; polígono degenerado (área zero) pode virar vazio após `MakeValid` e dar 500 em vez de 422; PUT do contrato sem teste de atomicidade e `contractBodySchema` repete `displayName` e `centralPhone`; testes que faltam (`source: 'ibge'`, escopo de gestor com bairro, isolamento entre prefeituras de `/panel/neighborhoods`, gestor inativo e token de cidadão em `/panel/tenant-profile`, leituras da equipe que não geram auditoria, 403 de `q` da lista de cidadãos); o nome do cidadão buscado (`q`) aparece nos logs de requisição; LIKE com `_` e `\` sem teste; recuperação do agendador loga '…: normalizado'; JSDoc fora do lugar em `tenants.ts`; ordem de imports em `routes.ts`.
+  - Web: `parseMapQuery` não normaliza `?status=abertas&prazo=…` escrito à mão; `__none__` cru na URL; sem testes de `/panel/neighborhoods` com falha e de `?bairro=` desconhecido, e a espera repete em 5xx; `ContractTab` não reinicia o formulário ao trocar de prefeitura; `fileError` não some depois de voltar para a malha; link `?aba=auditoria` pisca a Visão geral; parâmetro `pagina` pode vazar entre abas; `PAGE_SIZE` duplicado no web; aba Equipes e agentes sem a lista de agentes por equipe; token de cidadão em rota de equipe dá 403 (não 401); o selo da faixa não é `StatCard`; escolher 'abertas' no mapa também limpa o prazo.
 
 ## Plano 8 — Infraestrutura
 

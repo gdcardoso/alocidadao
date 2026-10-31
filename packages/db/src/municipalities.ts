@@ -38,7 +38,7 @@ function pick(value: unknown, path: string[]): unknown {
   return current;
 }
 
-function toMultiPolygon(geometry: unknown, ibgeCode: string): MultiPolygonGeometry {
+export function toMultiPolygon(geometry: unknown, ibgeCode: string): MultiPolygonGeometry {
   const type = pick(geometry, ['type']);
   const coordinates = pick(geometry, ['coordinates']);
   if (!Array.isArray(coordinates)) {
@@ -101,7 +101,7 @@ export function parseIbgeMunicipalities(geojson: unknown, names: unknown): Munic
  * GeoJSON para MultiPolygon 4326 válido. A malha do IBGE traz anéis que cruzam a si mesmos;
  * ST_MakeValid os corrige e ST_CollectionExtract(..., 3) descarta linhas e pontos que sobrem.
  */
-function validMultiPolygon(geometry: MultiPolygonGeometry) {
+export function validMultiPolygon(geometry: MultiPolygonGeometry) {
   const raw = sql`ST_SetSRID(ST_GeomFromGeoJSON(${JSON.stringify(geometry)}), 4326)`;
   return sql`ST_Multi(ST_CollectionExtract(ST_MakeValid(${raw}), 3))`;
 }

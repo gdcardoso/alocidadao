@@ -5,4 +5,5 @@ export * as schema from './schema.js';
 export * from './geo.js';
 export * from './citizen.js';
 export * from './municipalities.js';
+export * from './neighborhoods.js';
 export * from './notifications.js';

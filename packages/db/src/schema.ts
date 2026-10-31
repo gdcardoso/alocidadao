@@ -293,6 +293,26 @@ export const municipalities = pgTable(
   ],
 );
 
+/**
+ * Bairros da malha do IBGE (dado público, leitura livre). `code` (CD_BAIRRO) identifica o bairro
+ * e torna a importação repetível. Carregada pelo dono do banco (`pnpm db:import:neighborhoods`).
+ */
+export const ibgeNeighborhoods = pgTable(
+  'ibge_neighborhoods',
+  {
+    id: id(),
+    ibgeCode: text('ibge_code').notNull(),
+    code: text('code').notNull().unique(),
+    name: text('name').notNull(),
+    boundary: multiPolygon('boundary').notNull(),
+  },
+  (t) => [
+    index('ibge_neighborhoods_boundary_idx').using('gist', t.boundary),
+    index('ibge_neighborhoods_ibge_code_idx').on(t.ibgeCode),
+    check('ibge_neighborhoods_ibge_code_check', sql`${t.ibgeCode} ~ '^[0-9]{7}$'`),
+  ],
+);
+
 // ── Tabelas da prefeitura ──────────────────────────────────────────────────
 
 export const memberships = pgTable(
@@ -422,11 +442,14 @@ export const occurrences = pgTable(
     mergedIntoId: uuid('merged_into_id'),
     /** Motivo da recusa, visto pelo cidadão. */
     rejectionReason: text('rejection_reason'),
+    /** Bairro do ponto, calculado por gatilho a partir das camadas de bairros; nunca do endereço. */
+    neighborhood: text('neighborhood'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   (t) => [
     unique().on(t.tenantId, t.id),
+    index().on(t.tenantId, t.neighborhood),
     // Alvo da FK das solicitações: garante que a solicitação tem a categoria da ocorrência.
     unique().on(t.tenantId, t.id, t.categoryId),
     foreignKey({
@@ -445,6 +468,25 @@ export const occurrences = pgTable(
       'occurrences_merged_into_check',
       sql`(${t.status} = 'merged') = (${t.mergedIntoId} is not null) and ${t.mergedIntoId} <> ${t.id}`,
     ),
+  ],
+);
+
+/**
+ * Bairros próprios da prefeitura: quando existem, valem no lugar da malha do IBGE. Só a equipe
+ * (admin) grava, pelas funções `replace_tenant_neighborhoods` e `clear_tenant_neighborhoods`.
+ */
+export const tenantNeighborhoods = pgTable(
+  'tenant_neighborhoods',
+  {
+    id: id(),
+    tenantId: tenantId(),
+    name: text('name').notNull(),
+    boundary: multiPolygon('boundary').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique().on(t.tenantId, t.name),
+    index('tenant_neighborhoods_boundary_idx').using('gist', t.boundary),
   ],
 );
 

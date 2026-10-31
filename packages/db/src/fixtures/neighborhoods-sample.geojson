@@ -1,0 +1,39 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "CD_MUN": "9999801", "CD_BAIRRO": "999980100001", "NM_BAIRRO": "Centro" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [40, -40],
+            [41, -40],
+            [41, -39],
+            [40, -39],
+            [40, -40]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "CD_MUN": "9999801", "CD_BAIRRO": "999980100002", "NM_BAIRRO": "Alvorada" },
+      "geometry": {
+        "type": "MultiPolygon",
+        "coordinates": [
+          [
+            [
+              [41, -40],
+              [42, -40],
+              [42, -39],
+              [41, -39],
+              [41, -40]
+            ]
+          ]
+        ]
+      }
+    }
+  ]
+}

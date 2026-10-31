@@ -1248,6 +1248,43 @@ describe('fila, aparelhos e confirmação automática', () => {
     expect(await claimNotifications(app, 10)).toEqual([]);
   });
 
+  it('pegada não envia work_order_* a quem saiu da equipe', async () => {
+    await clearQueue();
+    const stays = await seedUser('agente-fica');
+    const left = await seedUser('agente-saiu');
+    const demoted = await seedUser('agente-sem-vinculo');
+    for (const userId of [stays, left, demoted]) await role(town.tenantId, userId, 'field_agent');
+    await owner.insert(teamMembers).values(
+      [stays, left, demoted].map((userId) => ({
+        tenantId: town.tenantId,
+        teamId: town.teamId,
+        userId,
+      })),
+    );
+    const occurrenceId = await newOccurrence('in_progress');
+    const [order] = await owner
+      .insert(workOrders)
+      .values({ tenantId: town.tenantId, occurrenceId, teamId: town.teamId })
+      .returning();
+    const kind = 'work_order_assigned';
+    const staysRow = await queued(stays, { kind, workOrderId: order!.id });
+    const leftRow = await queued(left, { kind, workOrderId: order!.id });
+    const demotedRow = await queued(demoted, { kind, workOrderId: order!.id });
+    // Saiu da equipe e perdeu o vínculo de agente depois de o aviso entrar na fila.
+    await owner
+      .delete(teamMembers)
+      .where(and(eq(teamMembers.teamId, town.teamId), eq(teamMembers.userId, left)));
+    await owner
+      .update(memberships)
+      .set({ status: 'inactive' })
+      .where(and(eq(memberships.userId, demoted), eq(memberships.role, 'field_agent')));
+
+    const claimed = await claimNotifications(app, 10);
+    expect(claimed.map((row) => row.id)).toEqual([staysRow.id]);
+    expect((await outboxRow(leftRow.id)).status).toBe('skipped');
+    expect((await outboxRow(demotedRow.id)).status).toBe('skipped');
+  });
+
   it('nova tentativa volta à fila no tempo pedido', async () => {
     await clearQueue();
     const person = await seedUser('pessoa-tentativa');

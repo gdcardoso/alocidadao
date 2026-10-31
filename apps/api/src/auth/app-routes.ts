@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import {
+  clearPushForDeadSession,
   consumeCode,
   findUserByPhone,
   freezeStaleAccount,
@@ -257,8 +258,21 @@ export function registerAppAuthRoutes(instance: FastifyInstance, deps: AuthDeps)
       },
     },
     async (request, reply) => {
-      const found = await sessionForRefresh(db, hashRefreshToken(request.body.refreshToken));
-      if (!found) return reply.code(401).send({ code: 'session_expired' });
+      const tokenHash = hashRefreshToken(request.body.refreshToken);
+      const found = await sessionForRefresh(db, tokenHash);
+      if (!found) {
+        // Sessão revogada ou expirada no servidor: o aparelho deixa de receber push. Falha ao
+        // apagar não muda a resposta.
+        try {
+          await clearPushForDeadSession(db, tokenHash);
+        } catch (error) {
+          request.log.warn(
+            { error: error instanceof Error ? error.message : String(error) },
+            'Renovação recusada sem apagar o token de push do aparelho',
+          );
+        }
+        return reply.code(401).send({ code: 'session_expired' });
+      }
       const accessToken = await signAccessToken(secret, {
         userId: found.userId,
         sessionId: found.sessionId,

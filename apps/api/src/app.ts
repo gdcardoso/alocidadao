@@ -3,7 +3,7 @@ import cors from '@fastify/cors';
 import rateLimit, { type RateLimitPluginOptions } from '@fastify/rate-limit';
 import type { Database } from '@alocidadao/db';
 import { healthResponseSchema } from '@alocidadao/shared';
-import Fastify, { type FastifyInstance } from 'fastify';
+import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import {
   serializerCompiler,
   validatorCompiler,
@@ -76,14 +76,30 @@ async function registerRateLimit(scope: FastifyInstance, options: RateLimitPlugi
       retryAfterSeconds: Math.max(1, Math.ceil(context.ttl / 1000)),
     }),
   });
-  scope.setErrorHandler((error: { statusCode?: number; code?: string }, _request, reply) => {
+  scope.setErrorHandler((error: { statusCode?: number; code?: string }, request, reply) => {
     if (error.statusCode === 429 && error.code === 'rate_limited') {
       const { retryAfterSeconds } = error as { retryAfterSeconds?: number };
       return reply.code(429).send({ code: 'rate_limited', retryAfterSeconds });
     }
-    // Os demais erros seguem para o tratamento padrão.
-    return reply.send(error);
+    return handleError(error, request, reply);
   });
+}
+
+/**
+ * Erro inesperado (sem statusCode ou 5xx) vira `500 { code: 'internal_error' }`, sem a mensagem
+ * interna, e vai ao log do servidor. Erros 4xx (validação, corpo inválido, 413) seguem o tratamento
+ * padrão do Fastify.
+ */
+function handleError(
+  error: { statusCode?: number; code?: string },
+  request: FastifyRequest,
+  reply: FastifyReply,
+) {
+  if (error.statusCode === undefined || error.statusCode >= 500) {
+    request.log.error({ err: error }, 'Erro inesperado');
+    return reply.code(500).send({ code: 'internal_error' });
+  }
+  return reply.send(error);
 }
 
 export async function buildApp({
@@ -99,6 +115,7 @@ export async function buildApp({
   const app = Fastify({ logger }).withTypeProvider<ZodTypeProvider>();
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
+  app.setErrorHandler(handleError);
 
   await app.register(cors, { origin: corsOrigin ?? true });
 

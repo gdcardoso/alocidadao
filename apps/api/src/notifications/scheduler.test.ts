@@ -164,6 +164,34 @@ describe('notification scheduler', () => {
     await scheduler.stop();
   });
 
+  it('scheduler logs a database failure once until it recovers', async () => {
+    db.claimNotifications
+      .mockRejectedValueOnce(new Error('banco fora'))
+      .mockRejectedValueOnce(new Error('banco fora'))
+      .mockRejectedValueOnce(new Error('banco fora'))
+      .mockResolvedValueOnce([])
+      .mockRejectedValueOnce(new Error('banco fora de novo'));
+    const d = deps();
+    const scheduler = startScheduler(d, {
+      dispatchEveryMs: 5_000,
+      maintenanceEveryMs: 3_600_000,
+      maintenanceFirstRunMs: 3_600_000,
+    });
+
+    // Três falhas seguidas: um registro só.
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(db.claimNotifications).toHaveBeenCalledTimes(3);
+    expect(d.log.error).toHaveBeenCalledTimes(1);
+
+    // Voltou: um registro de recuperação; nova falha depois volta a registrar.
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(d.log.info).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(d.log.error).toHaveBeenCalledTimes(2);
+
+    await scheduler.stop();
+  });
+
   it('closing the app waits for the running dispatch before the onClose hooks', async () => {
     // Só os intervalos são falsos: o fechamento do Fastify usa os timers de verdade.
     vi.useRealTimers();

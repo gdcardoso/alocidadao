@@ -21,6 +21,26 @@ const MAX_AUTO_CONFIRM_CALLS = 20;
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 /**
+ * Registra uma falha só na mudança de estado: a primeira falha vai ao log e as seguintes ficam
+ * quietas até a tarefa voltar a funcionar (um aviso de recuperação). Sem isso, banco fora gera uma
+ * linha de erro a cada batida, por instância.
+ */
+function failureLog(log: DispatchDeps['log']) {
+  const failing = new Set<string>();
+  return {
+    failed(name: string, message: string, error: unknown) {
+      if (failing.has(name)) return;
+      failing.add(name);
+      log.error({ error: errorText(error) }, message);
+    },
+    ok(name: string, message: string) {
+      if (!failing.delete(name)) return;
+      log.info({}, `${message}: normalizado`);
+    },
+  };
+}
+
+/**
  * Tarefa periódica sem sobreposição: se a rodada anterior ainda roda, a batida é pulada. Erro vai
  * ao log e não para a tarefa.
  */
@@ -53,12 +73,14 @@ export function startScheduler(
   }: SchedulerOptions = {},
 ): Scheduler {
   const { db, log } = deps;
+  const failures = failureLog(log);
 
   const dispatch = every(dispatchEveryMs, async () => {
     try {
       await dispatchNotifications(deps);
+      failures.ok('dispatch', 'Envio da fila de avisos');
     } catch (error) {
-      log.error({ error: errorText(error) }, 'Falha no envio da fila de avisos');
+      failures.failed('dispatch', 'Falha no envio da fila de avisos', error);
     }
   });
 
@@ -74,13 +96,15 @@ export function startScheduler(
           if (count < AUTO_CONFIRM_BATCH) break;
         }
         if (confirmed > 0) log.info({ confirmed }, 'Solicitações confirmadas automaticamente');
+        failures.ok('auto-confirm', 'Confirmação automática');
       } catch (error) {
-        log.error({ error: errorText(error) }, 'Falha na confirmação automática');
+        failures.failed('auto-confirm', 'Falha na confirmação automática', error);
       }
       try {
         await cleanupNotifications(db);
+        failures.ok('cleanup', 'Limpeza dos avisos');
       } catch (error) {
-        log.error({ error: errorText(error) }, 'Falha na limpeza dos avisos');
+        failures.failed('cleanup', 'Falha na limpeza dos avisos', error);
       }
     },
     maintenanceFirstRunMs,

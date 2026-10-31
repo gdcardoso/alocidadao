@@ -8,7 +8,7 @@ import {
   frozenAccountReleaseBodySchema,
   maskEmail,
 } from '@alocidadao/shared';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 import type { FastifyInstance, preHandlerHookHandler } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
@@ -252,6 +252,8 @@ async function recoverInTransaction(
         eq(users.id, consumed.userId),
         eq(users.accountStatus, 'frozen'),
         isNull(users.deletedAt),
+        // CPF liberado depois do código: a conta ficaria sem CPF e sem número.
+        isNotNull(users.cpf),
       ),
     );
   if (!frozen?.email || frozen.email.toLowerCase() !== consumed.target) return 'invalid_code';

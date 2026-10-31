@@ -287,6 +287,29 @@ describe('conta congelada no backoffice', () => {
     expect((await userRow(frozen.id)).accountStatus).toBe('active');
   });
 
+  it('recover after the CPF was released returns invalid_code', async () => {
+    const supportId = await fx.newStaff('support');
+    const frozen = await frozenAccount({ email: 'liberada.antes@teste.dev' });
+    const sent = await requestCode(supportId, { cpf: frozen.cpf, tenantId: null });
+    expect(sent.statusCode).toBe(200);
+    const { challengeId } = frozenAccountCodeResponseSchema.parse(sent.json());
+    const code = codeSentTo('liberada.antes@teste.dev');
+
+    // O CPF é liberado depois de o código sair: a conta ficaria sem CPF e sem número.
+    const released = await releaseCpf(supportId, { cpf: frozen.cpf, tenantId: null });
+    expect(released.statusCode).toBe(204);
+
+    const recovered = await recover(supportId, {
+      challengeId,
+      code,
+      email: newEmail(),
+      tenantId: null,
+    });
+    expect(recovered.statusCode).toBe(400);
+    expect(recovered.json()).toEqual({ code: 'invalid_code' });
+    expect(await userRow(frozen.id)).toMatchObject({ accountStatus: 'frozen', cpf: null });
+  });
+
   it('frozen account without email is 409 frozen_account_without_email', async () => {
     const supportId = await fx.newStaff('support');
     const frozen = await frozenAccount({ email: null });

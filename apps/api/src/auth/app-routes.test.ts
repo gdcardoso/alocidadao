@@ -546,6 +546,61 @@ describe('app auth routes', () => {
     expect(saved.find((d) => d.installationId === other.installationId)?.pushToken).not.toBeNull();
   });
 
+  it('revoking a session on the server clears the device push token', async () => {
+    const phone = newPhone();
+    const userId = await createUser({ phone });
+    const device = newDevice();
+    const other = newDevice();
+    const verified = await signInByPhone(phone, device);
+    if (verified.status !== 'signed_in') throw new Error(`status ${verified.status}`);
+    const { accessToken, refreshToken } = verified.session;
+    const headers = { authorization: `Bearer ${accessToken}` };
+    for (const [d, pushToken] of [
+      [device, `push-${randomUUID()}`],
+      [other, `push-${randomUUID()}`],
+    ] as const) {
+      const res = await app.inject({
+        method: 'PUT',
+        url: `/me/devices/${d.installationId}`,
+        headers,
+        payload: { platform: d.platform, appVersion: d.appVersion, pushToken },
+      });
+      expect(res.statusCode).toBe(204);
+    }
+
+    // Sessão ainda válida: renovar não mexe no token.
+    const alive = await app.inject({
+      method: 'POST',
+      url: '/auth/refresh',
+      payload: { refreshToken },
+    });
+    expect(alive.statusCode).toBe(200);
+    const tokenOf = async (installationId: string) =>
+      (
+        await owner.db
+          .select({ pushToken: devices.pushToken })
+          .from(devices)
+          .where(and(eq(devices.userId, userId), eq(devices.installationId, installationId)))
+      )[0]?.pushToken;
+    expect(await tokenOf(device.installationId)).not.toBeNull();
+
+    // O servidor revoga a sessão (por exemplo, outra conta ganhou o número): a renovação falha.
+    await owner.db
+      .update(sessions)
+      .set({ revokedAt: new Date() })
+      .where(eq(sessions.userId, userId));
+    const refused = await app.inject({
+      method: 'POST',
+      url: '/auth/refresh',
+      payload: { refreshToken },
+    });
+    expect(refused.statusCode).toBe(401);
+
+    expect(await tokenOf(device.installationId)).toBeNull();
+    // O outro aparelho da conta não é tocado.
+    expect(await tokenOf(other.installationId)).not.toBeNull();
+  });
+
   it('auth rate limit per IP', async () => {
     const limited = await build({ max: 3, timeWindowMs: 60_000 });
     try {

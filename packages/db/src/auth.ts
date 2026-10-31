@@ -126,6 +126,14 @@ export async function sessionForRefresh(
   return { sessionId: row.session_id, userId: row.user_id, audience: row.audience };
 }
 
+/**
+ * Renovação recusada: se o token é de uma sessão já revogada ou expirada, o aparelho dela deixa de
+ * receber push. Sessão válida ou token desconhecido não mexem em nada.
+ */
+export async function clearPushForDeadSession(db: Executor, tokenHash: string): Promise<void> {
+  await db.execute(sql`select auth_clear_push_for_dead_session(${tokenHash})`);
+}
+
 // ── Conta ──────────────────────────────────────────────────────────────────
 // Rodam dentro de withContext com o usuário: as funções da migração account_functions
 // agem sobre app_current_user() e recusam a chamada sem usuário no contexto.

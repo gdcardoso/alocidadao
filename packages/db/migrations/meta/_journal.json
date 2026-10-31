@@ -274,6 +274,13 @@
       "when": 1793473991215,
       "tag": "0038_panel_tenant_profile",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1793475676997,
+      "tag": "0039_fixes_validation",
+      "breakpoints": true
     }
   ]
 }

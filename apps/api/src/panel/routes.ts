@@ -14,6 +14,8 @@ import {
   occurrenceDetailSchema,
   occurrenceMapQuerySchema,
   occurrenceMapResponseSchema,
+  occurrenceSummaryQuerySchema,
+  occurrenceSummarySchema,
   neighborhoodsResponseSchema,
   panelContextSchema,
   panelCountsSchema,
@@ -69,6 +71,7 @@ import {
   loadOccurrenceDetail,
   loadNeighborhoods,
   loadOccurrenceMap,
+  loadOccurrenceSummary,
   loadTeamOptions,
   searchOccurrences,
 } from './occurrences.js';
@@ -218,6 +221,22 @@ export function registerPanelRoutes(instance: FastifyInstance, deps: PanelDeps) 
       const identity = await requirePanelMember(db, request, reply);
       if (!identity) return reply;
       return loadOccurrenceMap(db, identity, request.query);
+    },
+  );
+
+  app.get(
+    '/panel/occurrences/summary',
+    {
+      preHandler: panelAuth,
+      schema: {
+        querystring: occurrenceSummaryQuerySchema,
+        response: { 200: occurrenceSummarySchema, ...panelErrors },
+      },
+    },
+    async (request, reply) => {
+      const identity = await requirePanelMember(db, request, reply);
+      if (!identity) return reply;
+      return loadOccurrenceSummary(db, identity, request.query);
     },
   );
 

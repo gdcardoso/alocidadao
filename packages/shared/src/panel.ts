@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { DEADLINE_FILTERS, DEADLINE_STATUSES } from './deadline.js';
 import { ICON_GROUPS } from './enums.js';
 import { geoPointSchema } from './geo.js';
 import { occurrenceStatusSchema, type OccurrenceStatus } from './occurrence-status.js';
@@ -84,8 +85,25 @@ export const occurrenceMapQuerySchema = z.object({
   categoryId: z.uuid().optional(),
   neighborhood: neighborhoodFilterSchema,
   days: mapDaysSchema,
+  /** Com prazo, o mapa mostra só ocorrências em atendimento. */
+  deadline: z.enum(DEADLINE_FILTERS).optional(),
 });
 export type OccurrenceMapQuery = z.infer<typeof occurrenceMapQuerySchema>;
+
+export const occurrenceSummaryQuerySchema = occurrenceMapQuerySchema.pick({
+  categoryId: true,
+  neighborhood: true,
+  days: true,
+});
+export type OccurrenceSummaryQuery = z.infer<typeof occurrenceSummaryQuerySchema>;
+
+export const occurrenceSummarySchema = z.object({
+  triage: z.number().int(),
+  inProgress: z.number().int(),
+  dueSoon: z.number().int(),
+  overdue: z.number().int(),
+});
+export type OccurrenceSummary = z.infer<typeof occurrenceSummarySchema>;
 
 export const occurrencePointSchema = z.object({
   id: z.uuid(),
@@ -97,6 +115,8 @@ export const occurrencePointSchema = z.object({
   status: occurrenceStatusSchema,
   requestCount: z.number().int(),
   statusSince: z.iso.datetime(),
+  deadlineStatus: z.enum(DEADLINE_STATUSES),
+  dueAt: z.iso.datetime().nullable(),
 });
 export type OccurrencePoint = z.infer<typeof occurrencePointSchema>;
 

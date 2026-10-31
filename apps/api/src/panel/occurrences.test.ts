@@ -4,6 +4,7 @@ import {
   occurrenceDetailSchema,
   NO_NEIGHBORHOOD,
   occurrenceMapResponseSchema,
+  occurrenceSummarySchema,
   panelSearchResponseSchema,
   teamOptionsResponseSchema,
   type GeoPoint,
@@ -11,6 +12,8 @@ import {
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp } from '../app.js';
+import { dueAtFor } from './actions.js';
+import { addDays, todayInSaoPaulo } from './occurrences.js';
 import { createStorage } from '../storage/s3.js';
 import { testStorageConfig } from '../storage/test-fixtures.js';
 import { panelAuthHeader } from '../test/panel.js';
@@ -151,6 +154,8 @@ describe('GET /panel/occurrences', () => {
       status: 'triage',
       requestCount: 2,
       statusSince: expect.any(String),
+      deadlineStatus: 'none',
+      dueAt: null,
     });
     // Sem evento, vale a criação da ocorrência.
     expect(Math.abs(Date.parse(openPoint.statusSince) - daysAgo(2).getTime())).toBeLessThan(60_000);
@@ -671,5 +676,208 @@ describe('GET /panel/occurrences neighborhood filter', () => {
     const body = occurrenceMapResponseSchema.parse(res.json());
     expect(body.items.map((item) => item.id)).toEqual([none.id]);
     expect(body.total).toBe(1);
+  });
+});
+
+describe('deadline status', () => {
+  /** Ocorrência em atendimento com uma atividade (ou sem), com o prazo dado. */
+  async function withOrder(
+    seed: Awaited<ReturnType<typeof fx.seedPanelTenant>>,
+    input: {
+      dueAt?: Date;
+      status?: Parameters<typeof fx.addWorkOrder>[1]['status'];
+      occurrenceStatus?: Parameters<typeof fx.addOccurrence>[1]['status'];
+    },
+  ) {
+    const id = await fx.addOccurrence(seed.tenantId, {
+      categoryId: seed.potholeId,
+      at: CENTER,
+      status: input.occurrenceStatus ?? 'in_progress',
+    });
+    if (input.dueAt) {
+      const teamId = await fx.addTeam(seed.tenantId, {
+        departmentId: seed.worksId,
+        name: `Equipe ${randomUUID()}`,
+      });
+      await fx.addWorkOrder(seed.tenantId, {
+        occurrenceId: id,
+        teamId,
+        status: input.status ?? 'assigned',
+        dueAt: input.dueAt,
+      });
+    }
+    return id;
+  }
+
+  async function points(adminId: string, tenantId: string, query = '') {
+    const response = await get(`/panel/occurrences?days=all${query}`, adminId, tenantId);
+    expect(response.statusCode).toBe(200);
+    return occurrenceMapResponseSchema.parse(response.json()).items;
+  }
+
+  const inDays = (days: number) => dueAtFor(addDays(todayInSaoPaulo(), days));
+
+  it('triage occurrence is none', async () => {
+    const seed = await fx.seedPanelTenant();
+    const adminId = await fx.newAdmin(seed.tenantId);
+    await withOrder(seed, { occurrenceStatus: 'triage', dueAt: inDays(1) });
+    const [point] = await points(adminId, seed.tenantId);
+    expect(point?.deadlineStatus).toBe('none');
+    expect(point?.dueAt).toBeNull();
+  });
+
+  it('in-progress occurrence without a work order is none', async () => {
+    const seed = await fx.seedPanelTenant();
+    const adminId = await fx.newAdmin(seed.tenantId);
+    await withOrder(seed, {});
+    const [point] = await points(adminId, seed.tenantId);
+    expect(point?.deadlineStatus).toBe('none');
+  });
+
+  it('due in 3 days is on_time', async () => {
+    const seed = await fx.seedPanelTenant();
+    const adminId = await fx.newAdmin(seed.tenantId);
+    await withOrder(seed, { dueAt: inDays(3) });
+    const [point] = await points(adminId, seed.tenantId);
+    expect(point?.deadlineStatus).toBe('on_time');
+    expect(point?.dueAt).toBe(inDays(3).toISOString());
+  });
+
+  it('due in 2 days is due_soon', async () => {
+    const seed = await fx.seedPanelTenant();
+    const adminId = await fx.newAdmin(seed.tenantId);
+    await withOrder(seed, { dueAt: inDays(2) });
+    expect((await points(adminId, seed.tenantId))[0]?.deadlineStatus).toBe('due_soon');
+  });
+
+  // O banco usa o relógio real; o prazo "hoje às 23:59:59" de São Paulo é sempre o fim do dia
+  // corrente, então o resultado esperado vale a qualquer hora (sem fixar o now()).
+  it('due today at 23:30 São Paulo is due_soon', async () => {
+    const seed = await fx.seedPanelTenant();
+    const adminId = await fx.newAdmin(seed.tenantId);
+    await withOrder(seed, { dueAt: new Date(`${todayInSaoPaulo()}T23:30:00-03:00`) });
+    expect((await points(adminId, seed.tenantId))[0]?.deadlineStatus).toBe('due_soon');
+  });
+
+  it('one second after dueAtFor is overdue', async () => {
+    const seed = await fx.seedPanelTenant();
+    const adminId = await fx.newAdmin(seed.tenantId);
+    // Prazo de ontem (dueAtFor) já passou; o de hoje ainda não.
+    await withOrder(seed, { dueAt: inDays(-1) });
+    await withOrder(seed, { dueAt: new Date(Date.now() - 1000) });
+    const items = await points(adminId, seed.tenantId);
+    expect(items.map((item) => item.deadlineStatus)).toEqual(['overdue', 'overdue']);
+  });
+
+  it('impeded work order still counts its due date', async () => {
+    const seed = await fx.seedPanelTenant();
+    const adminId = await fx.newAdmin(seed.tenantId);
+    await withOrder(seed, { dueAt: inDays(-2), status: 'impeded' });
+    expect((await points(adminId, seed.tenantId))[0]?.deadlineStatus).toBe('overdue');
+  });
+
+  it('completed work order is ignored', async () => {
+    const seed = await fx.seedPanelTenant();
+    const adminId = await fx.newAdmin(seed.tenantId);
+    await withOrder(seed, { dueAt: inDays(-2), status: 'completed' });
+    expect((await points(adminId, seed.tenantId))[0]?.deadlineStatus).toBe('none');
+  });
+
+  it('deadline filter returns only in_progress', async () => {
+    const seed = await fx.seedPanelTenant();
+    const adminId = await fx.newAdmin(seed.tenantId);
+    const late = await withOrder(seed, { dueAt: inDays(-1) });
+    await withOrder(seed, { occurrenceStatus: 'triage' });
+    await withOrder(seed, { dueAt: inDays(5) });
+    const items = await points(
+      adminId,
+      seed.tenantId,
+      '&status=open_and_in_progress&deadline=overdue',
+    );
+    expect(items.map((item) => item.id)).toEqual([late]);
+    const all = await points(adminId, seed.tenantId, '&status=open&deadline=on_time');
+    expect(all).toHaveLength(1);
+    expect(all[0]?.status).toBe('in_progress');
+  });
+});
+
+describe('GET /panel/occurrences/summary', () => {
+  async function summary(userId: string, tenantId: string, query = '') {
+    const response = await get(`/panel/occurrences/summary?days=all${query}`, userId, tenantId);
+    expect(response.statusCode).toBe(200);
+    return occurrenceSummarySchema.parse(response.json());
+  }
+
+  async function seedMix() {
+    const seed = await fx.seedPanelTenant();
+    const { tenantId, potholeId, lampId, worksId, lightsId } = seed;
+    const worksTeam = await fx.addTeam(tenantId, { departmentId: worksId, name: 'Obras' });
+    const lightsTeam = await fx.addTeam(tenantId, { departmentId: lightsId, name: 'Luz' });
+    const inProgress = async (categoryId: string, teamId: string, days: number) => {
+      const id = await fx.addOccurrence(tenantId, {
+        categoryId,
+        at: CENTER,
+        status: 'in_progress',
+      });
+      await fx.addWorkOrder(tenantId, {
+        occurrenceId: id,
+        teamId,
+        status: 'assigned',
+        dueAt: dueAtFor(addDays(todayInSaoPaulo(), days)),
+      });
+      return id;
+    };
+    await fx.addOccurrence(tenantId, { categoryId: potholeId, at: CENTER });
+    await fx.addOccurrence(tenantId, { categoryId: lampId, at: CENTER });
+    await fx.addOccurrence(tenantId, { categoryId: potholeId, at: CENTER, status: 'completed' });
+    const late = await inProgress(potholeId, worksTeam, -1);
+    await inProgress(potholeId, worksTeam, 1);
+    await inProgress(potholeId, worksTeam, 9);
+    await inProgress(lampId, lightsTeam, -3);
+    return { ...seed, late };
+  }
+
+  it('summary ignores status and deadline filters', async () => {
+    const seed = await seedMix();
+    const adminId = await fx.newAdmin(seed.tenantId);
+    const expected = { triage: 2, inProgress: 4, dueSoon: 1, overdue: 2 };
+    expect(await summary(adminId, seed.tenantId)).toEqual(expected);
+    expect(await summary(adminId, seed.tenantId, '&status=open&deadline=overdue')).toEqual(
+      expected,
+    );
+  });
+
+  it('summary respects category and neighborhood', async () => {
+    const seed = await seedMix();
+    const adminId = await fx.newAdmin(seed.tenantId);
+    expect(await summary(adminId, seed.tenantId, `&categoryId=${seed.lampId}`)).toEqual({
+      triage: 1,
+      inProgress: 1,
+      dueSoon: 0,
+      overdue: 1,
+    });
+    expect(await summary(adminId, seed.tenantId, `&neighborhood=${NO_NEIGHBORHOOD}`)).toEqual({
+      triage: 2,
+      inProgress: 4,
+      dueSoon: 1,
+      overdue: 2,
+    });
+    expect(await summary(adminId, seed.tenantId, '&neighborhood=Inexistente')).toEqual({
+      triage: 0,
+      inProgress: 0,
+      dueSoon: 0,
+      overdue: 0,
+    });
+  });
+
+  it('summary respects department scope', async () => {
+    const seed = await seedMix();
+    const lightsManager = await fx.newManager(seed.tenantId, [seed.lightsId]);
+    expect(await summary(lightsManager, seed.tenantId)).toEqual({
+      triage: 1,
+      inProgress: 1,
+      dueSoon: 0,
+      overdue: 1,
+    });
   });
 });

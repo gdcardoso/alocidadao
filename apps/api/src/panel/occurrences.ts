@@ -8,15 +8,19 @@ import {
 } from '@alocidadao/db';
 import {
   ACTIVE_WORK_ORDER_STATUSES,
+  DUE_SOON_DAYS,
   CLUSTERABLE_OCCURRENCE_STATUSES,
   MAX_SUGGESTIONS,
   NO_NEIGHBORHOOD,
   PANEL_SEARCH_LIMIT,
+  type DeadlineStatus,
   type MapStatusFilter,
   type NeighborhoodsResponse,
   type OccurrenceDetail,
   type OccurrenceMapQuery,
   type OccurrenceMapResponse,
+  type OccurrenceSummary,
+  type OccurrenceSummaryQuery,
   type OccurrenceStatus,
   type PanelSearchResponse,
   type TeamOptionsResponse,
@@ -57,6 +61,41 @@ export function statusSinceSql(): SQL<Date> {
     ),
     occurrences.created_at
   )`.mapWith(occurrences.createdAt);
+}
+
+/**
+ * Prazo (`due_at`) da atividade ativa mais recente da ocorrência (`occurrences`, sem apelido).
+ * Só vale com a ocorrência em atendimento; senão, null.
+ */
+export function activeDueAtSql(): SQL<Date | null> {
+  return sql<Date | null>`(
+    case when occurrences.status = 'in_progress' then (
+      select w.due_at
+      from work_orders w
+      where w.tenant_id = occurrences.tenant_id
+        and w.occurrence_id = occurrences.id
+        and w.status in (${sqlList(ACTIVE_WORK_ORDER_STATUSES)})
+      order by w.created_at desc, w.id desc
+      limit 1
+    ) end
+  )`.mapWith((value) => (value === null ? null : new Date(value)));
+}
+
+/**
+ * Situação do prazo (`DeadlineStatus`), a regra única do mapa: sem prazo, `none`; vencido,
+ * `overdue`; a até `DUE_SOON_DAYS` dias de calendário de Brasília, `due_soon`; senão `on_time`.
+ */
+export function deadlineStatusSql(): SQL<DeadlineStatus> {
+  return sql<DeadlineStatus>`(
+    select case
+      when d.due_at is null then 'none'
+      when d.due_at < now() then 'overdue'
+      when (d.due_at at time zone ${SAO_PAULO_TIME_ZONE})::date
+        - (now() at time zone ${SAO_PAULO_TIME_ZONE})::date <= ${DUE_SOON_DAYS} then 'due_soon'
+      else 'on_time'
+    end
+    from (select ${activeDueAtSql()} as due_at) d
+  )`;
 }
 
 /** Relatos da ocorrência (`occurrences` sem apelido): as solicitações não canceladas. */
@@ -109,7 +148,8 @@ export async function loadOccurrenceMap(
   const { tenantId } = identity;
   const where = and(
     eq(occurrences.tenantId, tenantId),
-    inArray(occurrences.status, MAP_STATUSES[query.status]),
+    inArray(occurrences.status, query.deadline ? ['in_progress'] : MAP_STATUSES[query.status]),
+    query.deadline ? sql`${deadlineStatusSql()} = ${query.deadline}` : undefined,
     query.categoryId ? eq(occurrences.categoryId, query.categoryId) : undefined,
     neighborhoodCondition(query.neighborhood),
     query.days === null
@@ -134,6 +174,8 @@ export async function loadOccurrenceMap(
         status: occurrences.status,
         requestCount: requestCountSql(),
         statusSince: statusSinceSql(),
+        deadlineStatus: deadlineStatusSql(),
+        dueAt: activeDueAtSql(),
       })
       .from(occurrences)
       .innerJoin(categories, eq(categories.id, occurrences.categoryId))
@@ -146,8 +188,42 @@ export async function loadOccurrenceMap(
         ...row,
         location: toGeoPoint(row.location),
         statusSince: row.statusSince.toISOString(),
+        dueAt: row.dueAt?.toISOString() ?? null,
       })),
     };
+  });
+}
+
+/**
+ * Totais do mapa: triagem, em atendimento, a vencer e atrasadas. Respeita categoria, período,
+ * bairro e setores; ignora status e prazo.
+ */
+export async function loadOccurrenceSummary(
+  db: Database,
+  identity: PanelIdentity,
+  query: OccurrenceSummaryQuery,
+): Promise<OccurrenceSummary> {
+  const where = and(
+    eq(occurrences.tenantId, identity.tenantId),
+    query.categoryId ? eq(occurrences.categoryId, query.categoryId) : undefined,
+    neighborhoodCondition(query.neighborhood),
+    query.days === null
+      ? undefined
+      : sql`${occurrences.createdAt} >= now() - make_interval(days => ${query.days})`,
+    departmentScope(identity),
+  );
+  return withContext(db, panelDbContext(identity), async (tx) => {
+    const [row] = await tx
+      .select({
+        triage: sql<number>`count(*) filter (where ${occurrences.status} = 'triage')::int`,
+        inProgress: sql<number>`count(*) filter (where ${occurrences.status} = 'in_progress')::int`,
+        dueSoon: sql<number>`count(*) filter (where ${deadlineStatusSql()} = 'due_soon')::int`,
+        overdue: sql<number>`count(*) filter (where ${deadlineStatusSql()} = 'overdue')::int`,
+      })
+      .from(occurrences)
+      .innerJoin(categories, eq(categories.id, occurrences.categoryId))
+      .where(where);
+    return row!;
   });
 }
 

@@ -46,6 +46,8 @@ function point(id: string, categoryId: string, categoryName: string): Occurrence
     status: 'triage',
     requestCount: 1,
     statusSince: '2026-10-20T12:00:00.000Z',
+    deadlineStatus: 'none',
+    dueAt: null,
   };
 }
 

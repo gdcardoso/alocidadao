@@ -16,3 +16,4 @@ export * from './panel-admin.js';
 export * from './phone.js';
 export * from './backoffice.js';
 export * from './notifications.js';
+export * from './deadline.js';

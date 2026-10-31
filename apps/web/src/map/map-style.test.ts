@@ -61,6 +61,8 @@ describe('map style', () => {
       status: 'triage',
       requestCount: 6,
       statusSince: '2026-10-20T12:00:00.000Z',
+      deadlineStatus: 'none',
+      dueAt: null,
     } satisfies OccurrencePoint;
     expect(pointsToGeoJson([point])).toEqual({
       type: 'FeatureCollection',

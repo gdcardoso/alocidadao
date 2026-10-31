@@ -143,6 +143,24 @@ const SCENARIOS: Record<string, (staffId: string) => Promise<Scenario>> = {
       personal: [],
     };
   },
+  'PUT /backoffice/tenants/:id/contract': async () => {
+    const tenantId = await fx.createTenant('active');
+    return {
+      call: {
+        method: 'PUT',
+        url: `/backoffice/tenants/${tenantId}/contract`,
+        payload: {
+          displayName: 'Prefeitura Editada',
+          centralPhone: '156',
+          plan: 'complete',
+          startsOn: '2026-01-01',
+          endsOn: null,
+          includedPanelUsers: 20,
+        },
+      },
+      personal: [],
+    };
+  },
   'PUT /backoffice/tenants/:id/neighborhoods': async () => {
     const tenantId = await fx.createTenant('active');
     const ring = [

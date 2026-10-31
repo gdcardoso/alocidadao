@@ -497,6 +497,88 @@ describe('backoffice calls', () => {
     });
   });
 
+  it('backoffice contract and neighborhoods methods use the expected routes', async () => {
+    const detail = {
+      id: NEW_TENANT_ID,
+      displayName: 'Prefeitura X',
+      state: 'SP',
+      ibgeCode: '3550308',
+      status: 'active',
+      centralPhone: null,
+      contract: null,
+      stats: {
+        citizenCount: 0,
+        openCount: 0,
+        staleTriageCount: 0,
+        awaitingReviewCount: 0,
+        lateReviewCount: 0,
+        avgResolutionDays: null,
+        teamCount: 0,
+        activeAgentCount: 0,
+        invitedAgentCount: 0,
+        managerCount: 0,
+        adminCount: 0,
+        activeCategoryCount: 0,
+        panelUserCount: 0,
+      },
+      recentStaffActions: [],
+    };
+    const contract = {
+      displayName: 'Prefeitura X',
+      centralPhone: null,
+      plan: 'complete' as const,
+      startsOn: '2026-01-01',
+      endsOn: null,
+      includedPanelUsers: 10,
+    };
+    const put = recorder(() => Response.json(detail));
+    const api = createApiClient({
+      baseUrl: 'http://api',
+      fetch: put.fakeFetch,
+      getToken: () => 't',
+    });
+    await expect(api.backofficeUpdateContract(NEW_TENANT_ID, contract)).resolves.toMatchObject({
+      id: NEW_TENANT_ID,
+    });
+    expect(put.calls[0]?.url).toBe(`http://api/backoffice/tenants/${NEW_TENANT_ID}/contract`);
+    expect(put.calls[0]?.init?.method).toBe('PUT');
+    expect(JSON.parse(String(put.calls[0]?.init?.body))).toEqual(contract);
+
+    const summary = recorder(() => Response.json({ count: 3, source: 'tenant' }));
+    const hoods = createApiClient({
+      baseUrl: 'http://api',
+      fetch: summary.fakeFetch,
+      getToken: () => 't',
+    });
+    const geojson = { type: 'FeatureCollection', features: [] };
+    await expect(hoods.backofficeNeighborhoods(NEW_TENANT_ID)).resolves.toEqual({
+      count: 3,
+      source: 'tenant',
+    });
+    await hoods.backofficePutNeighborhoods(NEW_TENANT_ID, geojson);
+    await hoods.backofficeResetNeighborhoods(NEW_TENANT_ID);
+    const url = `http://api/backoffice/tenants/${NEW_TENANT_ID}/neighborhoods`;
+    expect(summary.calls.map((c) => [c.init?.method, c.url])).toEqual([
+      ['GET', url],
+      ['PUT', url],
+      ['DELETE', url],
+    ]);
+    expect(JSON.parse(String(summary.calls[1]?.init?.body))).toEqual(geojson);
+    for (const call of summary.calls) {
+      expect(new Headers(call.init?.headers).get('x-tenant-id')).toBeNull();
+    }
+
+    const invalid = recorder(() =>
+      Response.json({ code: 'invalid_neighborhoods' }, { status: 422 }),
+    );
+    const failing = createApiClient({ baseUrl: 'http://api', fetch: invalid.fakeFetch });
+    const error = await failing
+      .backofficePutNeighborhoods(NEW_TENANT_ID, {})
+      .catch((e: unknown) => e);
+    expect((error as ApiError).status).toBe(422);
+    expect((error as ApiError).body).toEqual({ code: 'invalid_neighborhoods' });
+  });
+
   it('backoffice calls send no tenant header', async () => {
     const { calls, fakeFetch } = recorder(() => new Response(null, { status: 204 }));
     const api = createApiClient({ baseUrl: 'http://api', fetch: fakeFetch, getToken: () => 't' });

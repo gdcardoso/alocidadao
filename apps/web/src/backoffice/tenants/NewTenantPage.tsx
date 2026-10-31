@@ -1,10 +1,4 @@
-import {
-  INCLUDED_USERS_MAX,
-  PLANS,
-  PLAN_LABELS,
-  tenantCreateBodySchema,
-  type MunicipalityOption,
-} from '@alocidadao/shared';
+import { PLANS, tenantCreateBodySchema, type MunicipalityOption } from '@alocidadao/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { FilePenLine, Map as MapIcon, Tags, UserCog } from 'lucide-react';
 import { useId, useState } from 'react';
@@ -20,6 +14,8 @@ import { TopBar } from '../../ui/TopBar';
 import { useToast } from '../../ui/Toast';
 import { FrozenAccountPanel } from '../frozen/FrozenAccountPanel';
 import { useBackofficeContext } from '../use-backoffice-context';
+import { contractIssueError, DISPLAY_NAME_TEXT, REQUIRED_TEXT } from './contract-form';
+import { ContractFields, type ContractFieldsValues } from './ContractFields';
 import { MunicipalitySearch } from './MunicipalitySearch';
 import styles from './NewTenantPage.module.css';
 
@@ -35,8 +31,6 @@ type FieldKey =
   | 'startsOn'
   | 'endsOn';
 type Errors = Partial<Record<FieldKey, string>>;
-
-const REQUIRED_TEXT = 'Preencha este campo.';
 
 /** P2: cadastro de prefeitura, só para o admin da equipe interna. */
 export function NewTenantPage() {
@@ -132,16 +126,16 @@ export function NewTenantPage() {
     if (!parsed.success) {
       for (const issue of parsed.error.issues) {
         const path = issue.path.join('.');
-        if (path === 'displayName') found.displayName ??= 'Informe o nome (2 a 120 caracteres).';
+        if (path === 'displayName') found.displayName ??= DISPLAY_NAME_TEXT;
         else if (path === 'ibgeCode') found.municipality ??= REQUIRED_TEXT;
-        else if (path === 'contract.endsOn') found.endsOn ??= issue.message;
         else if (path === 'admin.name') found.name ??= 'Informe o nome (2 a 80 caracteres).';
         else if (path === 'admin.cpf') found.cpf ??= 'CPF inválido.';
         else if (path === 'admin.email') found.email ??= 'E-mail inválido.';
-        else if (path === 'contract.includedPanelUsers')
-          found.includedPanelUsers ??= `Informe de 1 a ${INCLUDED_USERS_MAX}.`;
-        else if (path === 'contract.startsOn') found.startsOn ??= REQUIRED_TEXT;
-        else unmapped = true;
+        else if (path.startsWith('contract.')) {
+          const hit = contractIssueError(path.slice('contract.'.length), issue.message);
+          if (hit) found[hit.key] ??= hit.text;
+          else unmapped = true;
+        } else unmapped = true;
       }
     }
     setErrors(found);
@@ -165,6 +159,21 @@ export function NewTenantPage() {
     'aria-invalid': errors[key] !== undefined,
     'aria-describedby': errors[key] ? `${ids}-${key}-error` : undefined,
   });
+
+  function changeContract(field: keyof ContractFieldsValues, value: string) {
+    if (field === 'plan') setPlan(value as (typeof PLANS)[number]);
+    else if (field === 'included') {
+      setIncluded(value);
+      clear('includedPanelUsers');
+    } else if (field === 'startsOn') {
+      setStartsOn(value);
+      clear('startsOn');
+      clear('endsOn');
+    } else {
+      setEndsOn(value);
+      clear('endsOn');
+    }
+  }
 
   const goBack = () => void navigate(LIST_PATH);
 
@@ -324,81 +333,15 @@ export function NewTenantPage() {
               <FilePenLine size={18} aria-hidden />
               Contrato
             </h2>
-            <div className={styles.row}>
-              <div className={`${fields.field} ${styles.grow}`}>
-                <label htmlFor={`${ids}-plan`} className={fields.label}>
-                  Plano
-                </label>
-                <select
-                  id={`${ids}-plan`}
-                  className={fields.input}
-                  value={plan}
-                  onChange={(event) => setPlan(event.target.value as (typeof PLANS)[number])}
-                >
-                  {PLANS.map((item) => (
-                    <option key={item} value={item}>
-                      {PLAN_LABELS[item]}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className={`${fields.field} ${styles.grow}`}>
-                <label htmlFor={`${ids}-included`} className={fields.label}>
-                  Agentes e gestores incluídos
-                </label>
-                <input
-                  id={`${ids}-included`}
-                  type="number"
-                  min={1}
-                  max={INCLUDED_USERS_MAX}
-                  className={fields.input}
-                  value={included}
-                  {...described('includedPanelUsers')}
-                  onChange={(event) => {
-                    setIncluded(event.target.value);
-                    clear('includedPanelUsers');
-                  }}
-                />
-                {errorText('includedPanelUsers')}
-              </div>
-            </div>
-            <div className={styles.row}>
-              <div className={`${fields.field} ${styles.grow}`}>
-                <label htmlFor={`${ids}-starts`} className={fields.label}>
-                  Início da vigência
-                </label>
-                <input
-                  id={`${ids}-starts`}
-                  type="date"
-                  className={fields.input}
-                  value={startsOn}
-                  {...described('startsOn')}
-                  onChange={(event) => {
-                    setStartsOn(event.target.value);
-                    clear('startsOn');
-                    clear('endsOn');
-                  }}
-                />
-                {errorText('startsOn')}
-              </div>
-              <div className={`${fields.field} ${styles.grow}`}>
-                <label htmlFor={`${ids}-ends`} className={fields.label}>
-                  Fim da vigência
-                </label>
-                <input
-                  id={`${ids}-ends`}
-                  type="date"
-                  className={fields.input}
-                  value={endsOn}
-                  {...described('endsOn')}
-                  onChange={(event) => {
-                    setEndsOn(event.target.value);
-                    clear('endsOn');
-                  }}
-                />
-                {errorText('endsOn')}
-              </div>
-            </div>
+            <ContractFields
+              idPrefix={ids}
+              plan={plan}
+              included={included}
+              startsOn={startsOn}
+              endsOn={endsOn}
+              errors={errors}
+              onChange={changeContract}
+            />
             <p className={styles.help}>
               Registro do que foi contratado. Cobrança fica fora do MVP.
             </p>

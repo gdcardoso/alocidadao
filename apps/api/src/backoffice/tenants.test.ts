@@ -28,7 +28,7 @@ afterAll(async () => {
 });
 
 async function backoffice(
-  method: 'GET' | 'POST',
+  method: 'GET' | 'POST' | 'PUT',
   url: string,
   userId: string,
   payload?: Record<string, unknown>,
@@ -329,5 +329,112 @@ describe('prefeituras do backoffice', () => {
     // Sem a falha, a mesma chamada vale (e não dá 409).
     expect((await setStatus(tenantId, adminId, 'suspend')).statusCode).toBe(200);
     expect(await auditOf(tenantId)).toHaveLength(1);
+  });
+
+  describe('PUT /backoffice/tenants/:id/contract', () => {
+    const contractBody = (over: Record<string, unknown> = {}) => ({
+      displayName: 'Prefeitura Nova',
+      centralPhone: '0800',
+      plan: 'complete',
+      startsOn: '2026-03-01',
+      endsOn: '2027-03-01',
+      includedPanelUsers: 30,
+      ...over,
+    });
+    const putContract = (tenantId: string, userId: string, over?: Record<string, unknown>) =>
+      backoffice('PUT', `/backoffice/tenants/${tenantId}/contract`, userId, contractBody(over));
+
+    it('admin updates the current contract and tenant data', async () => {
+      const adminId = await fx.newStaff('admin');
+      const tenantId = await readyTenant('active');
+      await owner.db.insert(tenantContracts).values([
+        { tenantId, plan: 'essential', startsOn: '2025-01-01', includedPanelUsers: 5 },
+        { tenantId, plan: 'essential', startsOn: '2026-01-01', includedPanelUsers: 9 },
+      ]);
+
+      const response = await putContract(tenantId, adminId);
+      expect(response.statusCode).toBe(200);
+      const body = tenantDetailSchema.parse(response.json());
+      expect(body).toMatchObject({
+        displayName: 'Prefeitura Nova',
+        centralPhone: '0800',
+        contract: {
+          plan: 'complete',
+          includedPanelUsers: 30,
+          startsOn: '2026-03-01',
+          endsOn: '2027-03-01',
+        },
+      });
+      const rows = await owner.db
+        .select()
+        .from(tenantContracts)
+        .where(eq(tenantContracts.tenantId, tenantId));
+      expect(rows).toHaveLength(2);
+      const old = rows.find((row) => row.startsOn === '2025-01-01');
+      expect(old).toMatchObject({ plan: 'essential', includedPanelUsers: 5 });
+      const [tenant] = await owner.db.select().from(tenants).where(eq(tenants.id, tenantId));
+      expect(tenant).toMatchObject({ displayName: 'Prefeitura Nova', centralPhone: '0800' });
+    });
+
+    it('support gets 403', async () => {
+      const supportId = await fx.newStaff('support');
+      const tenantId = await readyTenant('active');
+      const response = await putContract(tenantId, supportId);
+      expect(response.statusCode).toBe(403);
+      expect(response.json()).toEqual({ code: 'admin_only' });
+      expect(await auditOf(tenantId)).toEqual([]);
+    });
+
+    it('creates the contract when the tenant has none', async () => {
+      const adminId = await fx.newStaff('admin');
+      const tenantId = await readyTenant('onboarding');
+      const response = await putContract(tenantId, adminId, { endsOn: null, centralPhone: '' });
+      expect(response.statusCode).toBe(200);
+      const body = tenantDetailSchema.parse(response.json());
+      expect(body.contract).toEqual({
+        plan: 'complete',
+        includedPanelUsers: 30,
+        startsOn: '2026-03-01',
+        endsOn: null,
+      });
+      expect(body.centralPhone).toBeNull();
+      const rows = await owner.db
+        .select()
+        .from(tenantContracts)
+        .where(eq(tenantContracts.tenantId, tenantId));
+      expect(rows).toHaveLength(1);
+    });
+
+    it('writes tenant.contract_update in the audit', async () => {
+      const adminId = await fx.newStaff('admin');
+      const tenantId = await readyTenant('active');
+      expect((await putContract(tenantId, adminId)).statusCode).toBe(200);
+      const events = await auditOf(tenantId);
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({
+        action: 'tenant.contract_update',
+        staffUserId: adminId,
+        targetType: 'tenant',
+        targetId: tenantId,
+      });
+    });
+
+    it('rejects an end before the start and non-positive included users with 422', async () => {
+      const adminId = await fx.newStaff('admin');
+      const tenantId = await readyTenant('active');
+      for (const over of [{ endsOn: '2026-02-28' }, { includedPanelUsers: 0 }]) {
+        const response = await putContract(tenantId, adminId, over);
+        expect(response.statusCode).toBe(422);
+        expect(response.json()).toEqual({ code: 'invalid_contract' });
+      }
+      expect(await auditOf(tenantId)).toEqual([]);
+    });
+
+    it('returns 404 for an unknown tenant', async () => {
+      const adminId = await fx.newStaff('admin');
+      const response = await putContract(randomUUID(), adminId);
+      expect(response.statusCode).toBe(404);
+      expect(response.json()).toEqual({ code: 'tenant_not_found' });
+    });
   });
 });

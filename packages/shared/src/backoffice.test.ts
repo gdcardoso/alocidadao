@@ -80,7 +80,8 @@ describe('backoffice contracts', () => {
     for (const action of STAFF_AUDIT_ACTIONS) {
       expect(STAFF_AUDIT_ACTION_LABELS[action]).toBeTruthy();
     }
-    expect(STAFF_AUDIT_ACTIONS).toHaveLength(36);
+    expect(STAFF_AUDIT_ACTION_LABELS['tenant.contract_update']).toBe('Editou o contrato');
+    expect(STAFF_AUDIT_ACTIONS).toHaveLength(37);
   });
 
   it('every commercial status and staff audit action has a label', () => {

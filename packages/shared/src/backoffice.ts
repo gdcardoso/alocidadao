@@ -49,6 +49,7 @@ export const STAFF_AUDIT_ACTIONS = [
   'tenant.activate',
   'tenant.suspend',
   'tenant.reactivate',
+  'tenant.contract_update',
   'tenant.neighborhoods_replace',
   'tenant.neighborhoods_reset',
   'occurrence.assign',
@@ -89,6 +90,7 @@ export const STAFF_AUDIT_ACTION_LABELS: Record<StaffAuditAction, string> = {
   'tenant.activate': 'Ativou a prefeitura',
   'tenant.suspend': 'Suspendeu a prefeitura',
   'tenant.reactivate': 'Reativou a prefeitura',
+  'tenant.contract_update': 'Editou o contrato',
   'tenant.neighborhoods_replace': 'Carregou os bairros',
   'tenant.neighborhoods_reset': 'Voltou para a malha do IBGE',
   'occurrence.assign': 'Atribuiu uma ocorrência',
@@ -271,33 +273,36 @@ export type MunicipalitySearchResponse = z.infer<typeof municipalitySearchRespon
 
 // Criar prefeitura
 
-export const tenantCreateBodySchema = z
+/** Termos do contrato, compartilhados pelo cadastro (P2) e pela aba Contrato (P3). */
+export const contractTermsSchema = z
   .object({
-    ibgeCode: z.string().regex(/^\d{7}$/),
-    displayName: z.string().trim().min(2).max(120),
-    centralPhone: z
-      .string()
-      .trim()
-      .max(20)
-      .nullable()
-      .transform((value) => (value ? value : null)),
-    admin: z.object({
-      name: z.string().trim().min(2).max(80),
-      cpf: cpfSchema,
-      email: z.email().transform((value) => value.toLowerCase()),
-    }),
-    contract: z.object({
-      plan: planSchema,
-      includedPanelUsers: z.number().int().min(1).max(INCLUDED_USERS_MAX),
-      startsOn: z.iso.date(),
-      endsOn: z.iso.date().nullable(),
-    }),
-    copyDefaultCatalog: z.boolean(),
+    plan: planSchema,
+    includedPanelUsers: z.number().int().min(1).max(INCLUDED_USERS_MAX),
+    startsOn: z.iso.date(),
+    endsOn: z.iso.date().nullable(),
   })
-  .refine(({ contract }) => contract.endsOn === null || contract.endsOn >= contract.startsOn, {
+  .refine((terms) => terms.endsOn === null || terms.endsOn >= terms.startsOn, {
     message: 'O fim da vigência não pode ser antes do início.',
-    path: ['contract', 'endsOn'],
+    path: ['endsOn'],
   });
+
+export const tenantCreateBodySchema = z.object({
+  ibgeCode: z.string().regex(/^\d{7}$/),
+  displayName: z.string().trim().min(2).max(120),
+  centralPhone: z
+    .string()
+    .trim()
+    .max(20)
+    .nullable()
+    .transform((value) => (value ? value : null)),
+  admin: z.object({
+    name: z.string().trim().min(2).max(80),
+    cpf: cpfSchema,
+    email: z.email().transform((value) => value.toLowerCase()),
+  }),
+  contract: contractTermsSchema,
+  copyDefaultCatalog: z.boolean(),
+});
 export type TenantCreateBody = z.infer<typeof tenantCreateBodySchema>;
 
 export const tenantCreateResponseSchema = z.object({ id: z.uuid() });
@@ -340,6 +345,25 @@ export const tenantDetailSchema = z.object({
   ),
 });
 export type TenantDetail = z.infer<typeof tenantDetailSchema>;
+
+/**
+ * Corpo de `PUT /backoffice/tenants/:id/contract`. Fim antes do início e incluídos <= 0 são
+ * 422 `invalid_contract` (a rota confere), não 400: por isso o schema é mais frouxo que o do cadastro.
+ */
+export const contractBodySchema = z.object({
+  displayName: z.string().trim().min(2).max(120),
+  centralPhone: z
+    .string()
+    .trim()
+    .max(20)
+    .nullable()
+    .transform((value) => (value ? value : null)),
+  plan: planSchema,
+  startsOn: z.iso.date(),
+  endsOn: z.iso.date().nullable(),
+  includedPanelUsers: z.number().int().max(INCLUDED_USERS_MAX),
+});
+export type ContractBody = z.infer<typeof contractBodySchema>;
 
 export const tenantStatusBodySchema = z.object({
   action: z.enum(['activate', 'suspend', 'reactivate']),

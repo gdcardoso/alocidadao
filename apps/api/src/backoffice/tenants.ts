@@ -1,6 +1,7 @@
-import { schema, withContext, type Database } from '@alocidadao/db';
+import { schema, withContext, type Database, type Transaction } from '@alocidadao/db';
 import {
   apiErrorSchema,
+  contractBodySchema,
   tenantDetailSchema,
   tenantListResponseSchema,
   tenantStatusBodySchema,
@@ -77,6 +78,70 @@ type DetailRow = {
 };
 
 /** Rotas de prefeituras do backoffice: lista (P1), detalhe (P3) e mudança de status. */
+/** Detalhe da prefeitura (P3); `null` quando ela não existe. */
+async function loadTenantDetail(tx: Transaction, tenantId: string) {
+  const [tenant] = await tx.select().from(tenants).where(eq(tenants.id, tenantId));
+  if (!tenant) return null;
+  const [stats] = (
+    await tx.execute<DetailRow>(sql`select * from platform_tenant_detail(${tenantId})`)
+  ).rows;
+  // Contrato vigente: o de `starts_on` mais recente.
+  const [contract] = await tx
+    .select()
+    .from(tenantContracts)
+    .where(eq(tenantContracts.tenantId, tenantId))
+    .orderBy(desc(tenantContracts.startsOn), desc(tenantContracts.createdAt))
+    .limit(1);
+  const actions = await tx
+    .select({
+      action: staffAuditEvents.action,
+      staffName: users.name,
+      at: staffAuditEvents.createdAt,
+    })
+    .from(staffAuditEvents)
+    .innerJoin(users, eq(users.id, staffAuditEvents.staffUserId))
+    .where(eq(staffAuditEvents.tenantId, tenantId))
+    .orderBy(desc(staffAuditEvents.createdAt))
+    .limit(5);
+  const detail = stats!;
+  return {
+    id: tenant.id,
+    displayName: tenant.displayName,
+    state: tenant.state,
+    ibgeCode: tenant.ibgeCode,
+    status: tenant.status,
+    centralPhone: tenant.centralPhone,
+    contract: contract
+      ? {
+          plan: contract.plan as Plan,
+          includedPanelUsers: contract.includedPanelUsers,
+          startsOn: contract.startsOn,
+          endsOn: contract.endsOn,
+        }
+      : null,
+    stats: {
+      citizenCount: detail.citizen_count,
+      openCount: detail.open_count,
+      staleTriageCount: detail.stale_triage_count,
+      awaitingReviewCount: detail.awaiting_review_count,
+      lateReviewCount: detail.late_review_count,
+      avgResolutionDays: num(detail.avg_resolution_days),
+      teamCount: detail.team_count,
+      activeAgentCount: detail.active_agent_count,
+      invitedAgentCount: detail.invited_agent_count,
+      managerCount: detail.manager_count,
+      adminCount: detail.admin_count,
+      activeCategoryCount: detail.active_category_count,
+      panelUserCount: detail.panel_user_count,
+    },
+    recentStaffActions: actions.map((a) => ({
+      action: a.action,
+      staffName: a.staffName,
+      at: a.at.toISOString(),
+    })),
+  };
+}
+
 export function registerTenantRoutes(
   instance: FastifyInstance,
   { db, preHandler }: { db: Database; preHandler: preHandlerHookHandler },
@@ -174,70 +239,73 @@ export function registerTenantRoutes(
       const staff = await requirePlatformStaff(db, request, reply);
       if (!staff) return reply;
       const tenantId = request.params.id;
-      const found = await withContext(db, { ...staff, tenantId }, async (tx) => {
-        const [tenant] = await tx.select().from(tenants).where(eq(tenants.id, tenantId));
-        if (!tenant) return null;
-        const [stats] = (
-          await tx.execute<DetailRow>(sql`select * from platform_tenant_detail(${tenantId})`)
-        ).rows;
-        const [contract] = await tx
-          .select()
+      const detail = await withContext(db, { ...staff, tenantId }, (tx) =>
+        loadTenantDetail(tx, tenantId),
+      );
+      if (!detail) return reply.code(404).send({ code: 'tenant_not_found' });
+      return detail;
+    },
+  );
+
+  app.put(
+    '/backoffice/tenants/:id/contract',
+    {
+      preHandler,
+      schema: {
+        params: tenantParamsSchema,
+        body: contractBodySchema,
+        response: {
+          200: tenantDetailSchema,
+          ...staffErrors,
+          404: apiErrorSchema,
+          422: apiErrorSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const staff = await requirePlatformStaff(db, request, reply, ['admin']);
+      if (!staff) return reply;
+      const tenantId = request.params.id;
+      const body = request.body;
+      if (body.includedPanelUsers <= 0 || (body.endsOn !== null && body.endsOn < body.startsOn)) {
+        return reply.code(422).send({ code: 'invalid_contract' });
+      }
+
+      const detail = await withContext(db, { ...staff, tenantId }, async (tx) => {
+        const updated = await tx
+          .update(tenants)
+          .set({ displayName: body.displayName, centralPhone: body.centralPhone })
+          .where(eq(tenants.id, tenantId))
+          .returning({ id: tenants.id });
+        if (updated.length === 0) return null;
+        const terms = {
+          plan: body.plan,
+          startsOn: body.startsOn,
+          endsOn: body.endsOn,
+          includedPanelUsers: body.includedPanelUsers,
+        };
+        // Contrato vigente: o de `starts_on` mais recente; sem nenhum, cria.
+        const [current] = await tx
+          .select({ id: tenantContracts.id })
           .from(tenantContracts)
           .where(eq(tenantContracts.tenantId, tenantId))
           .orderBy(desc(tenantContracts.startsOn), desc(tenantContracts.createdAt))
           .limit(1);
-        const actions = await tx
-          .select({
-            action: staffAuditEvents.action,
-            staffName: users.name,
-            at: staffAuditEvents.createdAt,
-          })
-          .from(staffAuditEvents)
-          .innerJoin(users, eq(users.id, staffAuditEvents.staffUserId))
-          .where(eq(staffAuditEvents.tenantId, tenantId))
-          .orderBy(desc(staffAuditEvents.createdAt))
-          .limit(5);
-        return { tenant, stats: stats!, contract, actions };
+        if (current) {
+          await tx.update(tenantContracts).set(terms).where(eq(tenantContracts.id, current.id));
+        } else {
+          await tx.insert(tenantContracts).values({ tenantId, ...terms });
+        }
+        // Na mesma transação: a mudança e a auditoria valem juntas ou nenhuma vale.
+        await insertStaffAudit(
+          tx,
+          { ...staff, tenantId },
+          { action: 'tenant.contract_update', targetType: 'tenant', targetId: tenantId },
+        );
+        return loadTenantDetail(tx, tenantId);
       });
-      if (!found) return reply.code(404).send({ code: 'tenant_not_found' });
-      const { tenant, stats, contract, actions } = found;
-
-      return {
-        id: tenant.id,
-        displayName: tenant.displayName,
-        state: tenant.state,
-        ibgeCode: tenant.ibgeCode,
-        status: tenant.status,
-        centralPhone: tenant.centralPhone,
-        contract: contract
-          ? {
-              plan: contract.plan as Plan,
-              includedPanelUsers: contract.includedPanelUsers,
-              startsOn: contract.startsOn,
-              endsOn: contract.endsOn,
-            }
-          : null,
-        stats: {
-          citizenCount: stats.citizen_count,
-          openCount: stats.open_count,
-          staleTriageCount: stats.stale_triage_count,
-          awaitingReviewCount: stats.awaiting_review_count,
-          lateReviewCount: stats.late_review_count,
-          avgResolutionDays: num(stats.avg_resolution_days),
-          teamCount: stats.team_count,
-          activeAgentCount: stats.active_agent_count,
-          invitedAgentCount: stats.invited_agent_count,
-          managerCount: stats.manager_count,
-          adminCount: stats.admin_count,
-          activeCategoryCount: stats.active_category_count,
-          panelUserCount: stats.panel_user_count,
-        },
-        recentStaffActions: actions.map((a) => ({
-          action: a.action,
-          staffName: a.staffName,
-          at: a.at.toISOString(),
-        })),
-      };
+      if (!detail) return reply.code(404).send({ code: 'tenant_not_found' });
+      return detail;
     },
   );
 

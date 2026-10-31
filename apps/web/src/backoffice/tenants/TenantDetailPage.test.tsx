@@ -1,8 +1,8 @@
 import { ApiError } from '@alocidadao/api-client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Route, Routes } from 'react-router';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '../../api';
 import { createPanelSession } from '../../session/panel-session';
@@ -16,6 +16,10 @@ vi.mock('../../api', () => ({
     backofficeContext: vi.fn(),
     backofficeSetTenantStatus: vi.fn(),
     backofficeEnterSupport: vi.fn(),
+    backofficeUpdateContract: vi.fn(),
+    backofficeNeighborhoods: vi.fn(),
+    backofficePutNeighborhoods: vi.fn(),
+    backofficeResetNeighborhoods: vi.fn(),
   },
 }));
 
@@ -23,6 +27,7 @@ const tenant = vi.mocked(api.backofficeTenant);
 const context = vi.mocked(api.backofficeContext);
 const setStatus = vi.mocked(api.backofficeSetTenantStatus);
 const enterSupport = vi.mocked(api.backofficeEnterSupport);
+const neighborhoods = vi.mocked(api.backofficeNeighborhoods);
 
 const id = '3f2b8c1e-5a4d-4e6f-8a7b-9c0d1e2f3a4b';
 
@@ -65,7 +70,12 @@ function detail(over: Record<string, unknown> = {}, stats: Record<string, unknow
   } as never;
 }
 
-function renderPage() {
+function LocationProbe() {
+  const location = useLocation();
+  return <p data-testid="location">{location.search}</p>;
+}
+
+function renderPage(search = '') {
   const session = createPanelSession({
     client: {
       panelRefresh: vi.fn(async () => ({ accessToken: 't', accessExpiresInSeconds: 900 })),
@@ -78,13 +88,18 @@ function renderPage() {
     <QueryClientProvider client={queryClient}>
       <SessionProvider session={session}>
         <ToastProvider>
-          <MemoryRouter initialEntries={[`/backoffice/prefeituras/${id}`]}>
+          <MemoryRouter initialEntries={[`/backoffice/prefeituras/${id}${search}`]}>
             <Routes>
-              <Route path="/backoffice/prefeituras/:id" element={<TenantDetailPage />} />
+              <Route
+                path="/backoffice/prefeituras/:id"
+                element={
+                  <>
+                    <TenantDetailPage />
+                    <LocationProbe />
+                  </>
+                }
+              />
               <Route path="/mapa" element={<p>tela mapa</p>} />
-              <Route path="/equipes" element={<p>tela equipes</p>} />
-              <Route path="/equipes/gestores" element={<p>tela gestores</p>} />
-              <Route path="/categorias" element={<p>tela categorias</p>} />
             </Routes>
           </MemoryRouter>
         </ToastProvider>
@@ -125,7 +140,7 @@ describe('TenantDetailPage', () => {
     expect(screen.getByText('14 ativos · 1 convidado')).toBeInTheDocument();
     expect(screen.getByText('4 · 1 admin')).toBeInTheDocument();
     expect(screen.getByText('9 ativas')).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: /^Gerenciar/ })).toHaveLength(4);
+    expect(screen.getAllByRole('link', { name: /^Gerenciar/ })).toHaveLength(4);
 
     expect(screen.getByText('01/11/2026 a 31/10/2027')).toBeInTheDocument();
     expect(screen.getByText('18 de 50 incluídos')).toBeInTheDocument();
@@ -170,7 +185,9 @@ describe('TenantDetailPage', () => {
     const card = (await screen.findByText('Aguardando revisão')).parentElement!;
     expect(card).toHaveAttribute('data-tone', 'warning');
     expect(within(card).getByText('2 há mais de 1 dia')).toBeInTheDocument();
-    expect(screen.getByText('Cidadãos').parentElement).not.toHaveAttribute('data-tone');
+    expect(screen.getByText('Cidadãos', { selector: 'span' }).parentElement).not.toHaveAttribute(
+      'data-tone',
+    );
   });
 
   it('review card is plain without late reviews', async () => {
@@ -266,22 +283,105 @@ describe('TenantDetailPage', () => {
     });
   });
 
-  it('manage teams enters support on the teams page', async () => {
+  it('tabs follow ?aba', async () => {
     vi.useRealTimers();
-    enterSupport.mockResolvedValue(undefined);
+    neighborhoods.mockResolvedValue({ count: 0, source: null });
     renderPage();
     const user = userEvent.setup();
-    await user.click(await screen.findByRole('button', { name: 'Gerenciar equipes' }));
-    expect(await screen.findByText('tela equipes')).toBeInTheDocument();
-    await waitFor(() => expect(sessionStorage.getItem('ac_support_tenant')).not.toBeNull());
+    const nav = await screen.findByRole('navigation', { name: 'Seções' });
+    expect(
+      within(nav)
+        .getAllByRole('link')
+        .map((link) => link.textContent),
+    ).toEqual([
+      'Visão geral',
+      'Contrato',
+      'Equipes e agentes',
+      'Gestores',
+      'Categorias',
+      'Cidadãos',
+      'Auditoria',
+    ]);
+    expect(within(nav).getByRole('link', { name: 'Visão geral' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(screen.getByText('Pessoas da prefeitura')).toBeInTheDocument();
+
+    await user.click(within(nav).getByRole('link', { name: 'Contrato' }));
+    expect(screen.getByTestId('location')).toHaveTextContent('?aba=contrato');
+    expect(await screen.findByRole('button', { name: 'Salvar contrato' })).toBeInTheDocument();
+    expect(screen.queryByText('Pessoas da prefeitura')).not.toBeInTheDocument();
+    expect(within(nav).getByRole('link', { name: 'Contrato' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+
+    await user.click(within(nav).getByRole('link', { name: 'Visão geral' }));
+    expect(screen.getByText('Pessoas da prefeitura')).toBeInTheDocument();
+    expect(screen.getByTestId('location')).toHaveTextContent('');
   });
 
-  it('manage managers and categories open their pages', async () => {
+  it('unknown ?aba falls back to the overview', async () => {
+    renderPage('?aba=inventada');
+    expect(await screen.findByText('Pessoas da prefeitura')).toBeInTheDocument();
+  });
+
+  it('Gerenciar opens the matching tab', async () => {
     vi.useRealTimers();
-    enterSupport.mockResolvedValue(undefined);
     renderPage();
     const user = userEvent.setup();
-    await user.click(await screen.findByRole('button', { name: 'Gerenciar gestores' }));
-    expect(await screen.findByText('tela gestores')).toBeInTheDocument();
+    await user.click(await screen.findByRole('link', { name: 'Gerenciar equipes' }));
+    expect(screen.getByTestId('location')).toHaveTextContent('?aba=equipes');
+    expect(
+      within(screen.getByRole('navigation', { name: 'Seções' })).getByRole('link', {
+        name: 'Equipes e agentes',
+      }),
+    ).toHaveAttribute('aria-current', 'page');
+    expect(enterSupport).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('link', { name: 'Visão geral' }));
+    await user.click(screen.getByRole('link', { name: 'Gerenciar agentes' }));
+    expect(screen.getByTestId('location')).toHaveTextContent('?aba=equipes');
+    await user.click(screen.getByRole('link', { name: 'Visão geral' }));
+    await user.click(screen.getByRole('link', { name: 'Gerenciar gestores' }));
+    expect(screen.getByTestId('location')).toHaveTextContent('?aba=gestores');
+    await user.click(screen.getByRole('link', { name: 'Visão geral' }));
+    await user.click(screen.getByRole('link', { name: 'Gerenciar categorias' }));
+    expect(screen.getByTestId('location')).toHaveTextContent('?aba=categorias');
+  });
+
+  it('support sees the contract read-only and no Auditoria tab', async () => {
+    context.mockResolvedValue({
+      user: { id: 'u', name: 'Sara' },
+      platformRole: 'support',
+    } as never);
+    neighborhoods.mockResolvedValue({ count: 12, source: 'tenant' });
+    renderPage('?aba=contrato');
+    expect(await screen.findByLabelText('Nome de exibição')).toBeDisabled();
+    expect(screen.getByLabelText('Plano')).toBeDisabled();
+    expect(screen.getByLabelText('Início da vigência')).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Salvar contrato' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Carregar arquivo de bairros' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Voltar para a malha do IBGE' }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Auditoria' })).not.toBeInTheDocument();
+  });
+
+  it('admin sees the Auditoria tab', async () => {
+    renderPage();
+    expect(await screen.findByRole('link', { name: 'Auditoria' })).toBeInTheDocument();
+  });
+
+  it('support opening ?aba=auditoria lands on the overview', async () => {
+    context.mockResolvedValue({
+      user: { id: 'u', name: 'Sara' },
+      platformRole: 'support',
+    } as never);
+    renderPage('?aba=auditoria');
+    expect(await screen.findByText('Pessoas da prefeitura')).toBeInTheDocument();
   });
 });

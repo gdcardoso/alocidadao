@@ -6,6 +6,7 @@ import {
   staffListResponseSchema,
   backofficeContextSchema,
   municipalitySearchResponseSchema,
+  neighborhoodsSummarySchema,
   tenantCreateResponseSchema,
   tenantDetailSchema,
   tenantListResponseSchema,
@@ -15,6 +16,7 @@ import {
   type BackofficeContext,
   type CityInterestResponse,
   type CommercialStatus,
+  type ContractBody,
   type FrozenAccountCodeBody,
   type FrozenAccountCodeResponse,
   type FrozenAccountRecoverBody,
@@ -24,6 +26,7 @@ import {
   type StaffListResponse,
   type StaffUpdateBody,
   type MunicipalitySearchResponse,
+  type NeighborhoodsSummary,
   type TenantCreateBody,
   type TenantCreateResponse,
   type TenantDetail,
@@ -511,6 +514,39 @@ export function createApiClient({
       options?: RequestOptions,
     ): Promise<{ status: TenantStatus }> =>
       tenantStatusResponseSchema.parse(await send('POST', tenantPath(id, 'status'), body, options)),
+
+    backofficeUpdateContract: async (
+      id: string,
+      body: ContractBody,
+      options?: RequestOptions,
+    ): Promise<TenantDetail> =>
+      tenantDetailSchema.parse(await send('PUT', tenantPath(id, 'contract'), body, options)),
+
+    backofficeNeighborhoods: async (
+      id: string,
+      options?: RequestOptions,
+    ): Promise<NeighborhoodsSummary> =>
+      neighborhoodsSummarySchema.parse(
+        await send('GET', tenantPath(id, 'neighborhoods'), undefined, options),
+      ),
+
+    /** `geojson` é o GeoJSON já lido no navegador; a API valida e responde 422 `invalid_neighborhoods`. */
+    backofficePutNeighborhoods: async (
+      id: string,
+      geojson: unknown,
+      options?: RequestOptions,
+    ): Promise<NeighborhoodsSummary> =>
+      neighborhoodsSummarySchema.parse(
+        await send('PUT', tenantPath(id, 'neighborhoods'), geojson, options),
+      ),
+
+    backofficeResetNeighborhoods: async (
+      id: string,
+      options?: RequestOptions,
+    ): Promise<NeighborhoodsSummary> =>
+      neighborhoodsSummarySchema.parse(
+        await send('DELETE', tenantPath(id, 'neighborhoods'), undefined, options),
+      ),
 
     backofficeMunicipalities: async (
       q: string,

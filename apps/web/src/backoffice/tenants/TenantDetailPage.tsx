@@ -2,7 +2,7 @@ import { PLAN_LABELS, STAFF_AUDIT_ACTION_LABELS, type TenantDetail } from '@aloc
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { FilePenLine, ScrollText, Users } from 'lucide-react';
 import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { api } from '../../api';
 import { formatLastActive } from '../../format/last-active';
 import { useNow } from '../../format/use-now';
@@ -17,6 +17,13 @@ import { useBackofficeContext } from '../use-backoffice-context';
 import { formatCount, formatDays, formatIsoDate } from './format';
 import { StatCard } from './StatCard';
 import styles from './TenantDetailPage.module.css';
+import { AuditTab } from './tabs/AuditTab';
+import { CategoriesTab } from './tabs/CategoriesTab';
+import { CitizensTab } from './tabs/CitizensTab';
+import { ContractTab } from './tabs/ContractTab';
+import { ManagersTab } from './tabs/ManagersTab';
+import { TeamsTab } from './tabs/TeamsTab';
+import { TENANT_TABS, tabFromSearch, tabSearch, type TenantTab } from './tenant-tabs';
 import { TenantStatusActions } from './TenantStatusActions';
 import { TenantStatusBadge } from './TenantStatusBadge';
 
@@ -40,10 +47,10 @@ function actionLabel(action: string): string {
 interface SummaryRow {
   label: string;
   value: string;
-  manage?: { to: string };
+  manage?: { tab: TenantTab };
 }
 
-/** P3: detalhe da prefeitura, aba Visão geral. */
+/** P3: detalhe da prefeitura, com as abas escolhidas por `?aba=`. */
 export function TenantDetailPage() {
   const { id = '' } = useParams();
   const { session } = useSession();
@@ -53,6 +60,7 @@ export function TenantDetailPage() {
   const context = useBackofficeContext();
   const [entering, setEntering] = useState(false);
   const now = useNow();
+  const [searchParams] = useSearchParams();
 
   const query = useQuery({
     queryKey: ['backoffice', 'tenant', id],
@@ -96,9 +104,15 @@ export function TenantDetailPage() {
   }
   if (!tenant) return null;
 
+  const isAdmin = context.data?.platformRole === 'admin';
+  const visibleTabs = TENANT_TABS.filter((def) => !def.adminOnly || isAdmin);
+  const requested = tabFromSearch(searchParams);
+  // Aba só do admin: sem o papel (ou ainda sem saber), cai na Visão geral.
+  const activeTab = visibleTabs.some((def) => def.key === requested) ? requested : 'overview';
+
   const { stats, contract } = tenant;
   const people: SummaryRow[] = [
-    { label: 'Equipes', value: formatCount(stats.teamCount), manage: { to: '/equipes' } },
+    { label: 'Equipes', value: formatCount(stats.teamCount), manage: { tab: 'teams' } },
     {
       label: 'Agentes',
       value:
@@ -106,19 +120,19 @@ export function TenantDetailPage() {
         (stats.invitedAgentCount > 0
           ? ` · ${countLabel(stats.invitedAgentCount, 'convidado', 'convidados')}`
           : ''),
-      manage: { to: '/equipes' },
+      manage: { tab: 'teams' },
     },
     {
       label: 'Gestores',
       value:
         formatCount(stats.managerCount) +
         (stats.adminCount > 0 ? ` · ${countLabel(stats.adminCount, 'admin', 'admins')}` : ''),
-      manage: { to: '/equipes/gestores' },
+      manage: { tab: 'managers' },
     },
     {
       label: 'Categorias',
       value: countLabel(stats.activeCategoryCount, 'ativa', 'ativas'),
-      manage: { to: '/categorias' },
+      manage: { tab: 'categories' },
     },
   ];
   const contractRows: SummaryRow[] = [
@@ -165,102 +179,124 @@ export function TenantDetailPage() {
           ) : null}
         </div>
         <nav className={styles.tabs} aria-label="Seções">
-          <span className={`${tabStyles.tab} ${tabStyles.active}`} aria-current="page">
-            Visão geral
-          </span>
+          {visibleTabs.map((def) => {
+            const active = def.key === activeTab;
+            return (
+              <Link
+                key={def.key}
+                to={tabSearch(def.key) || '?'}
+                className={`${tabStyles.tab} ${active ? tabStyles.active : ''}`}
+                aria-current={active ? 'page' : undefined}
+              >
+                {def.label}
+              </Link>
+            );
+          })}
         </nav>
       </header>
 
       <main className={styles.content}>
-        <div className={styles.cards}>
-          <StatCard
-            label="Cidadãos"
-            value={formatCount(stats.citizenCount)}
-            help="fizeram ao menos 1 solicitação"
-          />
-          <StatCard
-            label="Abertas e em atendimento"
-            value={formatCount(stats.openCount)}
-            help={
-              stats.staleTriageCount > 0
-                ? `${stats.staleTriageCount} abertas há +3 dias`
-                : 'nenhuma aberta há +3 dias'
-            }
-          />
-          <StatCard
-            label="Aguardando revisão"
-            value={formatCount(stats.awaitingReviewCount)}
-            help={
-              lateReviews ? `${stats.lateReviewCount} há mais de 1 dia` : 'nenhuma há mais de 1 dia'
-            }
-            tone={lateReviews ? 'warning' : undefined}
-          />
-          <StatCard
-            label="Tempo médio até a conclusão"
-            value={formatDays(stats.avgResolutionDays)}
-            help="últimos 30 dias"
-          />
-        </div>
+        {activeTab === 'contract' && context.data ? (
+          <ContractTab tenant={tenant} isAdmin={isAdmin} />
+        ) : null}
+        {activeTab === 'teams' ? <TeamsTab tenant={tenant} isAdmin={isAdmin} /> : null}
+        {activeTab === 'managers' ? <ManagersTab tenant={tenant} isAdmin={isAdmin} /> : null}
+        {activeTab === 'categories' ? <CategoriesTab tenant={tenant} isAdmin={isAdmin} /> : null}
+        {activeTab === 'citizens' ? <CitizensTab tenant={tenant} isAdmin={isAdmin} /> : null}
+        {activeTab === 'audit' ? <AuditTab tenant={tenant} isAdmin={isAdmin} /> : null}
+        {activeTab === 'overview' ? (
+          <>
+            <div className={styles.cards}>
+              <StatCard
+                label="Cidadãos"
+                value={formatCount(stats.citizenCount)}
+                help="fizeram ao menos 1 solicitação"
+              />
+              <StatCard
+                label="Abertas e em atendimento"
+                value={formatCount(stats.openCount)}
+                help={
+                  stats.staleTriageCount > 0
+                    ? `${stats.staleTriageCount} abertas há +3 dias`
+                    : 'nenhuma aberta há +3 dias'
+                }
+              />
+              <StatCard
+                label="Aguardando revisão"
+                value={formatCount(stats.awaitingReviewCount)}
+                help={
+                  lateReviews
+                    ? `${stats.lateReviewCount} há mais de 1 dia`
+                    : 'nenhuma há mais de 1 dia'
+                }
+                tone={lateReviews ? 'warning' : undefined}
+              />
+              <StatCard
+                label="Tempo médio até a conclusão"
+                value={formatDays(stats.avgResolutionDays)}
+                help="últimos 30 dias"
+              />
+            </div>
 
-        <div className={styles.blocks}>
-          <section className={styles.block} aria-labelledby="block-people">
-            <h2 id="block-people" className={styles.blockTitle}>
-              <Users size={18} aria-hidden />
-              Pessoas da prefeitura
-            </h2>
-            {people.map((row) => (
-              <div key={row.label} className={styles.row}>
-                <span className={styles.rowLabel}>{row.label}</span>
-                <span className={styles.rowValue}>{row.value}</span>
-                {row.manage ? (
-                  <button
-                    type="button"
-                    className={styles.manage}
-                    aria-label={`Gerenciar ${row.label.toLowerCase()}`}
-                    disabled={entering || tenant.status === 'suspended'}
-                    onClick={() => enterAt(row.manage!.to)}
-                  >
-                    Gerenciar
-                  </button>
-                ) : null}
-              </div>
-            ))}
-          </section>
-
-          <section className={styles.block} aria-labelledby="block-contract">
-            <h2 id="block-contract" className={styles.blockTitle}>
-              <FilePenLine size={18} aria-hidden />
-              Contrato
-            </h2>
-            {contractRows.map((row) => (
-              <div key={row.label} className={styles.row}>
-                <span className={styles.rowLabel}>{row.label}</span>
-                <span className={styles.rowValue}>{row.value}</span>
-              </div>
-            ))}
-          </section>
-
-          <section className={styles.block} aria-labelledby="block-audit">
-            <h2 id="block-audit" className={styles.blockTitle}>
-              <ScrollText size={18} aria-hidden />
-              Últimas ações da equipe Alô Cidadão
-            </h2>
-            {tenant.recentStaffActions.length === 0 ? (
-              <p className={styles.empty}>Nenhuma ação da equipe Alô Cidadão ainda.</p>
-            ) : (
-              <ul className={styles.actionsList}>
-                {tenant.recentStaffActions.map((item, index) => (
-                  <li key={`${item.at}-${index}`} className={styles.actionItem}>
-                    <span className={styles.actionName}>{actionLabel(item.action)}</span>
-                    <span className={styles.actionMeta}>
-                      {`${item.staffName} · ${formatLastActive(new Date(item.at), now)}`}
-                    </span>
-                  </li>
+            <div className={styles.blocks}>
+              <section className={styles.block} aria-labelledby="block-people">
+                <h2 id="block-people" className={styles.blockTitle}>
+                  <Users size={18} aria-hidden />
+                  Pessoas da prefeitura
+                </h2>
+                {people.map((row) => (
+                  <div key={row.label} className={styles.row}>
+                    <span className={styles.rowLabel}>{row.label}</span>
+                    <span className={styles.rowValue}>{row.value}</span>
+                    {row.manage ? (
+                      <Link
+                        className={styles.manage}
+                        aria-label={`Gerenciar ${row.label.toLowerCase()}`}
+                        to={tabSearch(row.manage.tab)}
+                      >
+                        Gerenciar
+                      </Link>
+                    ) : null}
+                  </div>
                 ))}
-              </ul>
-            )}
-          </section>
-        </div>
+              </section>
+
+              <section className={styles.block} aria-labelledby="block-contract">
+                <h2 id="block-contract" className={styles.blockTitle}>
+                  <FilePenLine size={18} aria-hidden />
+                  Contrato
+                </h2>
+                {contractRows.map((row) => (
+                  <div key={row.label} className={styles.row}>
+                    <span className={styles.rowLabel}>{row.label}</span>
+                    <span className={styles.rowValue}>{row.value}</span>
+                  </div>
+                ))}
+              </section>
+
+              <section className={styles.block} aria-labelledby="block-audit">
+                <h2 id="block-audit" className={styles.blockTitle}>
+                  <ScrollText size={18} aria-hidden />
+                  Últimas ações da equipe Alô Cidadão
+                </h2>
+                {tenant.recentStaffActions.length === 0 ? (
+                  <p className={styles.empty}>Nenhuma ação da equipe Alô Cidadão ainda.</p>
+                ) : (
+                  <ul className={styles.actionsList}>
+                    {tenant.recentStaffActions.map((item, index) => (
+                      <li key={`${item.at}-${index}`} className={styles.actionItem}>
+                        <span className={styles.actionName}>{actionLabel(item.action)}</span>
+                        <span className={styles.actionMeta}>
+                          {`${item.staffName} · ${formatLastActive(new Date(item.at), now)}`}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            </div>
+          </>
+        ) : null}
       </main>
     </>
   );

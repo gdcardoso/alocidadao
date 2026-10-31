@@ -67,9 +67,22 @@ export const mapDaysSchema = z.preprocess(
   z.union([z.literal(7), z.literal(30), z.literal(90), z.null()]),
 );
 
+/** Valor do filtro de bairro para as ocorrências sem bairro (`neighborhood IS NULL`). */
+export const NO_NEIGHBORHOOD = '__none__';
+
+export const neighborhoodFilterSchema = z.string().min(1).max(120).optional();
+
+/** Bairros efetivos da prefeitura (camada própria ou malha do IBGE), em ordem pt-BR. */
+export const neighborhoodsResponseSchema = z.object({
+  items: z.array(z.string()),
+  source: z.enum(['ibge', 'tenant']).nullable(),
+});
+export type NeighborhoodsResponse = z.infer<typeof neighborhoodsResponseSchema>;
+
 export const occurrenceMapQuerySchema = z.object({
   status: mapStatusFilterSchema.default('open_and_in_progress'),
   categoryId: z.uuid().optional(),
+  neighborhood: neighborhoodFilterSchema,
   days: mapDaysSchema,
 });
 export type OccurrenceMapQuery = z.infer<typeof occurrenceMapQuerySchema>;

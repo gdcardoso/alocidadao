@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { impedimentReasonSchema, reworkReasonSchema, type ReworkReason } from './agent.js';
 import { ICON_GROUPS } from './enums.js';
 import { requestStatusSchema } from './request-status.js';
-import { assignBodySchema, mapDaysSchema } from './panel.js';
+import { assignBodySchema, mapDaysSchema, neighborhoodFilterSchema } from './panel.js';
 import { ACTIVE_WORK_ORDER_STATUSES, workOrderStatusSchema } from './work-order-status.js';
 
 /** Itens da fila de revisão e de impedimentos. */
@@ -129,6 +129,7 @@ export type InProgressRow = z.infer<typeof inProgressRowSchema>;
 
 export const inProgressQuerySchema = z.object({
   categoryId: z.uuid().optional(),
+  neighborhood: neighborhoodFilterSchema,
   workOrderStatus: workOrderStatusSchema
     .refine((status) => ACTIVE_WORK_ORDER_STATUSES.includes(status), {
       message: 'Só atividades ativas',
@@ -161,6 +162,7 @@ export type RequestRow = z.infer<typeof requestRowSchema>;
 export const requestListQuerySchema = z.object({
   status: requestStatusSchema.optional(),
   categoryId: z.uuid().optional(),
+  neighborhood: neighborhoodFilterSchema,
   days: mapDaysSchema,
   q: z.string().max(200).default(''),
   /** Na query string a página vem como texto. */

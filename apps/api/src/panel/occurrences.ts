@@ -10,8 +10,10 @@ import {
   ACTIVE_WORK_ORDER_STATUSES,
   CLUSTERABLE_OCCURRENCE_STATUSES,
   MAX_SUGGESTIONS,
+  NO_NEIGHBORHOOD,
   PANEL_SEARCH_LIMIT,
   type MapStatusFilter,
+  type NeighborhoodsResponse,
   type OccurrenceDetail,
   type OccurrenceMapQuery,
   type OccurrenceMapResponse,
@@ -109,6 +111,7 @@ export async function loadOccurrenceMap(
     eq(occurrences.tenantId, tenantId),
     inArray(occurrences.status, MAP_STATUSES[query.status]),
     query.categoryId ? eq(occurrences.categoryId, query.categoryId) : undefined,
+    neighborhoodCondition(query.neighborhood),
     query.days === null
       ? undefined
       : sql`${occurrences.createdAt} >= now() - make_interval(days => ${query.days})`,
@@ -146,6 +149,33 @@ export async function loadOccurrenceMap(
       })),
     };
   });
+}
+
+/**
+ * Filtro de bairro sobre `occurrences` (sem apelido): `NO_NEIGHBORHOOD` pede as sem bairro;
+ * um nome, as daquele bairro. Undefined (sem filtro) quando não há valor.
+ */
+export function neighborhoodCondition(value: string | undefined): SQL | undefined {
+  if (value === undefined) return undefined;
+  if (value === NO_NEIGHBORHOOD) return sql`${occurrences.neighborhood} is null`;
+  return eq(occurrences.neighborhood, value);
+}
+
+/**
+ * Bairros efetivos da prefeitura (camada própria, senão a malha do IBGE) em ordem pt-BR. O
+ * contexto da prefeitura é o que libera as linhas de `effective_neighborhoods`.
+ */
+export async function loadNeighborhoods(
+  db: Database,
+  identity: PanelIdentity,
+): Promise<NeighborhoodsResponse> {
+  const result = await withContext(db, panelDbContext(identity), (tx) =>
+    tx.execute<{ name: string; source: 'ibge' | 'tenant' }>(
+      sql`select name, source from effective_neighborhoods(${identity.tenantId}::uuid)`,
+    ),
+  );
+  const items = result.rows.map((row) => row.name).toSorted((a, b) => a.localeCompare(b, 'pt-BR'));
+  return { items, source: result.rows[0]?.source ?? null };
 }
 
 /** Escapa `%`, `_` e `\` para o texto valer literalmente no ILIKE. */

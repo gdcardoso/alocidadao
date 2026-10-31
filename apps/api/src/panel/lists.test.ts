@@ -1,10 +1,13 @@
-import { createDatabase } from '@alocidadao/db';
+import { createDatabase, schema, withContext } from '@alocidadao/db';
 import {
   categoryOptionsResponseSchema,
   inProgressResponseSchema,
+  neighborhoodsResponseSchema,
+  NO_NEIGHBORHOOD,
   requestListResponseSchema,
   type GeoPoint,
 } from '@alocidadao/shared';
+import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp } from '../app.js';
 import { panelAuthHeader } from '../test/panel.js';
@@ -48,6 +51,16 @@ async function requestList(query: string, userId: string, tenantId: string) {
   const res = await get(`/panel/requests${query}`, userId, tenantId);
   expect(res.statusCode).toBe(200);
   return requestListResponseSchema.parse(res.json());
+}
+
+/** Grava o bairro direto (o gatilho só roda quando a localização muda). */
+async function setNeighborhood(tenantId: string, occurrenceId: string, name: string | null) {
+  await withContext(owner.db, { tenantId }, (tx) =>
+    tx
+      .update(schema.occurrences)
+      .set({ neighborhood: name })
+      .where(eq(schema.occurrences.id, occurrenceId)),
+  );
 }
 
 type Seed = Awaited<ReturnType<typeof fx.seedPanelTenant>>;
@@ -315,5 +328,65 @@ describe('category options', () => {
     expect(categoryOptionsResponseSchema.parse(scoped.json()).items).toEqual([
       { id: seed.lampId, name: 'Poste apagado' },
     ]);
+  });
+});
+
+describe('neighborhood filter', () => {
+  it('in-progress and requests lists filter by neighborhood', async () => {
+    const seed = await seedBase();
+    const { tenantId, adminId } = seed;
+    const centro = await working(seed, { status: 'in_execution', since: daysAgo(1) });
+    const alvorada = await working(seed, { status: 'in_execution', since: daysAgo(1) });
+    const none = await working(seed, { status: 'in_execution', since: daysAgo(1) });
+    await setNeighborhood(tenantId, centro.id, 'Centro');
+    await setNeighborhood(tenantId, alvorada.id, 'Alvorada');
+
+    const byName = await inProgress('?neighborhood=Centro', adminId, tenantId);
+    expect(byName.items.map((item) => item.occurrenceId)).toEqual([centro.id]);
+    expect(byName.total).toBe(1);
+    const byNone = await inProgress(`?neighborhood=${NO_NEIGHBORHOOD}`, adminId, tenantId);
+    expect(byNone.items.map((item) => item.occurrenceId)).toEqual([none.id]);
+
+    const requests = await requestList('?neighborhood=Alvorada', adminId, tenantId);
+    expect(requests.items.map((item) => item.requestId)).toEqual(
+      alvorada.requests.map((r) => r.id),
+    );
+    expect(requests.total).toBe(1);
+    const noneRequests = await requestList(`?neighborhood=${NO_NEIGHBORHOOD}`, adminId, tenantId);
+    expect(noneRequests.items.map((item) => item.requestId)).toEqual(
+      none.requests.map((r) => r.id),
+    );
+    expect((await requestList('', adminId, tenantId)).total).toBe(3);
+  });
+});
+
+describe('GET /panel/neighborhoods', () => {
+  it('GET /panel/neighborhoods lists the effective names', async () => {
+    const seed = await seedBase();
+    const { tenantId, adminId } = seed;
+    const square = (x: number) =>
+      sql`ST_Multi(ST_GeomFromText(${`POLYGON((${x} 0,${x + 1} 0,${x + 1} 1,${x} 0))`}, 4326))`;
+    await withContext(owner.db, { tenantId }, (tx) =>
+      tx.insert(schema.tenantNeighborhoods).values(
+        ['Zumbi', 'Água Branca', 'Centro'].map((name, i) => ({
+          tenantId,
+          name,
+          boundary: square(i * 2),
+        })),
+      ),
+    );
+    const res = await get('/panel/neighborhoods', adminId, tenantId);
+    expect(res.statusCode).toBe(200);
+    expect(neighborhoodsResponseSchema.parse(res.json())).toEqual({
+      items: ['Água Branca', 'Centro', 'Zumbi'],
+      source: 'tenant',
+    });
+  });
+
+  it('GET /panel/neighborhoods is empty for a tenant without neighborhoods', async () => {
+    const seed = await seedBase();
+    const res = await get('/panel/neighborhoods', seed.adminId, seed.tenantId);
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ items: [], source: null });
   });
 });

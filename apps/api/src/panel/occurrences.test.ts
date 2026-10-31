@@ -1,12 +1,14 @@
 import { randomUUID } from 'node:crypto';
-import { createDatabase } from '@alocidadao/db';
+import { createDatabase, schema, withContext } from '@alocidadao/db';
 import {
   occurrenceDetailSchema,
+  NO_NEIGHBORHOOD,
   occurrenceMapResponseSchema,
   panelSearchResponseSchema,
   teamOptionsResponseSchema,
   type GeoPoint,
 } from '@alocidadao/shared';
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp } from '../app.js';
 import { createStorage } from '../storage/s3.js';
@@ -41,6 +43,16 @@ async function get(url: string, userId: string, tenantId: string) {
     url,
     headers: await panelAuthHeader(appDb.db, userId, tenantId),
   });
+}
+
+/** Grava o bairro direto (o gatilho só roda quando a localização muda). */
+async function setNeighborhood(tenantId: string, occurrenceId: string, name: string | null) {
+  await withContext(owner.db, { tenantId }, (tx) =>
+    tx
+      .update(schema.occurrences)
+      .set({ neighborhood: name })
+      .where(eq(schema.occurrences.id, occurrenceId)),
+  );
 }
 
 /** Ocorrência com `reports` relatos (o primeiro no centro dela), criados na ordem dada. */
@@ -628,5 +640,36 @@ describe('GET /panel/occurrences/:id/teams', () => {
     expect(lights.items.map((team) => [team.name, team.baseDistanceM])).toEqual([
       ['Luz Sem Base', null],
     ]);
+  });
+});
+
+describe('GET /panel/occurrences neighborhood filter', () => {
+  async function seedThree() {
+    const seed = await fx.seedPanelTenant();
+    const { tenantId, potholeId } = seed;
+    const adminId = await fx.newAdmin(tenantId);
+    const centro = await occurrenceWithReports(seed, { categoryId: potholeId, at: CENTER });
+    const alvorada = await occurrenceWithReports(seed, { categoryId: potholeId, at: CENTER });
+    const none = await occurrenceWithReports(seed, { categoryId: potholeId, at: CENTER });
+    await setNeighborhood(tenantId, centro.id, 'Centro');
+    await setNeighborhood(tenantId, alvorada.id, 'Alvorada');
+    return { tenantId, adminId, centro, alvorada, none };
+  }
+
+  it('map filters by neighborhood', async () => {
+    const { tenantId, adminId, centro } = await seedThree();
+    const res = await get('/panel/occurrences?neighborhood=Centro', adminId, tenantId);
+    expect(res.statusCode).toBe(200);
+    const body = occurrenceMapResponseSchema.parse(res.json());
+    expect(body.items.map((item) => item.id)).toEqual([centro.id]);
+    expect(body.total).toBe(1);
+  });
+
+  it('__none__ returns occurrences without neighborhood', async () => {
+    const { tenantId, adminId, none } = await seedThree();
+    const res = await get(`/panel/occurrences?neighborhood=${NO_NEIGHBORHOOD}`, adminId, tenantId);
+    const body = occurrenceMapResponseSchema.parse(res.json());
+    expect(body.items.map((item) => item.id)).toEqual([none.id]);
+    expect(body.total).toBe(1);
   });
 });

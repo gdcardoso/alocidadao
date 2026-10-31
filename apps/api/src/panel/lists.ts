@@ -14,7 +14,7 @@ import {
 } from '@alocidadao/shared';
 import { sql } from 'drizzle-orm';
 import { departmentScope, panelDbContext, type PanelIdentity } from './member.js';
-import { searchCondition, sqlList, statusSinceSql } from './occurrences.js';
+import { neighborhoodCondition, searchCondition, sqlList, statusSinceSql } from './occurrences.js';
 
 /**
  * Lista "Em atendimento" (W5): uma linha por ocorrência `in_progress` no alcance, com a atividade
@@ -84,6 +84,7 @@ export async function loadInProgress(
         WHERE occurrences.tenant_id = ${tenantId}
           AND occurrences.status = 'in_progress'
           AND ${query.categoryId ? sql`occurrences.category_id = ${query.categoryId}` : sql`true`}
+          AND ${neighborhoodCondition(query.neighborhood) ?? sql`true`}
           AND ${query.workOrderStatus ? sql`wo.status = ${query.workOrderStatus}` : sql`true`}
           AND ${departmentScope(identity) ?? sql`true`}
       ) list
@@ -133,6 +134,7 @@ export async function loadRequestList(
     WHERE requests.tenant_id = ${tenantId}
       AND ${query.status ? sql`requests.status = ${query.status}` : sql`true`}
       AND ${query.categoryId ? sql`occurrences.category_id = ${query.categoryId}` : sql`true`}
+      AND ${neighborhoodCondition(query.neighborhood) ?? sql`true`}
       AND ${
         query.days === null
           ? sql`true`

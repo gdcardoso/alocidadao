@@ -14,6 +14,7 @@ import {
   occurrenceDetailSchema,
   occurrenceMapQuerySchema,
   occurrenceMapResponseSchema,
+  neighborhoodsResponseSchema,
   panelContextSchema,
   panelCountsSchema,
   panelNotificationsResponseSchema,
@@ -66,6 +67,7 @@ import {
 } from './notifications.js';
 import {
   loadOccurrenceDetail,
+  loadNeighborhoods,
   loadOccurrenceMap,
   loadTeamOptions,
   searchOccurrences,
@@ -245,6 +247,19 @@ export function registerPanelRoutes(instance: FastifyInstance, deps: PanelDeps) 
       const identity = await requirePanelMember(db, request, reply);
       if (!identity) return reply;
       return loadCategoryOptions(db, identity);
+    },
+  );
+
+  app.get(
+    '/panel/neighborhoods',
+    {
+      preHandler: panelAuth,
+      schema: { response: { 200: neighborhoodsResponseSchema, ...panelErrors } },
+    },
+    async (request, reply) => {
+      const identity = await requirePanelMember(db, request, reply);
+      if (!identity) return reply;
+      return loadNeighborhoods(db, identity);
     },
   );
 

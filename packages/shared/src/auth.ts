@@ -30,6 +30,16 @@ export function maskEmail(email: string): string {
   return `${lower.slice(0, 1)}•••${lower.slice(at)}`;
 }
 
+/**
+ * Celular mascarado: `(15) •••••-1234` para o padrão brasileiro (`+55` e 10 ou 11 dígitos),
+ * senão `•••• ` e os 4 últimos dígitos.
+ */
+export function maskPhone(e164: string): string {
+  const br = /^\+55(\d{2})(\d{8,9})$/.exec(e164);
+  if (br) return `(${br[1]}) •••••-${br[2]!.slice(-4)}`;
+  return `•••• ${e164.slice(-4)}`;
+}
+
 export const deviceInfoSchema = z.object({
   installationId: z.uuid(),
   platform: z.enum(['android', 'ios']),

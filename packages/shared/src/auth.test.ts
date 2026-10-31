@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   TERMS_VERSION,
   maskEmail,
+  maskPhone,
   panelRefreshResponseSchema,
   panelSessionResponseSchema,
   panelStartBodySchema,
@@ -156,5 +157,13 @@ describe('panel session responses', () => {
     expect(
       panelSessionResponseSchema.parse({ session: { ...session, refreshToken: 'r' } }).session,
     ).not.toHaveProperty('refreshToken');
+  });
+});
+
+describe('maskPhone', () => {
+  it('masks a Brazilian mobile, landline and foreign number', () => {
+    expect(maskPhone('+5515991231234')).toBe('(15) •••••-1234');
+    expect(maskPhone('+551532121234')).toBe('(15) •••••-1234');
+    expect(maskPhone('+351912345678')).toBe('•••• 5678');
   });
 });

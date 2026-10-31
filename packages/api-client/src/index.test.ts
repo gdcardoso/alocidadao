@@ -676,6 +676,14 @@ describe('backoffice calls', () => {
         result: { items: [] },
       },
       {
+        name: 'tenant citizens',
+        call: (a) => a.backofficeTenantCitizens(U, { q: 'ana', situation: 'frozen', page: 2 }),
+        method: 'GET',
+        path: `/backoffice/tenants/${U}/citizens?q=ana&situation=frozen&page=2`,
+        response: () => Response.json({ items: [], total: 0, page: 2, pageSize: 50 }),
+        result: { items: [], total: 0, page: 2, pageSize: 50 },
+      },
+      {
         name: 'tenant managers',
         call: (a) => a.backofficeTenantManagers(U),
         method: 'GET',

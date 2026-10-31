@@ -8,6 +8,7 @@ import { requireAuth } from '../auth/plugin.js';
 import type { EmailSender } from '../messaging/email.js';
 import { recordImplicitSupportLeave, recordStaffAudit } from '../panel/audit.js';
 import { registerAuditRoutes } from './audit-routes.js';
+import { registerCitizenRoutes } from './citizens.js';
 import { registerCityInterestRoutes } from './city-interest.js';
 import { registerCreateTenantRoutes } from './create-tenant.js';
 import { registerFrozenAccountRoutes } from './frozen-accounts.js';
@@ -97,6 +98,7 @@ export function registerBackofficeRoutes(instance: FastifyInstance, deps: Backof
 
   registerTenantRoutes(instance, { db, preHandler });
   registerTenantListRoutes(instance, { db, preHandler });
+  registerCitizenRoutes(instance, { db, preHandler });
   registerNeighborhoodRoutes(instance, { db, preHandler });
   registerCreateTenantRoutes(instance, { db, preHandler });
   registerCityInterestRoutes(instance, { db, preHandler });

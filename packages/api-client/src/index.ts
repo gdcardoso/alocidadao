@@ -1,5 +1,6 @@
 import {
   auditResponseSchema,
+  citizenListResponseSchema,
   cityInterestResponseSchema,
   frozenAccountCodeResponseSchema,
   staffCreateResponseSchema,
@@ -13,6 +14,8 @@ import {
   tenantSummarySchema,
   type AuditQuery,
   type AuditResponse,
+  type CitizenListQuery,
+  type CitizenListResponse,
   type BackofficeContext,
   type CityInterestResponse,
   type CommercialStatus,
@@ -638,6 +641,20 @@ export function createApiClient({
     ): Promise<AuditResponse> =>
       auditResponseSchema.parse(
         await send('GET', `/backoffice/audit${panelQuery({ ...params })}`, undefined, options),
+      ),
+
+    backofficeTenantCitizens: async (
+      id: string,
+      params: Partial<CitizenListQuery> = {},
+      options?: RequestOptions,
+    ): Promise<CitizenListResponse> =>
+      citizenListResponseSchema.parse(
+        await send(
+          'GET',
+          `${tenantPath(id, 'citizens')}${panelQuery({ ...params })}`,
+          undefined,
+          options,
+        ),
       ),
 
     backofficeFrozenAccountCode: async (

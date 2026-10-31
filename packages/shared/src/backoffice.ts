@@ -80,6 +80,7 @@ export const STAFF_AUDIT_ACTIONS = [
   'lead.update',
   'account.recover',
   'account.release_cpf',
+  'tenant.citizens_view',
 ] as const;
 export type StaffAuditAction = (typeof STAFF_AUDIT_ACTIONS)[number];
 
@@ -121,6 +122,7 @@ export const STAFF_AUDIT_ACTION_LABELS: Record<StaffAuditAction, string> = {
   'lead.update': 'Mudou a situação comercial',
   'account.recover': 'Recuperou uma conta congelada',
   'account.release_cpf': 'Liberou o CPF de uma conta congelada',
+  'tenant.citizens_view': 'Consultou os cidadãos',
 };
 
 /** Catálogo copiado para a prefeitura nova (os raios são os do seed de desenvolvimento). */
@@ -577,6 +579,45 @@ export const auditResponseSchema = z.object({
   pageSize: count,
 });
 export type AuditResponse = z.infer<typeof auditResponseSchema>;
+
+// Cidadãos da prefeitura (P3): sem CPF e com celular e e-mail mascarados pela API.
+
+export const CITIZEN_SITUATIONS = ['active', 'inactive', 'frozen'] as const;
+export type CitizenSituation = (typeof CITIZEN_SITUATIONS)[number];
+
+export const CITIZEN_SITUATION_LABELS: Record<CitizenSituation, string> = {
+  active: 'Ativo',
+  inactive: 'Inativo',
+  frozen: 'Bloqueada',
+};
+
+export const citizenListQuerySchema = z.object({
+  q: z.string().trim().max(120).optional(),
+  situation: z.enum(CITIZEN_SITUATIONS).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+});
+export type CitizenListQuery = z.infer<typeof citizenListQuerySchema>;
+
+export const citizenRowSchema = z.object({
+  id: z.uuid(),
+  name: z.string(),
+  phoneMasked: z.string().nullable(),
+  emailMasked: z.string().nullable(),
+  requestCount: count,
+  openCount: count,
+  lastRequestAt: z.iso.datetime(),
+  lastActiveAt: z.iso.datetime().nullable(),
+  situation: z.enum(CITIZEN_SITUATIONS),
+});
+export type CitizenRow = z.infer<typeof citizenRowSchema>;
+
+export const citizenListResponseSchema = z.object({
+  items: z.array(citizenRowSchema),
+  total: count,
+  page: count,
+  pageSize: count,
+});
+export type CitizenListResponse = z.infer<typeof citizenListResponseSchema>;
 
 // Conta congelada (CPF preso)
 

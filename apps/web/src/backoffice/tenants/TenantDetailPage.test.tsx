@@ -2,7 +2,7 @@ import { ApiError } from '@alocidadao/api-client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
+import { Link, MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '../../api';
 import { createPanelSession } from '../../session/panel-session';
@@ -30,6 +30,7 @@ const enterSupport = vi.mocked(api.backofficeEnterSupport);
 const neighborhoods = vi.mocked(api.backofficeNeighborhoods);
 
 const id = '3f2b8c1e-5a4d-4e6f-8a7b-9c0d1e2f3a4b';
+const otherId = '9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c5d';
 
 function detail(over: Record<string, unknown> = {}, stats: Record<string, unknown> = {}) {
   return {
@@ -96,6 +97,8 @@ function renderPage(search = '') {
                   <>
                     <TenantDetailPage />
                     <LocationProbe />
+                    <Link to={`/backoffice/prefeituras/${otherId}?aba=contrato`}>ir para B</Link>
+                    <Link to={`/backoffice/prefeituras/${id}?aba=contrato`}>ir para A</Link>
                   </>
                 }
               />
@@ -383,5 +386,28 @@ describe('TenantDetailPage', () => {
     } as never);
     renderPage('?aba=auditoria');
     expect(await screen.findByText('Pessoas da prefeitura')).toBeInTheDocument();
+  });
+
+  it('contract tab resets when navigating to another tenant', async () => {
+    neighborhoods.mockResolvedValue({ count: 12, source: 'tenant' });
+    tenant.mockImplementation(async (tenantId: string) =>
+      tenantId === id
+        ? detail()
+        : detail({ id: otherId, displayName: 'Prefeitura de Campinas', ibgeCode: '3509502' }),
+    );
+    const user = userEvent.setup();
+    renderPage('?aba=contrato');
+    expect(await screen.findByDisplayValue('Prefeitura de São Paulo')).toBeInTheDocument();
+    // Deixa as duas prefeituras no cache para a troca ser imediata.
+    await user.click(screen.getByRole('link', { name: 'ir para B' }));
+    expect(await screen.findByDisplayValue('Prefeitura de Campinas')).toBeInTheDocument();
+    await user.click(screen.getByRole('link', { name: 'ir para A' }));
+    const field = await screen.findByDisplayValue('Prefeitura de São Paulo');
+    await user.clear(field);
+    await user.type(field, 'Nome editado');
+
+    await user.click(screen.getByRole('link', { name: 'ir para B' }));
+    expect(await screen.findByDisplayValue('Prefeitura de Campinas')).toBeInTheDocument();
+    expect(screen.queryByDisplayValue('Nome editado')).not.toBeInTheDocument();
   });
 });

@@ -202,4 +202,13 @@ describe('neighborhoodsUploadSchema', () => {
       expect(neighborhoodsUploadSchema.safeParse(body).success).toBe(false);
     }
   });
+
+  it('rejects names longer than 120 characters and accepts exactly 120', () => {
+    expect(
+      neighborhoodsUploadSchema.safeParse(collection(feature({ nome: 'A'.repeat(120) }))).success,
+    ).toBe(true);
+    expect(
+      neighborhoodsUploadSchema.safeParse(collection(feature({ nome: 'A'.repeat(121) }))).success,
+    ).toBe(false);
+  });
 });

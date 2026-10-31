@@ -47,6 +47,7 @@ import {
   inProgressResponseSchema,
   managerRowSchema,
   managersResponseSchema,
+  staffManagersResponseSchema,
   categoryOptionsResponseSchema,
   neighborhoodsResponseSchema,
   tenantProfileSchema,
@@ -103,6 +104,7 @@ import {
   type ManagerRow,
   type ManagerUpdateBody,
   type ManagersResponse,
+  type StaffManagersResponse,
   type PublishBody,
   type ReassignBody,
   type RequestListQuery,
@@ -517,8 +519,8 @@ export function createApiClient({
     backofficeTenantManagers: async (
       id: string,
       options?: RequestOptions,
-    ): Promise<ManagersResponse> =>
-      managersResponseSchema.parse(
+    ): Promise<StaffManagersResponse> =>
+      staffManagersResponseSchema.parse(
         await send('GET', tenantPath(id, 'managers'), undefined, options),
       ),
 

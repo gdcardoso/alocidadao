@@ -1,4 +1,10 @@
-import { createDatabase, schema, withContext } from '@alocidadao/db';
+import {
+  createDatabase,
+  parseIbgeNeighborhoods,
+  schema,
+  upsertIbgeNeighborhoods,
+  withContext,
+} from '@alocidadao/db';
 import {
   categoryOptionsResponseSchema,
   inProgressResponseSchema,
@@ -7,6 +13,7 @@ import {
   requestListResponseSchema,
   type GeoPoint,
 } from '@alocidadao/shared';
+import { randomInt } from 'node:crypto';
 import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp } from '../app.js';
@@ -381,6 +388,41 @@ describe('GET /panel/neighborhoods', () => {
       items: ['Água Branca', 'Centro', 'Zumbi'],
       source: 'tenant',
     });
+  });
+
+  it('GET /panel/neighborhoods returns distinct names when two IBGE neighborhoods share one', async () => {
+    const seed = await seedBase();
+    const ibgeCode = String(randomInt(1_000_000, 9_999_999));
+    await owner.db
+      .update(schema.tenants)
+      .set({ ibgeCode })
+      .where(eq(schema.tenants.id, seed.tenantId));
+    const square = (x: number) => ({
+      type: 'Polygon',
+      coordinates: [
+        [
+          [x, 0],
+          [x + 1, 0],
+          [x + 1, 1],
+          [x, 1],
+          [x, 0],
+        ],
+      ],
+    });
+    await upsertIbgeNeighborhoods(
+      owner.db,
+      parseIbgeNeighborhoods({
+        type: 'FeatureCollection',
+        features: ['00001', '00002'].map((suffix, i) => ({
+          type: 'Feature',
+          properties: { CD_MUN: ibgeCode, CD_BAIRRO: `${ibgeCode}${suffix}`, NM_BAIRRO: 'Centro' },
+          geometry: square(i * 2),
+        })),
+      }),
+    );
+    const res = await get('/panel/neighborhoods', seed.adminId, seed.tenantId);
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ items: ['Centro'], source: 'ibge' });
   });
 
   it('GET /panel/neighborhoods is empty for a tenant without neighborhoods', async () => {

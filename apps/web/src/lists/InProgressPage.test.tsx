@@ -184,4 +184,15 @@ describe('in progress page', () => {
       expect(call[1]).not.toHaveProperty('neighborhood');
     }
   });
+
+  it('ignores ?bairro not in the tenant list', async () => {
+    renderListPage(<InProgressPage />, '/em-atendimento?bairro=Inexistente');
+    const select = (await screen.findByLabelText('Bairro')) as HTMLSelectElement;
+    await waitFor(() => expect(panelInProgress).toHaveBeenCalled());
+    expect([...select.options].map((o) => o.text)).not.toContain('Inexistente');
+    expect(screen.getByText('Bairro: todos')).toBeInTheDocument();
+    for (const call of panelInProgress.mock.calls) {
+      expect(call[1]).not.toHaveProperty('neighborhood');
+    }
+  });
 });

@@ -1,11 +1,11 @@
-import { maskCpf, type ManagerRow } from '@alocidadao/shared';
+import type { StaffManagerRow } from '@alocidadao/shared';
 import { api } from '../../../api';
 import type { DataTableColumn } from '../../../ui/DataTable';
 import type { ReadOnlyTabProps } from '../tenant-tabs';
 import { ReadOnlyTab } from './ReadOnlyTab';
 import styles from './ReadOnlyTab.module.css';
 
-const columns: DataTableColumn<ManagerRow>[] = [
+const columns: DataTableColumn<StaffManagerRow>[] = [
   {
     key: 'name',
     header: 'Nome',
@@ -18,9 +18,9 @@ const columns: DataTableColumn<ManagerRow>[] = [
     key: 'cpf',
     header: 'CPF',
     width: 150,
-    render: (row) => <span className={styles.muted}>{row.cpf ? maskCpf(row.cpf) : '—'}</span>,
+    render: (row) => <span className={styles.muted}>{row.cpfMasked ?? '—'}</span>,
   },
-  { key: 'email', header: 'E-mail', width: 270, render: (row) => row.email ?? '—' },
+  { key: 'email', header: 'E-mail', width: 270, render: (row) => row.emailMasked ?? '—' },
   {
     key: 'departments',
     header: 'Setores',
@@ -41,7 +41,7 @@ const columns: DataTableColumn<ManagerRow>[] = [
   },
 ];
 
-/** Aba Gestores da P3: só leitura; o CPF sai mascarado, como no painel. */
+/** Aba Gestores da P3: só leitura; CPF e e-mail já chegam mascarados da API. */
 export function ManagersTab({ tenant, onOpenPanel }: ReadOnlyTabProps) {
   return (
     <ReadOnlyTab

@@ -4,6 +4,7 @@ import {
   MAX_SUGGESTIONS,
   PANEL_OCCURRENCE_STATUS_LABELS,
   WORK_ORDER_STATUS_LABELS,
+  type DeadlineStatus,
   type OccurrenceDetail,
 } from '@alocidadao/shared';
 import { useQuery } from '@tanstack/react-query';
@@ -30,7 +31,7 @@ import { formatElapsed } from '../format/elapsed';
 import { useNow } from '../format/use-now';
 import { useSession } from '../session/SessionProvider';
 import { usePanel } from '../shell/use-panel';
-import { Badge } from '../ui/Badge';
+import { Badge, type BadgeTone } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { CategorySquare } from '../ui/CategorySquare';
 import { useToast } from '../ui/Toast';
@@ -46,10 +47,19 @@ import {
   type OccurrenceActionResult,
 } from './use-occurrence-actions';
 
+const DEADLINE_TONES: Record<DeadlineStatus, BadgeTone> = {
+  none: 'warning',
+  on_time: 'success',
+  due_soon: 'warning',
+  overdue: 'danger',
+};
+
 export interface PointPanelProps {
   occurrenceId: string;
   /** Prazo da ocorrência, vindo do ponto do mapa; sem ele não há etiqueta de prazo. */
   dueAt?: string | null;
+  /** Situação do prazo do ponto, para o tom da etiqueta; sem ela vale o tom de atenção. */
+  deadlineStatus?: DeadlineStatus;
   onClose: () => void;
   /** "Atribuir a uma equipe": quem usa o painel abre a W2 com o detalhe. */
   onAssign: (detail: OccurrenceDetail) => void;
@@ -87,7 +97,14 @@ function reportMeta(request: OccurrenceDetail['requests'][number]): string {
  * agrupamento e as ações de juntar, separar, atribuir e recusar. Quem usa deve trocar a
  * `key` junto com `occurrenceId`, para as caixas voltarem todas marcadas.
  */
-export function PointPanel({ occurrenceId, dueAt, onClose, onAssign, onChanged }: PointPanelProps) {
+export function PointPanel({
+  occurrenceId,
+  dueAt,
+  deadlineStatus,
+  onClose,
+  onAssign,
+  onChanged,
+}: PointPanelProps) {
   const { tenantId } = usePanel();
   const { session } = useSession();
   const actions = useOccurrenceActions(tenantId);
@@ -187,7 +204,7 @@ export function PointPanel({ occurrenceId, dueAt, onClose, onAssign, onChanged }
             {statusLabel}
           </Badge>
           {dueAt ? (
-            <Badge tone="warning" icon={<CalendarClock />}>
+            <Badge tone={DEADLINE_TONES[deadlineStatus ?? 'due_soon']} icon={<CalendarClock />}>
               {deadlineTag(dueAt, now)}
             </Badge>
           ) : null}

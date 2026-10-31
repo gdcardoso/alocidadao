@@ -247,7 +247,7 @@ export async function loadNeighborhoods(
 ): Promise<NeighborhoodsResponse> {
   const result = await withContext(db, panelDbContext(identity), (tx) =>
     tx.execute<{ name: string; source: 'ibge' | 'tenant' }>(
-      sql`select name, source from effective_neighborhoods(${identity.tenantId}::uuid)`,
+      sql`select distinct name, source from effective_neighborhoods(${identity.tenantId}::uuid)`,
     ),
   );
   const items = result.rows.map((row) => row.name).toSorted((a, b) => a.localeCompare(b, 'pt-BR'));

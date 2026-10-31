@@ -13,7 +13,7 @@ import { formatDayMonth } from '../format/date';
 import { formatElapsedShort } from '../format/elapsed';
 import { useNow } from '../format/use-now';
 import { FilterSelect, NeighborhoodFilter } from '../map/MapFilters';
-import { neighborhoodOrNull } from '../map/map-query';
+import { knownNeighborhood, neighborhoodOrNull } from '../map/map-query';
 import { useNeighborhoods } from '../map/use-neighborhoods';
 import { OccurrenceDrawer } from '../occurrence/OccurrenceDrawer';
 import { useSession } from '../session/SessionProvider';
@@ -42,8 +42,11 @@ export function InProgressPage() {
   const workOrderStatus = ACTIVE_WORK_ORDER_STATUSES.find((status) => status === rawStatus) ?? null;
   const occurrenceId = params.get('ocorrencia');
   const neighborhoods = useNeighborhoods();
-  // Sem bairros na prefeitura, um `?bairro=` antigo na URL é ignorado.
-  const neighborhood = neighborhoods.enabled ? neighborhoodOrNull(params.get('bairro')) : null;
+  // Bairro fora da lista da prefeitura (ou prefeitura sem bairros): o `?bairro=` é ignorado.
+  const neighborhood = knownNeighborhood(
+    neighborhoodOrNull(params.get('bairro')),
+    neighborhoods.items,
+  );
   const now = useNow();
 
   function update(patch: {

@@ -2,7 +2,9 @@ import { schema, withContext, type Database } from '@alocidadao/db';
 import {
   apiErrorSchema,
   categoriesResponseSchema,
-  managersResponseSchema,
+  maskCpfForStaff,
+  maskEmail,
+  staffManagersResponseSchema,
   teamsResponseSchema,
   type PlatformRole,
 } from '@alocidadao/shared';
@@ -78,11 +80,19 @@ export function registerTenantListRoutes(
 
   app.get(
     '/backoffice/tenants/:id/managers',
-    options(managersResponseSchema),
+    options(staffManagersResponseSchema),
     async (request, reply) => {
       const identity = await resolve(request, reply);
       if (!identity) return reply;
-      return loadManagers(db, identity);
+      const { items } = await loadManagers(db, identity);
+      // Dado pessoal mascarado aqui, antes do schema de resposta: a equipe nunca recebe o completo.
+      return {
+        items: items.map(({ cpf, email, ...row }) => ({
+          ...row,
+          cpfMasked: cpf ? maskCpfForStaff(cpf) : null,
+          emailMasked: email ? maskEmail(email) : null,
+        })),
+      };
     },
   );
 

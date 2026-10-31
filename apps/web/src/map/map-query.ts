@@ -1,6 +1,7 @@
 import {
   DEADLINE_FILTERS,
   MAP_STATUS_FILTERS,
+  NO_NEIGHBORHOOD,
   type DeadlineFilter,
   type MapPeriod,
   type MapStatusFilter,
@@ -61,6 +62,11 @@ const MAX_NEIGHBORHOOD_LENGTH = 120;
 /** Valor de `?bairro=`: texto de 1 a 120 caracteres, ou nulo. */
 export function neighborhoodOrNull(value: string | null): string | null {
   return value && value.length <= MAX_NEIGHBORHOOD_LENGTH ? value : null;
+}
+
+/** Só vale bairro da lista da prefeitura (ou "Sem bairro"); qualquer outro vira nulo. */
+export function knownNeighborhood(value: string | null, items: readonly string[]): string | null {
+  return value !== null && (value === NO_NEIGHBORHOOD || items.includes(value)) ? value : null;
 }
 
 export function parseMapQuery(params: URLSearchParams): MapQueryState {

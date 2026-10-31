@@ -197,7 +197,7 @@ export function TenantDetailPage() {
 
       <main className={styles.content}>
         {activeTab === 'contract' && context.data ? (
-          <ContractTab tenant={tenant} isAdmin={isAdmin} />
+          <ContractTab key={tenant.id} tenant={tenant} isAdmin={isAdmin} />
         ) : null}
         {activeTab === 'teams' ? (
           <TeamsTab tenant={tenant} isAdmin={isAdmin} onOpenPanel={enterAt} />

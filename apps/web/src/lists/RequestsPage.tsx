@@ -14,7 +14,7 @@ import { useSearchParams } from 'react-router';
 import { api } from '../api';
 import { NETWORK_ERROR_MESSAGE, UNEXPECTED_ERROR_MESSAGE } from '../auth/login-errors';
 import { formatDate } from '../format/date';
-import { neighborhoodOrNull, periodLabel } from '../map/map-query';
+import { knownNeighborhood, neighborhoodOrNull, periodLabel } from '../map/map-query';
 import { FilterSelect, NeighborhoodFilter } from '../map/MapFilters';
 import { useNeighborhoods } from '../map/use-neighborhoods';
 import { OccurrenceDrawer } from '../occurrence/OccurrenceDrawer';
@@ -87,8 +87,11 @@ export function RequestsPage() {
   const rawCategory = params.get('categoria');
   const categoryId = rawCategory && UUID.test(rawCategory) ? rawCategory : null;
   const neighborhoods = useNeighborhoods();
-  // Sem bairros na prefeitura, um `?bairro=` antigo na URL é ignorado.
-  const neighborhood = neighborhoods.enabled ? neighborhoodOrNull(params.get('bairro')) : null;
+  // Bairro fora da lista da prefeitura (ou prefeitura sem bairros): o `?bairro=` é ignorado.
+  const neighborhood = knownNeighborhood(
+    neighborhoodOrNull(params.get('bairro')),
+    neighborhoods.items,
+  );
   const rawPeriod = params.get('periodo');
   const days: MapPeriod =
     rawPeriod !== null && rawPeriod in PERIOD_PARAM

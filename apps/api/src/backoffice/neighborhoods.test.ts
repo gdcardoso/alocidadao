@@ -205,6 +205,23 @@ describe('carga de bairros do backoffice', () => {
           },
         ),
       ),
+      // Anel de área zero: vira geometria vazia no banco e a carga é recusada.
+      collection(
+        feature(
+          { nome: 'Degenerado' },
+          {
+            type: 'Polygon',
+            coordinates: [
+              [
+                [40, -40],
+                [41, -40],
+                [42, -40],
+                [40, -40],
+              ],
+            ],
+          },
+        ),
+      ),
       collection(feature({ nome: 'Fora' }, square(500, 0))),
       collection(),
       { type: 'Feature', properties: { nome: 'Solto' }, geometry: square(0, 0) },

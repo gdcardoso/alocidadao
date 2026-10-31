@@ -189,6 +189,22 @@ describe('map page', () => {
     }
   });
 
+  it('ignores ?bairro not in the tenant list', async () => {
+    renderPage('/mapa?bairro=Inexistente');
+    const select = (await screen.findByLabelText('Bairro')) as HTMLSelectElement;
+    await screen.findByText('2 ocorrências abertas e em atendimento · últimos 30 dias');
+    expect([...select.options].map((o) => o.text)).toEqual([
+      'todos',
+      'Centro',
+      'Vila Nova',
+      'Sem bairro',
+    ]);
+    expect(screen.getByText('Bairro: todos')).toBeInTheDocument();
+    for (const call of panelOccurrences.mock.calls.slice(-1)) {
+      expect(call[1]).not.toHaveProperty('neighborhood');
+    }
+  });
+
   it('strip click filters the map, shows the numbers and the second click resets', async () => {
     const user = renderPage();
     const overdue = await screen.findByRole('button', { name: 'Atrasadas: 1' });

@@ -79,8 +79,6 @@ interface NeighborhoodFilterProps {
 
 /** Filtro "Bairro: todos", com "Sem bairro" por último. Quem usa só o mostra se houver bairros. */
 export function NeighborhoodFilter({ neighborhoods, value, onChange }: NeighborhoodFilterProps) {
-  const unknown =
-    value !== null && value !== NO_NEIGHBORHOOD && !neighborhoods.includes(value) ? value : null;
   return (
     <FilterSelect
       name="Bairro"
@@ -91,8 +89,6 @@ export function NeighborhoodFilter({ neighborhoods, value, onChange }: Neighborh
       options={[
         { value: ALL_NEIGHBORHOODS, label: 'todos' },
         ...neighborhoods.map((name) => ({ value: name, label: name })),
-        // Bairro da URL que não está na lista.
-        ...(unknown ? [{ value: unknown, label: unknown }] : []),
         { value: NO_NEIGHBORHOOD, label: NO_NEIGHBORHOOD_LABEL },
       ]}
       onChange={(next) => onChange(next === ALL_NEIGHBORHOODS ? null : next)}

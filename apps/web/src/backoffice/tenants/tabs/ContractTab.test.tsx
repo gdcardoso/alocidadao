@@ -26,7 +26,7 @@ const resetNeighborhoods = vi.mocked(api.backofficeResetNeighborhoods);
 
 const id = '3f2b8c1e-5a4d-4e6f-8a7b-9c0d1e2f3a4b';
 const FORMAT_MESSAGE =
-  'O arquivo precisa ser GeoJSON com um polígono por bairro e o nome em `nome` ou `name`.';
+  'O arquivo precisa ser GeoJSON com um polígono por bairro e o nome em nome ou name.';
 
 const tenant = {
   id,

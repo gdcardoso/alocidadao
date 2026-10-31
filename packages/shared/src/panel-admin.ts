@@ -120,6 +120,22 @@ export type ManagerRow = z.infer<typeof managerRowSchema>;
 export const managersResponseSchema = z.object({ items: z.array(managerRowSchema) });
 export type ManagersResponse = z.infer<typeof managersResponseSchema>;
 
+// Gestores vistos pela equipe interna (CPF e e-mail já mascarados na API)
+
+export const staffManagerRowSchema = z.object({
+  userId: z.uuid(),
+  name: z.string(),
+  cpfMasked: z.string().nullable(),
+  emailMasked: z.string().nullable(),
+  role: panelRoleSchema,
+  status: membershipStatusSchema,
+  departments: z.array(z.object({ id: z.uuid(), name: z.string() })),
+});
+export type StaffManagerRow = z.infer<typeof staffManagerRowSchema>;
+
+export const staffManagersResponseSchema = z.object({ items: z.array(staffManagerRowSchema) });
+export type StaffManagersResponse = z.infer<typeof staffManagersResponseSchema>;
+
 const managerEmailSchema = z.email().transform((value) => value.toLowerCase());
 const departmentIdsSchema = z.array(z.uuid()).min(1);
 

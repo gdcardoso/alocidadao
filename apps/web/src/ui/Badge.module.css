@@ -38,6 +38,11 @@
   color: var(--success);
 }
 
+.danger {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
 .primary {
   background: var(--primary-soft);
   color: var(--primary);

@@ -224,8 +224,13 @@ describe('GET /backoffice/tenants/:id/citizens', () => {
     ]);
     await get(staffId, s.tenantId, '?q=pes');
     await get(staffId, s.tenantId, '?page=2');
-    await get(staffId, s.tenantId, '?situation=active');
     expect(await auditOf(s.tenantId)).toHaveLength(1);
+    // Primeira página sem busca audita, com ou sem filtro de situação: o filtro não escapa do registro.
+    await get(staffId, s.tenantId, '?situation=active');
+    expect(await auditOf(s.tenantId)).toHaveLength(2);
+    await get(staffId, s.tenantId, '?situation=active&page=2');
+    await get(staffId, s.tenantId, '?situation=active&q=pes');
+    expect(await auditOf(s.tenantId)).toHaveLength(2);
   });
 
   it('returns 404 for an unknown tenant, 401 without token and 403 for a tenant admin', async () => {

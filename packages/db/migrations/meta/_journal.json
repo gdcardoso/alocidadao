@@ -288,6 +288,13 @@
       "when": 1793475979087,
       "tag": "0040_clear_push_on_revoke",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1793477580572,
+      "tag": "0041_neighborhoods_reject_empty",
+      "breakpoints": true
     }
   ]
 }

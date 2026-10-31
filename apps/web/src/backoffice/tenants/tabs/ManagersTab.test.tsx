@@ -42,8 +42,8 @@ describe('ManagersTab', () => {
         {
           userId: '11111111-1111-4111-8111-111111111111',
           name: 'Gestora de Obras',
-          cpf: '52998224725',
-          email: 'g@exemplo.com',
+          cpfMasked: '•••.982.247-••',
+          emailMasked: 'g•••@exemplo.com',
           role: 'manager',
           status: 'active',
           departments: [{ id: '11111111-1111-4111-8111-111111111111', name: 'Obras' }],
@@ -53,8 +53,8 @@ describe('ManagersTab', () => {
     const onOpenPanel = renderTab();
 
     expect(await screen.findByText('Gestora de Obras')).toBeInTheDocument();
-    expect(screen.getByText('g@exemplo.com')).toBeInTheDocument();
-    expect(screen.queryByText('52998224725')).toBeNull();
+    expect(screen.getByText('g•••@exemplo.com')).toBeInTheDocument();
+    expect(screen.getByText('•••.982.247-••')).toBeInTheDocument();
     expect(load).toHaveBeenCalledWith(tenant.id);
     expect(screen.queryByRole('button', { name: /⋯|menu|editar/i })).toBeNull();
 

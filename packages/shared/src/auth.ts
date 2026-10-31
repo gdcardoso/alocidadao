@@ -40,6 +40,11 @@ export function maskPhone(e164: string): string {
   return `•••• ${e164.slice(-4)}`;
 }
 
+/** CPF para a equipe interna: só o miolo aparece, `12345678909` → `•••.456.789-••`. */
+export function maskCpfForStaff(digits: string): string {
+  return `•••.${digits.slice(3, 6)}.${digits.slice(6, 9)}-••`;
+}
+
 export const deviceInfoSchema = z.object({
   installationId: z.uuid(),
   platform: z.enum(['android', 'ios']),

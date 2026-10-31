@@ -22,6 +22,7 @@ import styles from './CitizensTab.module.css';
 const PAGE_SIZE = 50;
 const ALL = '';
 const SEARCH_DELAY_MS = 300;
+const CITIZENS_STALE_MS = 5 * 60_000;
 
 const SITUATION_TONE: Record<CitizenSituation, BadgeTone> = {
   active: 'success',
@@ -55,8 +56,10 @@ export function CitizensTab({ tenant }: TenantTabProps) {
     queryKey: ['backoffice', 'tenant', tenant.id, 'citizens', params],
     queryFn: () => session.withAuth(() => api.backofficeTenantCitizens(tenant.id, params)),
     placeholderData: keepPreviousData,
-    // Abrir a aba grava a consulta na auditoria; voltar à janela não deve gravar de novo.
+    // Abrir a aba grava a consulta na auditoria; voltar à janela ou remontar a aba não deve
+    // gravar de novo.
     refetchOnWindowFocus: false,
+    staleTime: CITIZENS_STALE_MS,
   });
 
   const columns: DataTableColumn<CitizenRow>[] = [

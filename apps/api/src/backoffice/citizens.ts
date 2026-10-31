@@ -128,7 +128,7 @@ export function registerCitizenRoutes(
           .innerJoin(users, eq(users.id, requests.citizenId))
           .where(where);
 
-        if (page === 1 && !q && !situation) {
+        if (page === 1 && !q) {
           // Na mesma transação: a consulta e o registro valem juntos.
           await insertStaffAudit(
             tx,

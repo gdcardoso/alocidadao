@@ -10,6 +10,7 @@ import { eq, sql } from 'drizzle-orm';
 import type { FastifyInstance, preHandlerHookHandler } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
+import { isPgError } from '../db-errors.js';
 import { insertStaffAudit } from '../panel/audit.js';
 import { requirePlatformStaff } from './staff.js';
 
@@ -98,23 +99,32 @@ export function registerNeighborhoodRoutes(
         name: neighborhoodFeatureName(feature.properties)!,
         geometry: feature.geometry,
       }));
-      const summary = await withContext(db, { ...staff, tenantId }, async (tx) => {
-        if (!(await tenantExists(tx, tenantId))) return null;
-        await tx.execute(
-          sql`select replace_tenant_neighborhoods(${tenantId}::uuid, ${JSON.stringify(features)}::jsonb)`,
-        );
-        // Na mesma transação: a carga e a auditoria valem juntas ou nenhuma vale.
-        await insertStaffAudit(
-          tx,
-          { ...staff, tenantId },
-          {
-            action: 'tenant.neighborhoods_replace',
-            targetType: 'tenant',
-            targetId: tenantId,
-          },
-        );
-        return layerSummary(tx, tenantId);
-      });
+      let summary: NeighborhoodsSummary | null;
+      try {
+        summary = await withContext(db, { ...staff, tenantId }, async (tx) => {
+          if (!(await tenantExists(tx, tenantId))) return null;
+          await tx.execute(
+            sql`select replace_tenant_neighborhoods(${tenantId}::uuid, ${JSON.stringify(features)}::jsonb)`,
+          );
+          // Na mesma transação: a carga e a auditoria valem juntas ou nenhuma vale.
+          await insertStaffAudit(
+            tx,
+            { ...staff, tenantId },
+            {
+              action: 'tenant.neighborhoods_replace',
+              targetType: 'tenant',
+              targetId: tenantId,
+            },
+          );
+          return layerSummary(tx, tenantId);
+        });
+      } catch (error) {
+        // A função do banco recusa geometria vazia (polígono sem área) com 22023; a transação
+        // inteira volta e a camada anterior fica.
+        if (isPgError(error, '22023'))
+          return reply.code(422).send({ code: 'invalid_neighborhoods' });
+        throw error;
+      }
       if (!summary) return reply.code(404).send({ code: 'tenant_not_found' });
       return summary;
     },

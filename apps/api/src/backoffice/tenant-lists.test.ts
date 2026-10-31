@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { createDatabase } from '@alocidadao/db';
+import { createDatabase, schema } from '@alocidadao/db';
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp } from '../app.js';
 import { panelAuthHeader, staffAuthHeader } from '../test/panel.js';
@@ -77,6 +78,31 @@ describe('listas do backoffice por prefeitura', () => {
           .toSorted(),
       ).toEqual(['Buraco', 'Poste apagado']);
     }
+  });
+
+  it('managers response never contains full cpf or email', async () => {
+    const seed = await fx.seedPanelTenant();
+    const managerId = await fx.newManager(seed.tenantId, [seed.worksId], 'Gestora Sigilo');
+    const email = `gestora.${randomUUID()}@teste.dev`;
+    await owner.db
+      .update(schema.users)
+      .set({ cpf: '12345678909', email })
+      .where(eq(schema.users.id, managerId));
+    const staffId = await fx.newStaff('support');
+    const res = await get(staffId, seed.tenantId, 'managers');
+    expect(res.statusCode).toBe(200);
+    expect(res.json().items).toEqual([
+      expect.objectContaining({
+        name: 'Gestora Sigilo',
+        cpfMasked: '•••.456.789-••',
+        emailMasked: `${email.slice(0, 1)}•••@teste.dev`,
+      }),
+    ]);
+    expect(res.body).not.toContain('12345678909');
+    expect(res.body).not.toContain('123.456.789-09');
+    expect(res.body).not.toContain(email);
+    expect(res.body).not.toContain('"cpf"');
+    expect(res.body).not.toContain('"email"');
   });
 
   it('does not leak other tenants', async () => {

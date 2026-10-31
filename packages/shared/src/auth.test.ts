@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   TERMS_VERSION,
+  maskCpfForStaff,
   maskEmail,
   maskPhone,
   panelRefreshResponseSchema,
@@ -165,5 +166,11 @@ describe('maskPhone', () => {
     expect(maskPhone('+5515991231234')).toBe('(15) •••••-1234');
     expect(maskPhone('+551532121234')).toBe('(15) •••••-1234');
     expect(maskPhone('+351912345678')).toBe('•••• 5678');
+  });
+});
+
+describe('maskCpfForStaff', () => {
+  it('shows only the middle digits', () => {
+    expect(maskCpfForStaff('12345678909')).toBe('•••.456.789-••');
   });
 });

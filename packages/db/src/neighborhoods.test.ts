@@ -289,4 +289,35 @@ describe('camada da prefeitura', () => {
       await asRole('admin', 'clear_tenant_neighborhoods', sql`${tenantId}::uuid`);
     }
   });
+
+  it('polígono degenerado (anel de área zero) é recusado com 22023 e não altera a camada', async () => {
+    const line = {
+      type: 'Polygon',
+      coordinates: [
+        [
+          [40, -40],
+          [41, -40],
+          [42, -40],
+          [40, -40],
+        ],
+      ],
+    };
+    const features = [{ name: 'Degenerado', geometry: line }];
+    const outcome = await asRole(
+      'admin',
+      'replace_tenant_neighborhoods',
+      sql`${tenantId}::uuid, ${JSON.stringify(features)}::jsonb`,
+    ).then(
+      () => 'accepted',
+      (error: unknown) => {
+        const cause = (error as { cause?: { code?: string } }).cause;
+        return cause?.code ?? String(error);
+      },
+    );
+    expect(outcome).toBe('22023');
+    const rows = await owner.db.execute(
+      sql`select count(*)::int as n from tenant_neighborhoods where tenant_id = ${tenantId}`,
+    );
+    expect(rows.rows[0]!.n).toBe(0);
+  });
 });

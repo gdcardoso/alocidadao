@@ -375,6 +375,8 @@ export type TenantStatusBody = z.infer<typeof tenantStatusBodySchema>;
 // Bairros da prefeitura (carga pelo backoffice)
 
 export const NEIGHBORHOODS_MAX_FEATURES = 2000;
+/** Mesmo limite do filtro `?bairro=` do painel: nome maior não seria filtrável. */
+export const NEIGHBORHOOD_NAME_MAX = 120;
 
 const positionSchema = z
   .array(z.number())
@@ -417,7 +419,7 @@ export function neighborhoodFeatureName(properties: Record<string, unknown> | nu
 
 /**
  * GeoJSON `FeatureCollection` de bairros: só Polygon e MultiPolygon, nome não vazio e único
- * (sem diferenciar maiúsculas), de 1 a 2000 feições.
+ * (sem diferenciar maiúsculas) e de até 120 caracteres, de 1 a 2000 feições.
  */
 export const neighborhoodsUploadSchema = z
   .object({
@@ -429,7 +431,7 @@ export const neighborhoodsUploadSchema = z
     collection.features.forEach((feature, index) => {
       const name = neighborhoodFeatureName(feature.properties);
       const key = name?.toLowerCase();
-      if (name === null || seen.has(key!)) {
+      if (name === null || name.length > NEIGHBORHOOD_NAME_MAX || seen.has(key!)) {
         ctx.addIssue({ code: 'custom', path: ['features', index], message: 'invalid_name' });
         return;
       }

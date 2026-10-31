@@ -7,10 +7,11 @@ import styles from './Badge.module.css';
  * - `subtle`: fundo `bg` (relatos, raio);
  * - `warning`: `warning-soft` (sugestão, motivo de impedimento);
  * - `success`: `success-soft` ("Ativo");
+ * - `danger`: `danger-soft` (prazo vencido);
  * - `primary`: `primary-soft`;
  * - `dark`: `text-primary` com texto branco ("Admin").
  */
-export type BadgeTone = 'muted' | 'subtle' | 'warning' | 'success' | 'primary' | 'dark';
+export type BadgeTone = 'muted' | 'subtle' | 'warning' | 'success' | 'danger' | 'primary' | 'dark';
 
 export interface BadgeProps {
   tone?: BadgeTone;

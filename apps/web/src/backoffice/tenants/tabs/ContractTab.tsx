@@ -27,7 +27,7 @@ import type { TenantTabProps } from '../tenant-tabs';
 import styles from './ContractTab.module.css';
 
 const FORMAT_MESSAGE =
-  'O arquivo precisa ser GeoJSON com um polígono por bairro e o nome em `nome` ou `name`.';
+  'O arquivo precisa ser GeoJSON com um polígono por bairro e o nome em nome ou name.';
 
 type Errors = Partial<Record<ContractFieldKey | 'displayName', string>>;
 

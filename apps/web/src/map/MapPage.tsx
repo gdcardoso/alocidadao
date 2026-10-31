@@ -15,6 +15,7 @@ import {
   applySummaryClick,
   categoriesOf,
   DEFAULT_MAP_QUERY,
+  knownNeighborhood,
   mapOccurrencesKey,
   mapSubtitle,
   mapSummaryKey,
@@ -41,10 +42,13 @@ export function MapPage() {
   const [params, setParams] = useSearchParams();
   const parsed = useMemo(() => parseMapQuery(params), [params]);
   const neighborhoods = useNeighborhoods();
-  // Sem bairros na prefeitura, um `?bairro=` antigo na URL é ignorado.
+  // Bairro fora da lista da prefeitura (ou prefeitura sem bairros): o `?bairro=` é ignorado.
   const state = useMemo(
-    () => (neighborhoods.enabled ? parsed : { ...parsed, neighborhood: null }),
-    [parsed, neighborhoods.enabled],
+    () => ({
+      ...parsed,
+      neighborhood: knownNeighborhood(parsed.neighborhood, neighborhoods.items),
+    }),
+    [parsed, neighborhoods.items],
   );
   const [focus, setFocus] = useState<MapFocus | null>(null);
   // Ocorrência da W2 (Atribuir a uma equipe), aberta a partir do painel do ponto.
@@ -100,6 +104,7 @@ export function MapPage() {
 
   const items = mapQuery.data?.items;
   const points = useMemo(() => items ?? [], [items]);
+  const selectedPoint = points.find((point) => point.id === state.occurrenceId);
   const empty = mapQuery.isSuccess && !mapQuery.isPlaceholderData && points.length === 0;
 
   function onSearchSelect(item: PanelSearchResult) {
@@ -157,7 +162,8 @@ export function MapPage() {
           <PointPanel
             key={state.occurrenceId}
             occurrenceId={state.occurrenceId}
-            dueAt={points.find((point) => point.id === state.occurrenceId)?.dueAt ?? null}
+            dueAt={selectedPoint?.dueAt ?? null}
+            deadlineStatus={selectedPoint?.deadlineStatus}
             onClose={() => update({ occurrenceId: null })}
             onAssign={setAssignTarget}
             onChanged={onChanged}

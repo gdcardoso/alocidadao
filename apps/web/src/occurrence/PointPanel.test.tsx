@@ -1,5 +1,5 @@
 import { ApiError } from '@alocidadao/api-client';
-import type { OccurrenceDetail, PanelContext } from '@alocidadao/shared';
+import type { DeadlineStatus, OccurrenceDetail, PanelContext } from '@alocidadao/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -88,7 +88,12 @@ function detail(overrides: Partial<OccurrenceDetail> = {}): OccurrenceDetail {
 }
 
 function renderPanel(
-  props: { onAssign?: () => void; onChanged?: () => void; dueAt?: string | null } = {},
+  props: {
+    onAssign?: () => void;
+    onChanged?: () => void;
+    dueAt?: string | null;
+    deadlineStatus?: DeadlineStatus;
+  } = {},
 ) {
   const session = createPanelSession({
     client: {
@@ -109,6 +114,7 @@ function renderPanel(
             <PointPanel
               occurrenceId={occurrenceId}
               dueAt={props.dueAt}
+              deadlineStatus={props.deadlineStatus}
               onClose={onClose}
               onAssign={onAssign}
               onChanged={onChanged}
@@ -150,6 +156,16 @@ describe('point panel', () => {
   it('shows the deadline tag only when there is a dueAt', async () => {
     renderPanel({ dueAt: new Date(Date.now() - 2 * 86_400_000).toISOString() });
     expect(await screen.findByText(/^Atrasada há \d+ dias?$|^Atrasada hoje$/)).toBeInTheDocument();
+  });
+
+  it.each([
+    ['on_time', 'success'],
+    ['due_soon', 'warning'],
+    ['overdue', 'danger'],
+  ] as const)('deadline tag tone follows %s', async (deadlineStatus, tone) => {
+    renderPanel({ dueAt: new Date(Date.now() + 86_400_000).toISOString(), deadlineStatus });
+    const tag = (await screen.findByText(/^(Vence|Atrasada|No prazo|Falta)/)).closest('span');
+    expect(tag?.className).toContain(tone);
   });
 
   it('shows ver mais 1 relato with three reports', async () => {

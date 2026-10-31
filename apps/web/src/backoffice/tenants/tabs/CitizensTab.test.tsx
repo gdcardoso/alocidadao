@@ -27,7 +27,9 @@ const row = (over: Partial<CitizenRow> = {}): CitizenRow => ({
   ...over,
 });
 
-function renderTab() {
+function renderTab(
+  queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+) {
   const session = createPanelSession({
     client: {
       panelRefresh: vi.fn(async () => ({ accessToken: 't', accessExpiresInSeconds: 900 })),
@@ -35,14 +37,14 @@ function renderTab() {
     },
   });
   session.signIn({ accessToken: 't', accessExpiresInSeconds: 900 });
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(
+  const view = render(
     <QueryClientProvider client={queryClient}>
       <SessionProvider session={session}>
         <CitizensTab tenant={tenant} isAdmin={false} />
       </SessionProvider>
     </QueryClientProvider>,
   );
+  return view;
 }
 
 describe('CitizensTab', () => {
@@ -107,6 +109,16 @@ describe('CitizensTab', () => {
       }),
     );
     expect(await screen.findByText('Nenhum cidadão com estes filtros.')).toBeInTheDocument();
+  });
+
+  it('does not reload (and re-audit) when the tab remounts within the stale time', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const first = renderTab(queryClient);
+    expect(await screen.findByText('Ana Souza')).toBeInTheDocument();
+    first.unmount();
+    renderTab(queryClient);
+    expect(await screen.findByText('Ana Souza')).toBeInTheDocument();
+    expect(load).toHaveBeenCalledTimes(1);
   });
 
   it('shows the empty message when nobody asked yet', async () => {

@@ -1,4 +1,10 @@
-import { MAP_STATUS_FILTERS, type MapPeriod, type MapStatusFilter } from '@alocidadao/shared';
+import {
+  DEADLINE_FILTERS,
+  MAP_STATUS_FILTERS,
+  type DeadlineFilter,
+  type MapPeriod,
+  type MapStatusFilter,
+} from '@alocidadao/shared';
 
 /** Filtros da W1 e o ponto aberto, guardados na URL. */
 export interface MapQueryState {
@@ -7,6 +13,8 @@ export interface MapQueryState {
   /** Nome do bairro, ou `NO_NEIGHBORHOOD` para as ocorrências sem bairro. */
   neighborhood: string | null;
   days: MapPeriod;
+  /** Só com prazo: o mapa mostra apenas ocorrências em atendimento. */
+  deadline: DeadlineFilter | null;
   occurrenceId: string | null;
 }
 
@@ -15,6 +23,7 @@ export const DEFAULT_MAP_QUERY: MapQueryState = {
   categoryId: null,
   neighborhood: null,
   days: 30,
+  deadline: null,
   occurrenceId: null,
 };
 
@@ -23,6 +32,20 @@ const STATUS_PARAM: Record<MapStatusFilter, string> = {
   open_and_in_progress: 'abertas-em-atendimento',
   open: 'abertas',
   in_progress: 'em-atendimento',
+};
+
+/** Valor de `?prazo=` para cada filtro de prazo. */
+const DEADLINE_PARAM: Record<DeadlineFilter, string> = {
+  on_time: 'no-prazo',
+  due_soon: 'vencendo',
+  overdue: 'atrasadas',
+};
+
+/** Texto do filtro de prazo na barra: `Prazo: todos`. */
+export const DEADLINE_FILTER_LABELS: Record<DeadlineFilter, string> = {
+  on_time: 'No prazo',
+  due_soon: 'Vencendo',
+  overdue: 'Atrasadas',
 };
 
 const PERIOD_PARAM: Record<string, MapPeriod> = { '7': 7, '30': 30, '90': 90, todo: null };
@@ -55,6 +78,8 @@ export function parseMapQuery(params: URLSearchParams): MapQueryState {
     categoryId: uuidOrNull(params.get('categoria')),
     neighborhood: neighborhoodOrNull(params.get('bairro')),
     days,
+    deadline:
+      DEADLINE_FILTERS.find((filter) => DEADLINE_PARAM[filter] === params.get('prazo')) ?? null,
     occurrenceId: uuidOrNull(params.get('ocorrencia')),
   };
 }
@@ -67,6 +92,7 @@ export function toSearchParams(state: MapQueryState): URLSearchParams {
   if (state.days !== DEFAULT_MAP_QUERY.days) {
     params.set('periodo', state.days === null ? 'todo' : String(state.days));
   }
+  if (state.deadline) params.set('prazo', DEADLINE_PARAM[state.deadline]);
   if (state.occurrenceId) params.set('ocorrencia', state.occurrenceId);
   return params;
 }
@@ -127,7 +153,7 @@ export function categoriesOf(
 /** Chave do mapa: `['occurrences', …]`, que as ações invalidam pelo prefixo. */
 export function mapOccurrencesKey(
   tenantId: string,
-  state: Pick<MapQueryState, 'status' | 'days' | 'categoryId' | 'neighborhood'>,
+  state: Pick<MapQueryState, 'status' | 'days' | 'categoryId' | 'neighborhood' | 'deadline'>,
 ) {
   return [
     'occurrences',
@@ -136,5 +162,60 @@ export function mapOccurrencesKey(
     state.days,
     state.categoryId,
     state.neighborhood,
+    state.deadline,
   ] as const;
+}
+
+/** Chave dos números da faixa (ignoram status e prazo); também sob `['occurrences', …]`. */
+export function mapSummaryKey(
+  tenantId: string,
+  state: Pick<MapQueryState, 'days' | 'categoryId' | 'neighborhood'>,
+) {
+  return [
+    'occurrences',
+    tenantId,
+    'summary',
+    state.days,
+    state.categoryId,
+    state.neighborhood,
+  ] as const;
+}
+
+/**
+ * Aplica uma mudança de filtro sem criar combinação vazia: prazo com "abertas" passa para
+ * "em atendimento" (só quem está em atendimento tem prazo) e "abertas" tira o prazo.
+ */
+export function mergeMapPatch(state: MapQueryState, patch: Partial<MapQueryState>): MapQueryState {
+  const next = { ...state, ...patch };
+  if (patch.deadline && next.status === 'open') next.status = 'in_progress';
+  else if (patch.status === 'open' && !patch.deadline) next.deadline = null;
+  return next;
+}
+
+export type SummaryKey = 'triage' | 'inProgress' | 'dueSoon' | 'overdue';
+
+/** Número da faixa que está ativo pelos filtros, ou nulo. */
+export function activeSummaryKey(state: MapQueryState): SummaryKey | null {
+  if (state.deadline === 'due_soon' && state.status === 'in_progress') return 'dueSoon';
+  if (state.deadline === 'overdue' && state.status === 'in_progress') return 'overdue';
+  if (state.deadline === null && state.status === 'open') return 'triage';
+  if (state.deadline === null && state.status === 'in_progress') return 'inProgress';
+  return null;
+}
+
+/** Clique num número da faixa; clicar no ativo volta ao padrão (abertas e em atendimento, prazo todos). */
+export function applySummaryClick(state: MapQueryState, key: SummaryKey): MapQueryState {
+  if (activeSummaryKey(state) === key) {
+    return { ...state, status: DEFAULT_MAP_QUERY.status, deadline: null };
+  }
+  switch (key) {
+    case 'triage':
+      return { ...state, status: 'open', deadline: null };
+    case 'inProgress':
+      return { ...state, status: 'in_progress', deadline: null };
+    case 'dueSoon':
+      return { ...state, status: 'in_progress', deadline: 'due_soon' };
+    case 'overdue':
+      return { ...state, status: 'in_progress', deadline: 'overdue' };
+  }
 }

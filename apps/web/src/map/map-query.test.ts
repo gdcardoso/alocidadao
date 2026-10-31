@@ -3,7 +3,10 @@ import { describe, expect, it } from 'vitest';
 import {
   categoriesOf,
   DEFAULT_MAP_QUERY,
+  activeSummaryKey,
+  applySummaryClick,
   isSearchable,
+  mergeMapPatch,
   mapOccurrencesKey,
   mapSubtitle,
   parseMapQuery,
@@ -21,6 +24,7 @@ describe('map query', () => {
       categoryId: null,
       neighborhood: null,
       days: 30,
+      deadline: null,
       occurrenceId: null,
     });
     // Os valores padrão não aparecem na URL.
@@ -31,6 +35,7 @@ describe('map query', () => {
       categoryId,
       neighborhood: null,
       days: null,
+      deadline: null,
       occurrenceId,
     } as const;
     const params = toSearchParams(state);
@@ -107,5 +112,60 @@ describe('map helpers', () => {
       { id: 'a', name: 'Buraco na via' },
       { id: 'b', name: 'Iluminação' },
     ]);
+  });
+
+  it('parses and writes ?prazo', () => {
+    for (const [param, deadline] of [
+      ['no-prazo', 'on_time'],
+      ['vencendo', 'due_soon'],
+      ['atrasadas', 'overdue'],
+    ] as const) {
+      const state = { ...DEFAULT_MAP_QUERY, status: 'in_progress', deadline } as const;
+      expect(toSearchParams(state).get('prazo')).toBe(param);
+      expect(parseMapQuery(toSearchParams(state))).toEqual(state);
+    }
+    expect(parseMapQuery(new URLSearchParams('prazo=xyz')).deadline).toBeNull();
+  });
+
+  it('map key includes the deadline', () => {
+    expect(mapOccurrencesKey('t', { ...DEFAULT_MAP_QUERY, deadline: 'overdue' })).not.toEqual(
+      mapOccurrencesKey('t', DEFAULT_MAP_QUERY),
+    );
+  });
+
+  it('choosing a deadline with status open switches to in_progress', () => {
+    const open = { ...DEFAULT_MAP_QUERY, status: 'open' } as const;
+    expect(mergeMapPatch(open, { deadline: 'due_soon' })).toMatchObject({
+      status: 'in_progress',
+      deadline: 'due_soon',
+    });
+    // Escolher "abertas" com prazo ativo tira o prazo.
+    const late = { ...DEFAULT_MAP_QUERY, status: 'in_progress', deadline: 'overdue' } as const;
+    expect(mergeMapPatch(late, { status: 'open' })).toMatchObject({
+      status: 'open',
+      deadline: null,
+    });
+  });
+
+  it('applySummaryClick follows the click rules and the second click resets', () => {
+    const base = { ...DEFAULT_MAP_QUERY, categoryId };
+    const triage = applySummaryClick(base, 'triage');
+    expect(triage).toMatchObject({ status: 'open', deadline: null, categoryId });
+    expect(activeSummaryKey(triage)).toBe('triage');
+    expect(applySummaryClick(triage, 'triage')).toEqual(base);
+
+    const progress = applySummaryClick(triage, 'inProgress');
+    expect(progress).toMatchObject({ status: 'in_progress', deadline: null });
+    expect(applySummaryClick(progress, 'inProgress')).toEqual(base);
+
+    const soon = applySummaryClick(progress, 'dueSoon');
+    expect(soon).toMatchObject({ status: 'in_progress', deadline: 'due_soon' });
+    expect(activeSummaryKey(soon)).toBe('dueSoon');
+    expect(applySummaryClick(soon, 'dueSoon')).toEqual(base);
+
+    const overdue = applySummaryClick(soon, 'overdue');
+    expect(overdue).toMatchObject({ status: 'in_progress', deadline: 'overdue' });
+    expect(applySummaryClick(overdue, 'overdue')).toEqual(base);
+    expect(activeSummaryKey(base)).toBeNull();
   });
 });

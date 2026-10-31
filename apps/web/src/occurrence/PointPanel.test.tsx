@@ -87,7 +87,9 @@ function detail(overrides: Partial<OccurrenceDetail> = {}): OccurrenceDetail {
   };
 }
 
-function renderPanel(props: { onAssign?: () => void; onChanged?: () => void } = {}) {
+function renderPanel(
+  props: { onAssign?: () => void; onChanged?: () => void; dueAt?: string | null } = {},
+) {
   const session = createPanelSession({
     client: {
       panelRefresh: vi.fn(async () => ({ accessToken: 't', accessExpiresInSeconds: 900 })),
@@ -106,6 +108,7 @@ function renderPanel(props: { onAssign?: () => void; onChanged?: () => void } = 
           <ToastProvider>
             <PointPanel
               occurrenceId={occurrenceId}
+              dueAt={props.dueAt}
               onClose={onClose}
               onAssign={onAssign}
               onChanged={onChanged}
@@ -142,6 +145,11 @@ describe('point panel', () => {
     expect(screen.getAllByRole('checkbox')).toHaveLength(6);
     for (const box of screen.getAllByRole('checkbox')) expect(box).toBeChecked();
     expect(screen.queryByRole('button', { name: /Ver os outros/ })).not.toBeInTheDocument();
+  });
+
+  it('shows the deadline tag only when there is a dueAt', async () => {
+    renderPanel({ dueAt: new Date(Date.now() - 2 * 86_400_000).toISOString() });
+    expect(await screen.findByText(/^Atrasada há \d+ dias?$|^Atrasada hoje$/)).toBeInTheDocument();
   });
 
   it('shows ver mais 1 relato with three reports', async () => {

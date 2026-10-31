@@ -7,13 +7,13 @@ import {
   CLUSTER_PROPERTIES,
   clusterLayers,
   MAP_STYLE_URL,
-  PIN_COLORS,
   PIN_LAYER_ID,
   pointsToGeoJson,
   SELECTION_LAYER_IDS,
   selectionFilter,
   SOURCE_ID,
 } from './map-style';
+import { MapLegend } from './MapLegend';
 import styles from './MapPage.module.css';
 
 /** Ponto para onde o mapa voa (busca); `seq` muda a cada pedido, mesmo para o mesmo lugar. */
@@ -196,24 +196,7 @@ export function OccurrenceMap({ items, bounds, selectedId, focus, onSelect }: Oc
           <Minus size={18} />
         </button>
       </div>
-      <div className={styles.legend}>
-        <p className={styles.legendTitle}>Ocorrências por ponto</p>
-        <ul className={styles.legendList}>
-          <li>
-            <span className={styles.legendDot} style={{ background: PIN_COLORS.danger }} />
-            Mais de 15 relatos
-          </li>
-          <li>
-            <span className={styles.legendDot} style={{ background: PIN_COLORS.warning }} />5 a 15
-            relatos
-          </li>
-          <li>
-            <span className={styles.legendDot} style={{ background: PIN_COLORS.primary }} />
-            Até 4 relatos
-          </li>
-        </ul>
-        <p className={styles.legendNote}>O número indica quantos relatos há no ponto</p>
-      </div>
+      <MapLegend />
     </>
   );
 }

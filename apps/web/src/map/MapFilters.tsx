@@ -1,11 +1,18 @@
 import {
+  DEADLINE_FILTERS,
   MAP_PERIODS,
   MAP_STATUS_FILTERS,
   NO_NEIGHBORHOOD,
+  type DeadlineFilter,
   type MapStatusFilter,
 } from '@alocidadao/shared';
 import { ChevronDown } from 'lucide-react';
-import { periodLabel, STATUS_FILTER_LABELS, type MapQueryState } from './map-query';
+import {
+  DEADLINE_FILTER_LABELS,
+  periodLabel,
+  STATUS_FILTER_LABELS,
+  type MapQueryState,
+} from './map-query';
 import styles from './MapPage.module.css';
 
 export interface CategoryOption {
@@ -59,6 +66,7 @@ export function FilterSelect({ name, valueLabel, value, options, onChange }: Fil
 }
 
 const ALL = 'todas';
+const ALL_DEADLINES = 'todos';
 // Vazio não colide com nenhum nome de bairro.
 const ALL_NEIGHBORHOODS = '';
 const NO_NEIGHBORHOOD_LABEL = 'Sem bairro';
@@ -111,6 +119,21 @@ export function MapFilters({
           label: STATUS_FILTER_LABELS[status],
         }))}
         onChange={(value) => onChange({ status: value as MapStatusFilter })}
+      />
+      <FilterSelect
+        name="Prazo"
+        valueLabel={state.deadline ? DEADLINE_FILTER_LABELS[state.deadline].toLowerCase() : 'todos'}
+        value={state.deadline ?? ALL_DEADLINES}
+        options={[
+          { value: ALL_DEADLINES, label: 'todos' },
+          ...DEADLINE_FILTERS.map((deadline) => ({
+            value: deadline,
+            label: DEADLINE_FILTER_LABELS[deadline],
+          })),
+        ]}
+        onChange={(value) =>
+          onChange({ deadline: value === ALL_DEADLINES ? null : (value as DeadlineFilter) })
+        }
       />
       <FilterSelect
         name="Categoria"

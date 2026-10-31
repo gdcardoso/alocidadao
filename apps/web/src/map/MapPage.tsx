@@ -11,10 +11,14 @@ import { usePanel } from '../shell/use-panel';
 import { TopBar } from '../ui/TopBar';
 import { MapFilters } from './MapFilters';
 import {
+  activeSummaryKey,
+  applySummaryClick,
   categoriesOf,
   DEFAULT_MAP_QUERY,
   mapOccurrencesKey,
   mapSubtitle,
+  mapSummaryKey,
+  mergeMapPatch,
   parseMapQuery,
   toSearchParams,
   type MapQueryState,
@@ -23,6 +27,7 @@ import type { MapFocus } from './OccurrenceMap';
 import { useNeighborhoods } from './use-neighborhoods';
 import styles from './MapPage.module.css';
 import { SearchBox } from './SearchBox';
+import { SummaryStrip } from './SummaryStrip';
 
 // O MapLibre é grande: carrega à parte, só quando o mapa abre.
 const OccurrenceMap = lazy(() =>
@@ -46,7 +51,7 @@ export function MapPage() {
   const [assignTarget, setAssignTarget] = useState<OccurrenceDetail | null>(null);
 
   function update(patch: Partial<MapQueryState>) {
-    setParams(toSearchParams({ ...state, ...patch }), { replace: true });
+    setParams(toSearchParams(mergeMapPatch(state, patch)), { replace: true });
   }
 
   function fetchMap(categoryId: string | null) {
@@ -56,6 +61,7 @@ export function MapPage() {
         days: state.days,
         ...(categoryId ? { categoryId } : {}),
         ...(state.neighborhood ? { neighborhood: state.neighborhood } : {}),
+        ...(state.deadline ? { deadline: state.deadline } : {}),
       }),
     );
   }
@@ -70,6 +76,20 @@ export function MapPage() {
   const categoryQuery = useQuery({
     queryKey: mapOccurrencesKey(tenantId, { ...state, categoryId: null }),
     queryFn: () => fetchMap(null),
+    enabled: !neighborhoods.isPending,
+    placeholderData: keepPreviousData,
+  });
+  // Números da faixa: respeitam categoria, período e bairro; ignoram status e prazo.
+  const summaryQuery = useQuery({
+    queryKey: mapSummaryKey(tenantId, state),
+    queryFn: () =>
+      session.withAuth(() =>
+        api.panelOccurrenceSummary(tenantId, {
+          days: state.days,
+          ...(state.categoryId ? { categoryId: state.categoryId } : {}),
+          ...(state.neighborhood ? { neighborhood: state.neighborhood } : {}),
+        }),
+      ),
     enabled: !neighborhoods.isPending,
     placeholderData: keepPreviousData,
   });
@@ -109,6 +129,13 @@ export function MapPage() {
           />
         }
       />
+      <SummaryStrip
+        summary={summaryQuery.data}
+        active={activeSummaryKey(state)}
+        onClick={(key) =>
+          setParams(toSearchParams(applySummaryClick(state, key)), { replace: true })
+        }
+      />
       <div className={styles.area}>
         <div className={styles.mapWrap}>
           <Suspense fallback={null}>
@@ -130,6 +157,7 @@ export function MapPage() {
           <PointPanel
             key={state.occurrenceId}
             occurrenceId={state.occurrenceId}
+            dueAt={points.find((point) => point.id === state.occurrenceId)?.dueAt ?? null}
             onClose={() => update({ occurrenceId: null })}
             onAssign={setAssignTarget}
             onChanged={onChanged}

@@ -1,4 +1,9 @@
-import { pinStyleFor, type OccurrencePoint } from '@alocidadao/shared';
+import {
+  DEADLINE_STATUSES,
+  pinStyleFor,
+  type DeadlineStatus,
+  type OccurrencePoint,
+} from '@alocidadao/shared';
 import type { ExpressionSpecification, FilterSpecification, LayerSpecification } from 'maplibre-gl';
 
 /** Mesmo estilo do app. */
@@ -11,8 +16,54 @@ export const PIN_COLORS = { primary: '#0057B8', warning: '#B45309', danger: '#B9
 const PIN_STROKE = '#FFFFFF';
 const SELECTED_GLOW = '#1557B0';
 
-/** Soma os relatos dos pontos de cada grupo em `reportCount`. */
-export const CLUSTER_PROPERTIES = { reportCount: ['+', ['get', 'requestCount']] } as const;
+/**
+ * Cor do pino pela situação do prazo. Repete `--success` (tokens.css) e usa `warning` e
+ * `danger` acima; `none` é o cinza de "Na triagem (sem prazo)".
+ */
+export const DEADLINE_PIN_COLORS: Record<DeadlineStatus, string> = {
+  none: '#64748B',
+  on_time: '#007a4a',
+  due_soon: PIN_COLORS.warning,
+  overdue: PIN_COLORS.danger,
+};
+
+/** Peso de cada situação, na ordem do pior: none < on_time < due_soon < overdue. */
+export const DEADLINE_WEIGHT: Record<DeadlineStatus, number> = {
+  none: 0,
+  on_time: 1,
+  due_soon: 2,
+  overdue: 3,
+};
+
+/**
+ * Soma os relatos dos pontos de cada grupo em `reportCount` e guarda o pior prazo em
+ * `worstDeadline` (máximo do peso).
+ */
+export const CLUSTER_PROPERTIES = {
+  reportCount: ['+', ['get', 'requestCount']],
+  worstDeadline: ['max', ['get', 'deadlineWeight']],
+} as const;
+
+/** Peso do grupo (`worstDeadline`) ou do ponto sozinho (`deadlineWeight`). */
+const DEADLINE_WEIGHT_OF: ExpressionSpecification = [
+  'coalesce',
+  ['get', 'worstDeadline'],
+  ['get', 'deadlineWeight'],
+];
+
+/** Cor do círculo: `match` no peso, uma cor por situação. */
+function deadlineColor(): ExpressionSpecification {
+  const branches = DEADLINE_STATUSES.flatMap((status) => [
+    DEADLINE_WEIGHT[status],
+    DEADLINE_PIN_COLORS[status],
+  ]);
+  return [
+    'match',
+    DEADLINE_WEIGHT_OF,
+    ...branches,
+    DEADLINE_PIN_COLORS.none,
+  ] as ExpressionSpecification;
+}
 
 /** Relatos do grupo (`reportCount`) ou do ponto sozinho (`requestCount`). */
 const REPORTS: ExpressionSpecification = [
@@ -47,7 +98,7 @@ export function selectionFilter(selectedId: string | null): FilterSpecification 
   return ['all', ['!', ['has', 'point_count']], ['==', ['get', 'id'], selectedId]];
 }
 
-/** Camadas dos pinos: brilho do selecionado, círculo por faixa de relatos e o número. */
+/** Camadas dos pinos: brilho do selecionado, círculo (tamanho pelos relatos, cor pelo prazo) e o número. */
 export function clusterLayers(selectedId: string | null = null): LayerSpecification[] {
   const radius = pinStep((style) => style.size / 2);
   return [
@@ -69,7 +120,7 @@ export function clusterLayers(selectedId: string | null = null): LayerSpecificat
       source: SOURCE_ID,
       paint: {
         'circle-radius': radius,
-        'circle-color': pinStep((style) => PIN_COLORS[style.tone]),
+        'circle-color': deadlineColor(),
         'circle-stroke-color': PIN_STROKE,
         'circle-stroke-width': 3,
       },
@@ -110,7 +161,7 @@ export interface PointFeatureCollection {
   features: {
     type: 'Feature';
     geometry: { type: 'Point'; coordinates: [number, number] };
-    properties: { id: string; requestCount: number };
+    properties: { id: string; requestCount: number; deadlineWeight: number };
   }[];
 }
 
@@ -120,7 +171,11 @@ export function pointsToGeoJson(items: readonly OccurrencePoint[]): PointFeature
     features: items.map((item) => ({
       type: 'Feature',
       geometry: { type: 'Point', coordinates: [item.location.lng, item.location.lat] },
-      properties: { id: item.id, requestCount: item.requestCount },
+      properties: {
+        id: item.id,
+        requestCount: item.requestCount,
+        deadlineWeight: DEADLINE_WEIGHT[item.deadlineStatus],
+      },
     })),
   };
 }

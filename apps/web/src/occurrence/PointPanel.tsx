@@ -1,5 +1,6 @@
 import { ApiError } from '@alocidadao/api-client';
 import {
+  deadlineTag,
   MAX_SUGGESTIONS,
   PANEL_OCCURRENCE_STATUS_LABELS,
   WORK_ORDER_STATUS_LABELS,
@@ -7,6 +8,7 @@ import {
 } from '@alocidadao/shared';
 import { useQuery } from '@tanstack/react-query';
 import {
+  CalendarClock,
   Check,
   CircleX,
   HardHat,
@@ -46,6 +48,8 @@ import {
 
 export interface PointPanelProps {
   occurrenceId: string;
+  /** Prazo da ocorrência, vindo do ponto do mapa; sem ele não há etiqueta de prazo. */
+  dueAt?: string | null;
   onClose: () => void;
   /** "Atribuir a uma equipe": quem usa o painel abre a W2 com o detalhe. */
   onAssign: (detail: OccurrenceDetail) => void;
@@ -83,7 +87,7 @@ function reportMeta(request: OccurrenceDetail['requests'][number]): string {
  * agrupamento e as ações de juntar, separar, atribuir e recusar. Quem usa deve trocar a
  * `key` junto com `occurrenceId`, para as caixas voltarem todas marcadas.
  */
-export function PointPanel({ occurrenceId, onClose, onAssign, onChanged }: PointPanelProps) {
+export function PointPanel({ occurrenceId, dueAt, onClose, onAssign, onChanged }: PointPanelProps) {
   const { tenantId } = usePanel();
   const { session } = useSession();
   const actions = useOccurrenceActions(tenantId);
@@ -182,6 +186,11 @@ export function PointPanel({ occurrenceId, onClose, onAssign, onChanged }: Point
           <Badge tone="muted" icon={<Hourglass />}>
             {statusLabel}
           </Badge>
+          {dueAt ? (
+            <Badge tone="warning" icon={<CalendarClock />}>
+              {deadlineTag(dueAt, now)}
+            </Badge>
+          ) : null}
           <Badge tone="subtle" icon={<Users />}>
             {reportsLabel(detail.requestCount)}
           </Badge>

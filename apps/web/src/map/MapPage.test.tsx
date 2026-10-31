@@ -17,6 +17,7 @@ vi.mock('../api', () => ({
     panelSearch: vi.fn(),
     panelOccurrence: vi.fn(),
     panelNeighborhoods: vi.fn(),
+    panelOccurrenceSummary: vi.fn(),
   },
 }));
 // O MapLibre precisa de WebGL, que o jsdom não tem.
@@ -24,6 +25,7 @@ vi.mock('./OccurrenceMap', () => ({ OccurrenceMap: () => null }));
 
 const panelOccurrences = vi.mocked(api.panelOccurrences);
 const panelNeighborhoods = vi.mocked(api.panelNeighborhoods);
+const panelOccurrenceSummary = vi.mocked(api.panelOccurrenceSummary);
 const tenantId = '3f2b8c1e-5a4d-4e6f-8a7b-9c0d1e2f3a4b';
 const holes = '33333333-3333-4333-8333-333333333333';
 const lights = '44444444-4444-4444-8444-444444444444';
@@ -85,6 +87,7 @@ function renderPage(path = '/mapa') {
 beforeEach(() => {
   vi.resetAllMocks();
   panelNeighborhoods.mockResolvedValue({ items: ['Centro', 'Vila Nova'], source: 'tenant' });
+  panelOccurrenceSummary.mockResolvedValue({ triage: 5, inProgress: 7, dueSoon: 2, overdue: 1 });
   panelOccurrences.mockImplementation(async (_tenant, params) => {
     const all = [
       point('11111111-1111-4111-8111-111111111111', lights, 'Iluminação'),
@@ -184,5 +187,40 @@ describe('map page', () => {
     for (const call of panelOccurrences.mock.calls) {
       expect(call[1]).not.toHaveProperty('neighborhood');
     }
+  });
+
+  it('strip click filters the map, shows the numbers and the second click resets', async () => {
+    const user = renderPage();
+    const overdue = await screen.findByRole('button', { name: 'Atrasadas: 1' });
+    expect(screen.getByRole('button', { name: 'Na triagem: 5' })).toBeInTheDocument();
+    expect(panelOccurrenceSummary).toHaveBeenCalledWith(tenantId, { days: 30 });
+
+    await user.click(overdue);
+    expect(screen.getByTestId('location')).toHaveTextContent(
+      '?status=em-atendimento&prazo=atrasadas',
+    );
+    expect(screen.getByRole('button', { name: 'Atrasadas: 1' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await waitFor(() =>
+      expect(panelOccurrences).toHaveBeenCalledWith(tenantId, {
+        status: 'in_progress',
+        days: 30,
+        deadline: 'overdue',
+      }),
+    );
+    expect(screen.getByText('Prazo: atrasadas')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Atrasadas: 1' }));
+    expect(screen.getByTestId('location')).toHaveTextContent(/^$/);
+  });
+
+  it('choosing a deadline with status open switches the status', async () => {
+    const user = renderPage('/mapa?status=abertas');
+    await user.selectOptions(await screen.findByLabelText('Prazo'), 'due_soon');
+    expect(screen.getByTestId('location')).toHaveTextContent(
+      '?status=em-atendimento&prazo=vencendo',
+    );
   });
 });

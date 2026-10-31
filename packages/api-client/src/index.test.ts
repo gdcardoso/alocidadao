@@ -345,6 +345,19 @@ describe('panel calls', () => {
     expect(result.items[0]?.name).toBe('Buraco');
   });
 
+  it('panelOccurrenceSummary serializes the filters and parses the counts', async () => {
+    const { calls, fakeFetch } = recorder(() =>
+      Response.json({ triage: 3, inProgress: 5, dueSoon: 1, overdue: 2 }),
+    );
+    const api = createApiClient({ baseUrl: 'http://api', fetch: fakeFetch });
+    const result = await api.panelOccurrenceSummary(TENANT_ID, {
+      days: null,
+      neighborhood: 'Centro',
+    });
+    expect(calls[0]?.url).toBe('http://api/panel/occurrences/summary?days=all&neighborhood=Centro');
+    expect(result).toEqual({ triage: 3, inProgress: 5, dueSoon: 1, overdue: 2 });
+  });
+
   it('panelNeighborhoods gets the effective neighborhoods', async () => {
     const { calls, fakeFetch } = recorder(() =>
       Response.json({ items: ['Centro'], source: 'tenant' }),

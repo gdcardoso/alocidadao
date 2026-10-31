@@ -59,6 +59,7 @@ import {
   mergeResponseSchema,
   occurrenceDetailSchema,
   occurrenceMapResponseSchema,
+  occurrenceSummarySchema,
   panelChallengeResponseSchema,
   panelContextSchema,
   panelCountsSchema,
@@ -128,6 +129,8 @@ import {
   type MergeResponse,
   type OccurrenceDetail,
   type OccurrenceMapQuery,
+  type OccurrenceSummary,
+  type OccurrenceSummaryQuery,
   type OccurrenceMapResponse,
   type PanelChallengeResponse,
   type PanelContext,
@@ -645,6 +648,18 @@ export function createApiClient({
     ): Promise<OccurrenceMapResponse> =>
       occurrenceMapResponseSchema.parse(
         await send('GET', `/panel/occurrences${panelQuery({ ...params })}`, undefined, {
+          ...options,
+          tenantId,
+        }),
+      ),
+
+    panelOccurrenceSummary: async (
+      tenantId: string,
+      params: OccurrenceSummaryQuery,
+      options?: RequestOptions,
+    ): Promise<OccurrenceSummary> =>
+      occurrenceSummarySchema.parse(
+        await send('GET', `/panel/occurrences/summary${panelQuery({ ...params })}`, undefined, {
           ...options,
           tenantId,
         }),

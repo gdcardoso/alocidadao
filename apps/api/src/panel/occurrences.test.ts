@@ -750,19 +750,19 @@ describe('deadline status', () => {
     expect((await points(adminId, seed.tenantId))[0]?.deadlineStatus).toBe('due_soon');
   });
 
-  // O banco usa o relógio real; o prazo "hoje às 23:59:59" de São Paulo é sempre o fim do dia
-  // corrente, então o resultado esperado vale a qualquer hora (sem fixar o now()).
-  it('due today at 23:30 São Paulo is due_soon', async () => {
+  // O banco usa o relógio real: dueAtFor(hoje) é 23:59:59 de hoje em São Paulo, então a
+  // situação é due_soon (dia de hoje, ainda não vencido) a qualquer hora do dia.
+  it('due today at the end of the São Paulo day is due_soon', async () => {
     const seed = await fx.seedPanelTenant();
     const adminId = await fx.newAdmin(seed.tenantId);
-    await withOrder(seed, { dueAt: new Date(`${todayInSaoPaulo()}T23:30:00-03:00`) });
+    await withOrder(seed, { dueAt: dueAtFor(todayInSaoPaulo()) });
     expect((await points(adminId, seed.tenantId))[0]?.deadlineStatus).toBe('due_soon');
   });
 
-  it('one second after dueAtFor is overdue', async () => {
+  it('past due dates are overdue (yesterday dueAtFor and one second ago)', async () => {
     const seed = await fx.seedPanelTenant();
     const adminId = await fx.newAdmin(seed.tenantId);
-    // Prazo de ontem (dueAtFor) já passou; o de hoje ainda não.
+    // Prazo de ontem (dueAtFor) já passou, e um de um segundo atrás também.
     await withOrder(seed, { dueAt: inDays(-1) });
     await withOrder(seed, { dueAt: new Date(Date.now() - 1000) });
     const items = await points(adminId, seed.tenantId);

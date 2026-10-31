@@ -32,4 +32,11 @@ describe('deadlineTag', () => {
   it('overdue for several days counts the days', () => {
     expect(deadlineTag('2026-06-08T02:59:59Z', NOW)).toBe('Atrasada há 3 dias');
   });
+
+  it('at 23:30 São Paulo, a later time the same day is "Vence hoje"', () => {
+    // 23:30 de 10/06 em São Paulo é 02:30Z de 11/06.
+    expect(deadlineTag('2026-06-11T02:59:59Z', new Date('2026-06-11T02:30:00Z'))).toBe(
+      'Vence hoje',
+    );
+  });
 });

@@ -1,6 +1,6 @@
-import type { OccurrencePoint, PanelContext } from '@alocidadao/shared';
+import { NO_NEIGHBORHOOD, type OccurrencePoint, type PanelContext } from '@alocidadao/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, useLocation } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -12,12 +12,18 @@ import { ToastProvider } from '../ui/Toast';
 import { MapPage } from './MapPage';
 
 vi.mock('../api', () => ({
-  api: { panelOccurrences: vi.fn(), panelSearch: vi.fn(), panelOccurrence: vi.fn() },
+  api: {
+    panelOccurrences: vi.fn(),
+    panelSearch: vi.fn(),
+    panelOccurrence: vi.fn(),
+    panelNeighborhoods: vi.fn(),
+  },
 }));
 // O MapLibre precisa de WebGL, que o jsdom não tem.
 vi.mock('./OccurrenceMap', () => ({ OccurrenceMap: () => null }));
 
 const panelOccurrences = vi.mocked(api.panelOccurrences);
+const panelNeighborhoods = vi.mocked(api.panelNeighborhoods);
 const tenantId = '3f2b8c1e-5a4d-4e6f-8a7b-9c0d1e2f3a4b';
 const holes = '33333333-3333-4333-8333-333333333333';
 const lights = '44444444-4444-4444-8444-444444444444';
@@ -76,6 +82,7 @@ function renderPage(path = '/mapa') {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  panelNeighborhoods.mockResolvedValue({ items: ['Centro', 'Vila Nova'], source: 'tenant' });
   panelOccurrences.mockImplementation(async (_tenant, params) => {
     const all = [
       point('11111111-1111-4111-8111-111111111111', lights, 'Iluminação'),
@@ -128,5 +135,52 @@ describe('map page', () => {
     renderPage('/mapa?status=abertas');
     expect(await screen.findByText('Nenhuma ocorrência com estes filtros.')).toBeInTheDocument();
     expect(screen.getByText('Status: abertas')).toBeInTheDocument();
+  });
+
+  it('shows "Sem bairro" as the last option and sends the neighborhood', async () => {
+    const user = renderPage();
+    const select = (await screen.findByLabelText('Bairro')) as HTMLSelectElement;
+    expect([...select.options].map((o) => o.text)).toEqual([
+      'todos',
+      'Centro',
+      'Vila Nova',
+      'Sem bairro',
+    ]);
+    expect(screen.getByText('Bairro: todos')).toBeInTheDocument();
+    await user.selectOptions(select, 'Vila Nova');
+    expect(screen.getByTestId('location')).toHaveTextContent('?bairro=Vila+Nova');
+    await waitFor(() =>
+      expect(panelOccurrences).toHaveBeenCalledWith(tenantId, {
+        status: 'open_and_in_progress',
+        days: 30,
+        neighborhood: 'Vila Nova',
+      }),
+    );
+    await user.selectOptions(select, NO_NEIGHBORHOOD);
+    expect(await screen.findByText('Bairro: Sem bairro')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(panelOccurrences).toHaveBeenCalledWith(tenantId, {
+        status: 'open_and_in_progress',
+        days: 30,
+        neighborhood: NO_NEIGHBORHOOD,
+      }),
+    );
+  });
+
+  it('hides the neighborhood filter when the tenant has none', async () => {
+    panelNeighborhoods.mockResolvedValue({ items: [], source: null });
+    renderPage();
+    await screen.findByLabelText('Categoria');
+    await waitFor(() => expect(panelOccurrences).toHaveBeenCalled());
+    expect(screen.queryByLabelText('Bairro')).not.toBeInTheDocument();
+  });
+
+  it('ignores ?bairro when the tenant has no neighborhoods', async () => {
+    panelNeighborhoods.mockResolvedValue({ items: [], source: null });
+    renderPage('/mapa?bairro=Centro');
+    await screen.findByText('2 ocorrências abertas e em atendimento · últimos 30 dias');
+    for (const call of panelOccurrences.mock.calls) {
+      expect(call[1]).not.toHaveProperty('neighborhood');
+    }
   });
 });

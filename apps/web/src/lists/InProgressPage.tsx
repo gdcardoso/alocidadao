@@ -12,7 +12,9 @@ import { NETWORK_ERROR_MESSAGE, UNEXPECTED_ERROR_MESSAGE } from '../auth/login-e
 import { formatDayMonth } from '../format/date';
 import { formatElapsedShort } from '../format/elapsed';
 import { useNow } from '../format/use-now';
-import { FilterSelect } from '../map/MapFilters';
+import { FilterSelect, NeighborhoodFilter } from '../map/MapFilters';
+import { neighborhoodOrNull } from '../map/map-query';
+import { useNeighborhoods } from '../map/use-neighborhoods';
 import { OccurrenceDrawer } from '../occurrence/OccurrenceDrawer';
 import { useSession } from '../session/SessionProvider';
 import { usePanel } from '../shell/use-panel';
@@ -39,15 +41,26 @@ export function InProgressPage() {
   const rawStatus = params.get('atividade');
   const workOrderStatus = ACTIVE_WORK_ORDER_STATUSES.find((status) => status === rawStatus) ?? null;
   const occurrenceId = params.get('ocorrencia');
+  const neighborhoods = useNeighborhoods();
+  // Sem bairros na prefeitura, um `?bairro=` antigo na URL é ignorado.
+  const neighborhood = neighborhoods.enabled ? neighborhoodOrNull(params.get('bairro')) : null;
   const now = useNow();
 
-  function update(patch: { categoryId?: string | null; workOrderStatus?: WorkOrderStatus | null }) {
+  function update(patch: {
+    categoryId?: string | null;
+    neighborhood?: string | null;
+    workOrderStatus?: WorkOrderStatus | null;
+  }) {
     setParams(
       (previous) => {
         const search = new URLSearchParams(previous);
         if ('categoryId' in patch) {
           if (patch.categoryId) search.set('categoria', patch.categoryId);
           else search.delete('categoria');
+        }
+        if ('neighborhood' in patch) {
+          if (patch.neighborhood) search.set('bairro', patch.neighborhood);
+          else search.delete('bairro');
         }
         if ('workOrderStatus' in patch) {
           if (patch.workOrderStatus) search.set('atividade', patch.workOrderStatus);
@@ -63,6 +76,7 @@ export function InProgressPage() {
     return session.withAuth(() =>
       api.panelInProgress(tenantId, {
         ...(category ? { categoryId: category } : {}),
+        ...(neighborhood ? { neighborhood } : {}),
         ...(workOrderStatus ? { workOrderStatus } : {}),
       }),
     );
@@ -70,8 +84,9 @@ export function InProgressPage() {
 
   // A chave começa com 'in-progress': as ações do painel invalidam esse prefixo.
   const list = useQuery({
-    queryKey: ['in-progress', tenantId, categoryId, workOrderStatus],
+    queryKey: ['in-progress', tenantId, categoryId, neighborhood, workOrderStatus],
     queryFn: () => fetchList(categoryId),
+    enabled: !neighborhoods.isPending,
     placeholderData: keepPreviousData,
   });
   // Opções de categoria: as do alcance, vindas da rota própria.
@@ -166,6 +181,13 @@ export function InProgressPage() {
               ]}
               onChange={(value) => update({ categoryId: value === ALL ? null : value })}
             />
+            {neighborhoods.enabled ? (
+              <NeighborhoodFilter
+                neighborhoods={neighborhoods.items}
+                value={neighborhood}
+                onChange={(value) => update({ neighborhood: value })}
+              />
+            ) : null}
             <FilterSelect
               name="Atividade"
               valueLabel={workOrderStatus ? WORK_ORDER_STATUS_LABELS[workOrderStatus] : ALL}

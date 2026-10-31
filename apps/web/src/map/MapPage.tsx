@@ -20,6 +20,7 @@ import {
   type MapQueryState,
 } from './map-query';
 import type { MapFocus } from './OccurrenceMap';
+import { useNeighborhoods } from './use-neighborhoods';
 import styles from './MapPage.module.css';
 import { SearchBox } from './SearchBox';
 
@@ -33,7 +34,13 @@ export function MapPage() {
   const { tenantId, context } = usePanel();
   const { session } = useSession();
   const [params, setParams] = useSearchParams();
-  const state = useMemo(() => parseMapQuery(params), [params]);
+  const parsed = useMemo(() => parseMapQuery(params), [params]);
+  const neighborhoods = useNeighborhoods();
+  // Sem bairros na prefeitura, um `?bairro=` antigo na URL é ignorado.
+  const state = useMemo(
+    () => (neighborhoods.enabled ? parsed : { ...parsed, neighborhood: null }),
+    [parsed, neighborhoods.enabled],
+  );
   const [focus, setFocus] = useState<MapFocus | null>(null);
   // Ocorrência da W2 (Atribuir a uma equipe), aberta a partir do painel do ponto.
   const [assignTarget, setAssignTarget] = useState<OccurrenceDetail | null>(null);
@@ -48,6 +55,7 @@ export function MapPage() {
         status: state.status,
         days: state.days,
         ...(categoryId ? { categoryId } : {}),
+        ...(state.neighborhood ? { neighborhood: state.neighborhood } : {}),
       }),
     );
   }
@@ -55,12 +63,14 @@ export function MapPage() {
   const mapQuery = useQuery({
     queryKey: mapOccurrencesKey(tenantId, state),
     queryFn: () => fetchMap(state.categoryId),
+    enabled: !neighborhoods.isPending,
     placeholderData: keepPreviousData,
   });
   // Opções de categoria: o mesmo mapa sem o filtro de categoria (sem filtro, é a mesma consulta).
   const categoryQuery = useQuery({
     queryKey: mapOccurrencesKey(tenantId, { ...state, categoryId: null }),
     queryFn: () => fetchMap(null),
+    enabled: !neighborhoods.isPending,
     placeholderData: keepPreviousData,
   });
   const categories = useMemo(
@@ -93,6 +103,7 @@ export function MapPage() {
           <MapFilters
             state={state}
             categories={categories}
+            neighborhoods={neighborhoods.items}
             onChange={update}
             onClear={() => update({ ...DEFAULT_MAP_QUERY, occurrenceId: state.occurrenceId })}
           />

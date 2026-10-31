@@ -1,8 +1,10 @@
+import { NO_NEIGHBORHOOD } from '@alocidadao/shared';
 import { describe, expect, it } from 'vitest';
 import {
   categoriesOf,
   DEFAULT_MAP_QUERY,
   isSearchable,
+  mapOccurrencesKey,
   mapSubtitle,
   parseMapQuery,
   toSearchParams,
@@ -17,13 +19,20 @@ describe('map query', () => {
     expect(DEFAULT_MAP_QUERY).toEqual({
       status: 'open_and_in_progress',
       categoryId: null,
+      neighborhood: null,
       days: 30,
       occurrenceId: null,
     });
     // Os valores padrão não aparecem na URL.
     expect(toSearchParams(DEFAULT_MAP_QUERY).toString()).toBe('');
 
-    const state = { status: 'open', categoryId, days: null, occurrenceId } as const;
+    const state = {
+      status: 'open',
+      categoryId,
+      neighborhood: null,
+      days: null,
+      occurrenceId,
+    } as const;
     const params = toSearchParams(state);
     expect(params.get('status')).toBe('abertas');
     expect(params.get('categoria')).toBe(categoryId);
@@ -34,6 +43,25 @@ describe('map query', () => {
     const inProgress = { ...DEFAULT_MAP_QUERY, status: 'in_progress', days: 7 } as const;
     expect(parseMapQuery(toSearchParams(inProgress))).toEqual(inProgress);
     expect(toSearchParams({ ...DEFAULT_MAP_QUERY, days: 90 }).toString()).toBe('periodo=90');
+  });
+
+  it('parses and writes ?bairro', () => {
+    const state = { ...DEFAULT_MAP_QUERY, neighborhood: 'Vila Nova' };
+    expect(toSearchParams(state).get('bairro')).toBe('Vila Nova');
+    expect(parseMapQuery(toSearchParams(state))).toEqual(state);
+    const none = { ...DEFAULT_MAP_QUERY, neighborhood: NO_NEIGHBORHOOD };
+    expect(toSearchParams(none).toString()).toBe('bairro=__none__');
+    expect(parseMapQuery(new URLSearchParams('bairro=__none__'))).toEqual(none);
+    expect(parseMapQuery(new URLSearchParams('bairro='))).toEqual(DEFAULT_MAP_QUERY);
+    expect(parseMapQuery(new URLSearchParams(`bairro=${'a'.repeat(121)}`))).toEqual(
+      DEFAULT_MAP_QUERY,
+    );
+  });
+
+  it('map key includes the neighborhood', () => {
+    expect(mapOccurrencesKey('t', DEFAULT_MAP_QUERY)).not.toEqual(
+      mapOccurrencesKey('t', { ...DEFAULT_MAP_QUERY, neighborhood: 'Centro' }),
+    );
   });
 
   it('ignores invalid values', () => {

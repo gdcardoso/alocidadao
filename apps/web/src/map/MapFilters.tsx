@@ -1,4 +1,9 @@
-import { MAP_PERIODS, MAP_STATUS_FILTERS, type MapStatusFilter } from '@alocidadao/shared';
+import {
+  MAP_PERIODS,
+  MAP_STATUS_FILTERS,
+  NO_NEIGHBORHOOD,
+  type MapStatusFilter,
+} from '@alocidadao/shared';
 import { ChevronDown } from 'lucide-react';
 import { periodLabel, STATUS_FILTER_LABELS, type MapQueryState } from './map-query';
 import styles from './MapPage.module.css';
@@ -12,6 +17,8 @@ export interface MapFiltersProps {
   state: MapQueryState;
   /** Categorias do alcance, em ordem de nome. */
   categories: readonly CategoryOption[];
+  /** Bairros da prefeitura; vazio esconde o filtro. */
+  neighborhoods: readonly string[];
   onChange: (patch: Partial<MapQueryState>) => void;
   onClear: () => void;
 }
@@ -52,8 +59,46 @@ export function FilterSelect({ name, valueLabel, value, options, onChange }: Fil
 }
 
 const ALL = 'todas';
+// Vazio não colide com nenhum nome de bairro.
+const ALL_NEIGHBORHOODS = '';
+const NO_NEIGHBORHOOD_LABEL = 'Sem bairro';
 
-export function MapFilters({ state, categories, onChange, onClear }: MapFiltersProps) {
+interface NeighborhoodFilterProps {
+  neighborhoods: readonly string[];
+  value: string | null;
+  onChange: (value: string | null) => void;
+}
+
+/** Filtro "Bairro: todos", com "Sem bairro" por último. Quem usa só o mostra se houver bairros. */
+export function NeighborhoodFilter({ neighborhoods, value, onChange }: NeighborhoodFilterProps) {
+  const unknown =
+    value !== null && value !== NO_NEIGHBORHOOD && !neighborhoods.includes(value) ? value : null;
+  return (
+    <FilterSelect
+      name="Bairro"
+      valueLabel={
+        value === null ? 'todos' : value === NO_NEIGHBORHOOD ? NO_NEIGHBORHOOD_LABEL : value
+      }
+      value={value ?? ALL_NEIGHBORHOODS}
+      options={[
+        { value: ALL_NEIGHBORHOODS, label: 'todos' },
+        ...neighborhoods.map((name) => ({ value: name, label: name })),
+        // Bairro da URL que não está na lista.
+        ...(unknown ? [{ value: unknown, label: unknown }] : []),
+        { value: NO_NEIGHBORHOOD, label: NO_NEIGHBORHOOD_LABEL },
+      ]}
+      onChange={(next) => onChange(next === ALL_NEIGHBORHOODS ? null : next)}
+    />
+  );
+}
+
+export function MapFilters({
+  state,
+  categories,
+  neighborhoods,
+  onChange,
+  onClear,
+}: MapFiltersProps) {
   const categoryName = categories.find((item) => item.id === state.categoryId)?.name;
   return (
     <>
@@ -79,6 +124,13 @@ export function MapFilters({ state, categories, onChange, onClear }: MapFiltersP
         ]}
         onChange={(value) => onChange({ categoryId: value === ALL ? null : value })}
       />
+      {neighborhoods.length > 0 ? (
+        <NeighborhoodFilter
+          neighborhoods={neighborhoods}
+          value={state.neighborhood}
+          onChange={(neighborhood) => onChange({ neighborhood })}
+        />
+      ) : null}
       <FilterSelect
         name="Período"
         valueLabel={periodLabel(state.days)}

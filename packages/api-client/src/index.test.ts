@@ -345,6 +345,16 @@ describe('panel calls', () => {
     expect(result.items[0]?.name).toBe('Buraco');
   });
 
+  it('panelNeighborhoods gets the effective neighborhoods', async () => {
+    const { calls, fakeFetch } = recorder(() =>
+      Response.json({ items: ['Centro'], source: 'tenant' }),
+    );
+    const api = createApiClient({ baseUrl: 'http://api', fetch: fakeFetch });
+    const result = await api.panelNeighborhoods(TENANT_ID);
+    expect(calls[0]?.url).toBe('http://api/panel/neighborhoods');
+    expect(result).toEqual({ items: ['Centro'], source: 'tenant' });
+  });
+
   it('panelRequests serializes days null as all and page as text', async () => {
     const { calls, fakeFetch } = recorder(() =>
       Response.json({ total: 0, page: 2, pageSize: 50, items: [] }),

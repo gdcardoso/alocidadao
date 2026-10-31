@@ -1,12 +1,18 @@
 import type { RequestRow } from '@alocidadao/shared';
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { NO_NEIGHBORHOOD } from '@alocidadao/shared';
 import { api } from '../api';
 import { RequestsPage } from './RequestsPage';
 import { renderListPage, tenantId } from './test-render';
 
 vi.mock('../api', () => ({
-  api: { panelRequests: vi.fn(), panelOccurrence: vi.fn(), panelCategoryOptions: vi.fn() },
+  api: {
+    panelRequests: vi.fn(),
+    panelOccurrence: vi.fn(),
+    panelCategoryOptions: vi.fn(),
+    panelNeighborhoods: vi.fn(),
+  },
 }));
 
 const panelRequests = vi.mocked(api.panelRequests);
@@ -42,6 +48,10 @@ const rows: RequestRow[] = [
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(api.panelNeighborhoods).mockResolvedValue({
+    items: ['Centro', 'Vila Nova'],
+    source: 'tenant',
+  });
   vi.mocked(api.panelCategoryOptions).mockResolvedValue({
     items: [
       { id: holesCategory, name: 'Buraco na via' },
@@ -148,5 +158,41 @@ describe('requests page', () => {
     renderListPage(<RequestsPage />, '/solicitacoes?periodo=todo');
     expect(await screen.findByText('Nenhuma solicitação com estes filtros.')).toBeInTheDocument();
     expect(screen.getByText('0 solicitações · todo o período')).toBeInTheDocument();
+  });
+
+  it('sends neighborhood to the API', async () => {
+    const user = renderListPage(<RequestsPage />, '/solicitacoes');
+    const select = (await screen.findByLabelText('Bairro')) as HTMLSelectElement;
+    expect([...select.options].map((o) => o.text)).toEqual([
+      'todos',
+      'Centro',
+      'Vila Nova',
+      'Sem bairro',
+    ]);
+    await user.selectOptions(select, 'Centro');
+    expect(screen.getByTestId('location')).toHaveTextContent('bairro=Centro');
+    await waitFor(() =>
+      expect(panelRequests).toHaveBeenCalledWith(
+        tenantId,
+        expect.objectContaining({ neighborhood: 'Centro' }),
+      ),
+    );
+    await user.selectOptions(select, NO_NEIGHBORHOOD);
+    await waitFor(() =>
+      expect(panelRequests).toHaveBeenCalledWith(
+        tenantId,
+        expect.objectContaining({ neighborhood: NO_NEIGHBORHOOD }),
+      ),
+    );
+  });
+
+  it('hides the filter and ignores ?bairro when the tenant has no neighborhoods', async () => {
+    vi.mocked(api.panelNeighborhoods).mockResolvedValue({ items: [], source: null });
+    renderListPage(<RequestsPage />, '/solicitacoes?bairro=Centro');
+    await waitFor(() => expect(panelRequests).toHaveBeenCalled());
+    expect(screen.queryByLabelText('Bairro')).not.toBeInTheDocument();
+    for (const call of panelRequests.mock.calls) {
+      expect(call[1]).not.toHaveProperty('neighborhood');
+    }
   });
 });

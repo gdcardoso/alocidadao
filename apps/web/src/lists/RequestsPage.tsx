@@ -14,8 +14,9 @@ import { useSearchParams } from 'react-router';
 import { api } from '../api';
 import { NETWORK_ERROR_MESSAGE, UNEXPECTED_ERROR_MESSAGE } from '../auth/login-errors';
 import { formatDate } from '../format/date';
-import { periodLabel } from '../map/map-query';
-import { FilterSelect } from '../map/MapFilters';
+import { neighborhoodOrNull, periodLabel } from '../map/map-query';
+import { FilterSelect, NeighborhoodFilter } from '../map/MapFilters';
+import { useNeighborhoods } from '../map/use-neighborhoods';
 import { OccurrenceDrawer } from '../occurrence/OccurrenceDrawer';
 import { useSession } from '../session/SessionProvider';
 import { usePanel } from '../shell/use-panel';
@@ -85,6 +86,9 @@ export function RequestsPage() {
   const status = REQUEST_STATUSES.find((item) => item === statusParam) ?? null;
   const rawCategory = params.get('categoria');
   const categoryId = rawCategory && UUID.test(rawCategory) ? rawCategory : null;
+  const neighborhoods = useNeighborhoods();
+  // Sem bairros na prefeitura, um `?bairro=` antigo na URL é ignorado.
+  const neighborhood = neighborhoods.enabled ? neighborhoodOrNull(params.get('bairro')) : null;
   const rawPeriod = params.get('periodo');
   const days: MapPeriod =
     rawPeriod !== null && rawPeriod in PERIOD_PARAM
@@ -100,6 +104,7 @@ export function RequestsPage() {
     patch: Partial<{
       status: RequestStatus | null;
       categoryId: string | null;
+      neighborhood: string | null;
       days: MapPeriod;
       q: string;
       page: number;
@@ -115,6 +120,7 @@ export function RequestsPage() {
         };
         if ('status' in patch) set('status', patch.status ?? null);
         if ('categoryId' in patch) set('categoria', patch.categoryId ?? null);
+        if ('neighborhood' in patch) set('bairro', patch.neighborhood ?? null);
         if ('days' in patch)
           set('periodo', patch.days === DEFAULT_DAYS ? null : periodParam(patch.days ?? null));
         if ('q' in patch) set('q', patch.q ?? null);
@@ -142,6 +148,7 @@ export function RequestsPage() {
       api.panelRequests(tenantId, {
         ...(status ? { status } : {}),
         ...(category ? { categoryId: category } : {}),
+        ...(neighborhood ? { neighborhood } : {}),
         days,
         q: term,
         page: pageNumber,
@@ -151,8 +158,9 @@ export function RequestsPage() {
 
   // A chave começa com 'requests': as ações do painel invalidam esse prefixo.
   const list = useQuery({
-    queryKey: ['requests', tenantId, status, categoryId, days, term, page],
+    queryKey: ['requests', tenantId, status, categoryId, neighborhood, days, term, page],
     queryFn: () => fetchList(categoryId, page),
+    enabled: !neighborhoods.isPending,
     placeholderData: keepPreviousData,
   });
   // Opções de categoria: as do alcance, vindas da rota própria.
@@ -214,6 +222,13 @@ export function RequestsPage() {
               ]}
               onChange={(value) => update({ categoryId: value === ALL ? null : value })}
             />
+            {neighborhoods.enabled ? (
+              <NeighborhoodFilter
+                neighborhoods={neighborhoods.items}
+                value={neighborhood}
+                onChange={(value) => update({ neighborhood: value })}
+              />
+            ) : null}
             <FilterSelect
               name="Período"
               valueLabel={periodLabel(days)}

@@ -4,6 +4,8 @@ import { MAP_STATUS_FILTERS, type MapPeriod, type MapStatusFilter } from '@aloci
 export interface MapQueryState {
   status: MapStatusFilter;
   categoryId: string | null;
+  /** Nome do bairro, ou `NO_NEIGHBORHOOD` para as ocorrências sem bairro. */
+  neighborhood: string | null;
   days: MapPeriod;
   occurrenceId: string | null;
 }
@@ -11,6 +13,7 @@ export interface MapQueryState {
 export const DEFAULT_MAP_QUERY: MapQueryState = {
   status: 'open_and_in_progress',
   categoryId: null,
+  neighborhood: null,
   days: 30,
   occurrenceId: null,
 };
@@ -30,6 +33,13 @@ function uuidOrNull(value: string | null): string | null {
   return value && UUID.test(value) ? value : null;
 }
 
+const MAX_NEIGHBORHOOD_LENGTH = 120;
+
+/** Valor de `?bairro=`: texto de 1 a 120 caracteres, ou nulo. */
+export function neighborhoodOrNull(value: string | null): string | null {
+  return value && value.length <= MAX_NEIGHBORHOOD_LENGTH ? value : null;
+}
+
 export function parseMapQuery(params: URLSearchParams): MapQueryState {
   const statusParam = params.get('status');
   const status =
@@ -43,6 +53,7 @@ export function parseMapQuery(params: URLSearchParams): MapQueryState {
   return {
     status,
     categoryId: uuidOrNull(params.get('categoria')),
+    neighborhood: neighborhoodOrNull(params.get('bairro')),
     days,
     occurrenceId: uuidOrNull(params.get('ocorrencia')),
   };
@@ -52,6 +63,7 @@ export function toSearchParams(state: MapQueryState): URLSearchParams {
   const params = new URLSearchParams();
   if (state.status !== DEFAULT_MAP_QUERY.status) params.set('status', STATUS_PARAM[state.status]);
   if (state.categoryId) params.set('categoria', state.categoryId);
+  if (state.neighborhood) params.set('bairro', state.neighborhood);
   if (state.days !== DEFAULT_MAP_QUERY.days) {
     params.set('periodo', state.days === null ? 'todo' : String(state.days));
   }
@@ -115,7 +127,14 @@ export function categoriesOf(
 /** Chave do mapa: `['occurrences', …]`, que as ações invalidam pelo prefixo. */
 export function mapOccurrencesKey(
   tenantId: string,
-  state: Pick<MapQueryState, 'status' | 'days' | 'categoryId'>,
+  state: Pick<MapQueryState, 'status' | 'days' | 'categoryId' | 'neighborhood'>,
 ) {
-  return ['occurrences', tenantId, state.status, state.days, state.categoryId] as const;
+  return [
+    'occurrences',
+    tenantId,
+    state.status,
+    state.days,
+    state.categoryId,
+    state.neighborhood,
+  ] as const;
 }

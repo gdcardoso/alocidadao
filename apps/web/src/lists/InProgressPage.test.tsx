@@ -1,12 +1,18 @@
 import type { InProgressRow, OccurrenceDetail } from '@alocidadao/shared';
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { NO_NEIGHBORHOOD } from '@alocidadao/shared';
 import { api } from '../api';
 import { InProgressPage } from './InProgressPage';
 import { renderListPage, tenantId } from './test-render';
 
 vi.mock('../api', () => ({
-  api: { panelInProgress: vi.fn(), panelOccurrence: vi.fn(), panelCategoryOptions: vi.fn() },
+  api: {
+    panelInProgress: vi.fn(),
+    panelOccurrence: vi.fn(),
+    panelCategoryOptions: vi.fn(),
+    panelNeighborhoods: vi.fn(),
+  },
 }));
 
 const panelInProgress = vi.mocked(api.panelInProgress);
@@ -74,6 +80,10 @@ function detail(): OccurrenceDetail {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(api.panelNeighborhoods).mockResolvedValue({
+    items: ['Centro', 'Vila Nova'],
+    source: 'tenant',
+  });
   vi.mocked(api.panelCategoryOptions).mockResolvedValue({
     items: [{ id: holesCategory, name: 'Buraco na via' }],
   });
@@ -137,5 +147,41 @@ describe('in progress page', () => {
     panelInProgress.mockResolvedValue({ total: 0, items: [] });
     renderListPage(<InProgressPage />, '/em-atendimento');
     expect(await screen.findByText('Nenhuma ocorrência em atendimento.')).toBeInTheDocument();
+  });
+
+  it('sends neighborhood to the API', async () => {
+    const user = renderListPage(<InProgressPage />, '/em-atendimento');
+    const select = (await screen.findByLabelText('Bairro')) as HTMLSelectElement;
+    expect([...select.options].map((o) => o.text)).toEqual([
+      'todos',
+      'Centro',
+      'Vila Nova',
+      'Sem bairro',
+    ]);
+    await user.selectOptions(select, 'Centro');
+    expect(screen.getByTestId('location')).toHaveTextContent('bairro=Centro');
+    await waitFor(() =>
+      expect(panelInProgress).toHaveBeenCalledWith(
+        tenantId,
+        expect.objectContaining({ neighborhood: 'Centro' }),
+      ),
+    );
+    await user.selectOptions(select, NO_NEIGHBORHOOD);
+    await waitFor(() =>
+      expect(panelInProgress).toHaveBeenCalledWith(
+        tenantId,
+        expect.objectContaining({ neighborhood: NO_NEIGHBORHOOD }),
+      ),
+    );
+  });
+
+  it('hides the filter and ignores ?bairro when the tenant has no neighborhoods', async () => {
+    vi.mocked(api.panelNeighborhoods).mockResolvedValue({ items: [], source: null });
+    renderListPage(<InProgressPage />, '/em-atendimento?bairro=Centro');
+    await waitFor(() => expect(panelInProgress).toHaveBeenCalled());
+    expect(screen.queryByLabelText('Bairro')).not.toBeInTheDocument();
+    for (const call of panelInProgress.mock.calls) {
+      expect(call[1]).not.toHaveProperty('neighborhood');
+    }
   });
 });

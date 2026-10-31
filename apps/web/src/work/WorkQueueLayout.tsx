@@ -14,21 +14,27 @@ export interface WorkQueueLayoutProps {
 
 /**
  * Mestre-detalhe da W3 e da W4: fila de 360 à esquerda e detalhe no resto. A URL guarda o item
- * aberto (`?atividade=`). Sem item na URL, ou com um que saiu da fila (publicado, devolvido,
- * decidido), abre o que ocupa o lugar dele: o próximo, ou o último se era o fim da fila.
+ * aberto (`?atividade=`). Sem item na URL, ou com um que saiu da fila depois de aberto aqui
+ * (publicado, devolvido, decidido), abre o que ocupa o lugar dele: o próximo, ou o último se era
+ * o fim da fila. Um id que nunca esteve na fila (link do sino de uma atividade que já saiu) não
+ * abre outra atividade: o detalhe avisa e a fila segue usável.
  */
 export function WorkQueueLayout({ items, renderCard, renderDetail, empty }: WorkQueueLayoutProps) {
   const [params, setParams] = useSearchParams();
   const [lastIndex, setLastIndex] = useState(0);
+  // Último id da URL que foi encontrado na fila: distingue "saiu depois de aberto" de "nunca esteve".
+  const [seenId, setSeenId] = useState<string | null>(null);
   const urlId = params.get('atividade');
 
   const fromUrl = items.findIndex((item) => item.workOrderId === urlId);
-  const index = fromUrl >= 0 ? fromUrl : Math.min(lastIndex, items.length - 1);
+  const gone = urlId !== null && fromUrl < 0 && urlId !== seenId && items.length > 0;
+  const index = fromUrl >= 0 ? fromUrl : gone ? -1 : Math.min(lastIndex, items.length - 1);
   const selected = items[index];
   const selectedId = selected?.workOrderId ?? null;
 
   // Guarda a posição aberta (ajuste de estado durante a renderização).
   if (index >= 0 && index !== lastIndex) setLastIndex(index);
+  if (fromUrl >= 0 && urlId !== seenId) setSeenId(urlId);
 
   // Mantém a URL com o item aberto (sem empilhar histórico).
   useEffect(() => {
@@ -69,7 +75,13 @@ export function WorkQueueLayout({ items, renderCard, renderDetail, empty }: Work
           );
         })}
       </ul>
-      <section className={styles.detail}>{selectedId ? renderDetail(selectedId) : null}</section>
+      <section className={styles.detail}>
+        {selectedId ? (
+          renderDetail(selectedId)
+        ) : gone ? (
+          <p className={styles.empty}>Esta atividade já saiu da fila.</p>
+        ) : null}
+      </section>
     </div>
   );
 }

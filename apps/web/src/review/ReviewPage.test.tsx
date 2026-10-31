@@ -221,6 +221,20 @@ describe('ReviewPage', () => {
     ).toBeInTheDocument();
   });
 
+  it('opening an activity that left the queue shows "Esta atividade já saiu da fila."', async () => {
+    const { user } = renderPage('/revisao?atividade=99999999-9999-4999-8999-999999999999');
+    expect(await screen.findByText('Esta atividade já saiu da fila.')).toBeVisible();
+    // Não abre a primeira nem a última: nenhum detalhe é pedido e a URL não muda.
+    expect(panelReview).not.toHaveBeenCalled();
+    expect(screen.getByTestId('location')).toHaveTextContent(
+      'atividade=99999999-9999-4999-8999-999999999999',
+    );
+    // A fila segue usável.
+    await user.click(screen.getByRole('button', { name: /Poda de árvore/ }));
+    await screen.findByRole('heading', { name: 'Poda de árvore' });
+    expect(screen.queryByText('Esta atividade já saiu da fila.')).not.toBeInTheDocument();
+  });
+
   it('after publishing the next item opens and counts are invalidated', async () => {
     const { user, invalidate } = renderPage();
     await screen.findByText('Fotos do serviço');

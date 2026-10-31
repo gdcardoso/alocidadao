@@ -101,6 +101,12 @@ describe('ManagersPage', () => {
     ).toBeInTheDocument();
   });
 
+  it('managers table has no "⋯" header text', async () => {
+    renderAdminPage(<ManagersPage />, '/equipes/gestores');
+    await screen.findByText('Carlos Almeida');
+    expect(screen.queryByText('⋯')).not.toBeInTheDocument();
+  });
+
   it('admin row has no actions menu', async () => {
     renderAdminPage(<ManagersPage />, '/equipes/gestores');
     await screen.findByText('Rita Campos');

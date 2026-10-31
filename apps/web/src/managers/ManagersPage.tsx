@@ -147,7 +147,7 @@ export function ManagersPage() {
     },
     {
       key: 'actions',
-      header: '⋯',
+      header: '',
       width: 60,
       render: (row) =>
         row.role === 'tenant_admin' ? null : (

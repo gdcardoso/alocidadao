@@ -210,9 +210,9 @@ Um de cada vez, depois dos testes de risco.
 2. **Acesso:** código por celular no app, CPF + código por e-mail (Resend, `nao-responda@alocidadao.com.br`) no painel, sessões, `devices` e a regra dos 90 dias.
 3. **App do cidadão:** telas 0 a 8, prefeitura pela localização, agrupamento pela 5b e registro offline, reaproveitando a fila dos testes de risco. **Feito** (plano `docs/superpowers/plans/2026-10-23-app-do-cidadao.md`).
 4. **App do agente:** telas A1 a A5, sobre a fila e o cache dos testes de risco. **Feito** (plano `docs/superpowers/plans/2026-10-24-app-do-agente.md`).
-5. **Painel da prefeitura:** W0 a W7, com mapa, triagem, agrupamento, atribuição, revisão e configurações. Em duas partes: **5a feito** (login, menu, mapa, triagem, juntar e separar, atribuir e recusar; plano `docs/superpowers/plans/2026-10-26-painel-5a.md`); o 5b traz revisão, impedimentos, listas, equipes, categorias e setores.
-6. **Backoffice:** P1 a P6.
-7. **Notificações:** fila de envio, caixa de entrada, e-mails e conclusão automática em 7 dias.
+5. **Painel da prefeitura:** W0 a W7, com mapa, triagem, agrupamento, atribuição, revisão e configurações. Em duas partes: **5a feito** (login, menu, mapa, triagem, juntar e separar, atribuir e recusar; plano `docs/superpowers/plans/2026-10-26-painel-5a.md`); **5b feito** (revisão, impedimentos, listas, equipes, categorias e setores; plano `docs/superpowers/plans/2026-10-26-painel-5b.md`).
+6. **Backoffice:** P1 a P6. **Feito** em duas partes (planos `docs/superpowers/plans/2026-10-26-backoffice-6a.md` e `docs/superpowers/plans/2026-10-28-backoffice-6b.md`).
+7. **Notificações:** fila de envio, caixa de entrada, e-mails e conclusão automática em 7 dias. **Feito** (plano `docs/superpowers/plans/2026-10-29-notificacoes.md`); a entrega real de push com Firebase e Apple fica para depois dos testes em aparelho real.
 8. **Infraestrutura:** Droplet e Spaces na DigitalOcean, backups, observabilidade e publicação nas lojas.
 
 ## Perguntas em aberto

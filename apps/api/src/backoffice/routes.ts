@@ -14,6 +14,7 @@ import { registerFrozenAccountRoutes } from './frozen-accounts.js';
 import { requirePlatformStaff } from './staff.js';
 import { registerNeighborhoodRoutes } from './neighborhoods.js';
 import { registerStaffRoutes } from './staff-routes.js';
+import { registerTenantListRoutes } from './tenant-lists.js';
 import { registerTenantRoutes } from './tenants.js';
 
 const { tenants, users } = schema;
@@ -95,6 +96,7 @@ export function registerBackofficeRoutes(instance: FastifyInstance, deps: Backof
     );
 
   registerTenantRoutes(instance, { db, preHandler });
+  registerTenantListRoutes(instance, { db, preHandler });
   registerNeighborhoodRoutes(instance, { db, preHandler });
   registerCreateTenantRoutes(instance, { db, preHandler });
   registerCityInterestRoutes(instance, { db, preHandler });

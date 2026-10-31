@@ -508,6 +508,25 @@ export function createApiClient({
     backofficeTenant: async (id: string, options?: RequestOptions): Promise<TenantDetail> =>
       tenantDetailSchema.parse(await send('GET', tenantPath(id), undefined, options)),
 
+    backofficeTenantTeams: async (id: string, options?: RequestOptions): Promise<TeamsResponse> =>
+      teamsResponseSchema.parse(await send('GET', tenantPath(id, 'teams'), undefined, options)),
+
+    backofficeTenantManagers: async (
+      id: string,
+      options?: RequestOptions,
+    ): Promise<ManagersResponse> =>
+      managersResponseSchema.parse(
+        await send('GET', tenantPath(id, 'managers'), undefined, options),
+      ),
+
+    backofficeTenantCategories: async (
+      id: string,
+      options?: RequestOptions,
+    ): Promise<CategoriesResponse> =>
+      categoriesResponseSchema.parse(
+        await send('GET', tenantPath(id, 'categories'), undefined, options),
+      ),
+
     backofficeSetTenantStatus: async (
       id: string,
       body: TenantStatusBody,

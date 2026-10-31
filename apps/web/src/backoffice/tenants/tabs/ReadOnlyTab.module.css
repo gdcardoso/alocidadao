@@ -1,0 +1,42 @@
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.hint {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.state {
+  color: var(--text-secondary);
+}
+
+.error {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.muted {
+  color: var(--text-secondary);
+}
+
+.cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.off {
+  color: var(--text-secondary);
+}

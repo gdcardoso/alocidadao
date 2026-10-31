@@ -40,3 +40,8 @@ export interface TenantTabProps {
   /** Admin da equipe interna: edita; o suporte só consulta. */
   isAdmin: boolean;
 }
+
+/** Abas só leitura: levam ao painel da prefeitura (modo suporte) no caminho dado. */
+export interface ReadOnlyTabProps extends TenantTabProps {
+  onOpenPanel: (path: string) => void;
+}

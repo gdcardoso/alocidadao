@@ -199,9 +199,15 @@ export function TenantDetailPage() {
         {activeTab === 'contract' && context.data ? (
           <ContractTab tenant={tenant} isAdmin={isAdmin} />
         ) : null}
-        {activeTab === 'teams' ? <TeamsTab tenant={tenant} isAdmin={isAdmin} /> : null}
-        {activeTab === 'managers' ? <ManagersTab tenant={tenant} isAdmin={isAdmin} /> : null}
-        {activeTab === 'categories' ? <CategoriesTab tenant={tenant} isAdmin={isAdmin} /> : null}
+        {activeTab === 'teams' ? (
+          <TeamsTab tenant={tenant} isAdmin={isAdmin} onOpenPanel={enterAt} />
+        ) : null}
+        {activeTab === 'managers' ? (
+          <ManagersTab tenant={tenant} isAdmin={isAdmin} onOpenPanel={enterAt} />
+        ) : null}
+        {activeTab === 'categories' ? (
+          <CategoriesTab tenant={tenant} isAdmin={isAdmin} onOpenPanel={enterAt} />
+        ) : null}
         {activeTab === 'citizens' ? <CitizensTab tenant={tenant} isAdmin={isAdmin} /> : null}
         {activeTab === 'audit' ? <AuditTab tenant={tenant} isAdmin={isAdmin} /> : null}
         {activeTab === 'overview' ? (

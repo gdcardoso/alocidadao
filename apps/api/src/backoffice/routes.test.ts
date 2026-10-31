@@ -143,6 +143,40 @@ const SCENARIOS: Record<string, (staffId: string) => Promise<Scenario>> = {
       personal: [],
     };
   },
+  'PUT /backoffice/tenants/:id/neighborhoods': async () => {
+    const tenantId = await fx.createTenant('active');
+    const ring = [
+      [0, 0],
+      [1, 0],
+      [1, 1],
+      [0, 1],
+      [0, 0],
+    ];
+    return {
+      call: {
+        method: 'PUT',
+        url: `/backoffice/tenants/${tenantId}/neighborhoods`,
+        payload: {
+          type: 'FeatureCollection',
+          features: [
+            {
+              type: 'Feature',
+              properties: { nome: 'Centro' },
+              geometry: { type: 'Polygon', coordinates: [ring] },
+            },
+          ],
+        },
+      },
+      personal: [],
+    };
+  },
+  'DELETE /backoffice/tenants/:id/neighborhoods': async () => {
+    const tenantId = await fx.createTenant('active');
+    return {
+      call: { method: 'DELETE', url: `/backoffice/tenants/${tenantId}/neighborhoods` },
+      personal: [],
+    };
+  },
   'POST /backoffice/tenants/:id/support/enter': async () => {
     const tenantId = await fx.createTenant('active');
     return {

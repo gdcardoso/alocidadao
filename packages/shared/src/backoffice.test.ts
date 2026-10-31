@@ -8,6 +8,7 @@ import {
   cityInterestCsv,
   formatChange,
   frozenAccountRecoverBodySchema,
+  neighborhoodsUploadSchema,
   staffCreateBodySchema,
   staffUpdateBodySchema,
   tenantCreateBodySchema,
@@ -79,7 +80,7 @@ describe('backoffice contracts', () => {
     for (const action of STAFF_AUDIT_ACTIONS) {
       expect(STAFF_AUDIT_ACTION_LABELS[action]).toBeTruthy();
     }
-    expect(STAFF_AUDIT_ACTIONS).toHaveLength(34);
+    expect(STAFF_AUDIT_ACTIONS).toHaveLength(36);
   });
 
   it('every commercial status and staff audit action has a label', () => {
@@ -158,5 +159,45 @@ describe('backoffice contracts', () => {
     expect(frozenAccountRecoverBodySchema.safeParse({ ...base, code: '12345' }).success).toBe(
       false,
     );
+  });
+});
+
+describe('neighborhoodsUploadSchema', () => {
+  const ring = [
+    [0, 0],
+    [1, 0],
+    [1, 1],
+    [0, 1],
+    [0, 0],
+  ];
+  const feature = (
+    properties: Record<string, unknown>,
+    geometry: unknown = { type: 'Polygon', coordinates: [ring] },
+  ) => ({
+    type: 'Feature',
+    properties,
+    geometry,
+  });
+  const collection = (...features: unknown[]) => ({ type: 'FeatureCollection', features });
+
+  it('accepts polygons with nome, name or NM_BAIRRO', () => {
+    const body = collection(
+      feature({ nome: 'A' }),
+      feature({ name: 'B' }),
+      feature({ NM_BAIRRO: 'C' }),
+    );
+    expect(neighborhoodsUploadSchema.safeParse(body).success).toBe(true);
+  });
+
+  it('rejects points, empty and duplicate names (ignoring case) and empty collections', () => {
+    const point = { type: 'Point', coordinates: [0, 0] };
+    for (const body of [
+      collection(feature({ nome: 'A' }, point)),
+      collection(feature({ nome: ' ' })),
+      collection(feature({ nome: 'Centro' }), feature({ name: ' CENTRO ' })),
+      collection(),
+    ]) {
+      expect(neighborhoodsUploadSchema.safeParse(body).success).toBe(false);
+    }
   });
 });

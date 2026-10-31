@@ -49,6 +49,8 @@ export const STAFF_AUDIT_ACTIONS = [
   'tenant.activate',
   'tenant.suspend',
   'tenant.reactivate',
+  'tenant.neighborhoods_replace',
+  'tenant.neighborhoods_reset',
   'occurrence.assign',
   'occurrence.reject',
   'occurrence.merge',
@@ -87,6 +89,8 @@ export const STAFF_AUDIT_ACTION_LABELS: Record<StaffAuditAction, string> = {
   'tenant.activate': 'Ativou a prefeitura',
   'tenant.suspend': 'Suspendeu a prefeitura',
   'tenant.reactivate': 'Reativou a prefeitura',
+  'tenant.neighborhoods_replace': 'Carregou os bairros',
+  'tenant.neighborhoods_reset': 'Voltou para a malha do IBGE',
   'occurrence.assign': 'Atribuiu uma ocorrência',
   'occurrence.reject': 'Recusou uma ocorrência',
   'occurrence.merge': 'Juntou ocorrências',
@@ -341,6 +345,78 @@ export const tenantStatusBodySchema = z.object({
   action: z.enum(['activate', 'suspend', 'reactivate']),
 });
 export type TenantStatusBody = z.infer<typeof tenantStatusBodySchema>;
+
+// Bairros da prefeitura (carga pelo backoffice)
+
+export const NEIGHBORHOODS_MAX_FEATURES = 2000;
+
+const positionSchema = z
+  .array(z.number())
+  .min(2)
+  .max(3)
+  .refine(([lng, lat]) => Math.abs(lng!) <= 180 && Math.abs(lat!) <= 90);
+/** Anel fechado: pelo menos 4 posições, a última igual à primeira. */
+const ringSchema = z
+  .array(positionSchema)
+  .min(4)
+  .refine((ring) => {
+    const first = ring[0]!;
+    const last = ring[ring.length - 1]!;
+    return first[0] === last[0] && first[1] === last[1];
+  });
+const polygonCoordinatesSchema = z.array(ringSchema).min(1);
+
+const neighborhoodGeometrySchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('Polygon'), coordinates: polygonCoordinatesSchema }),
+  z.object({
+    type: z.literal('MultiPolygon'),
+    coordinates: z.array(polygonCoordinatesSchema).min(1),
+  }),
+]);
+
+const neighborhoodFeatureSchema = z.object({
+  type: z.literal('Feature'),
+  properties: z.record(z.string(), z.unknown()).nullable().optional(),
+  geometry: neighborhoodGeometrySchema,
+});
+
+/** Nome do bairro: `nome`, `name` ou `NM_BAIRRO` (nessa ordem), sem espaços nas pontas. */
+export function neighborhoodFeatureName(properties: Record<string, unknown> | null | undefined) {
+  for (const key of ['nome', 'name', 'NM_BAIRRO']) {
+    const value = properties?.[key];
+    if (typeof value === 'string' && value.trim() !== '') return value.trim();
+  }
+  return null;
+}
+
+/**
+ * GeoJSON `FeatureCollection` de bairros: só Polygon e MultiPolygon, nome não vazio e único
+ * (sem diferenciar maiúsculas), de 1 a 2000 feições.
+ */
+export const neighborhoodsUploadSchema = z
+  .object({
+    type: z.literal('FeatureCollection'),
+    features: z.array(neighborhoodFeatureSchema).min(1).max(NEIGHBORHOODS_MAX_FEATURES),
+  })
+  .superRefine((collection, ctx) => {
+    const seen = new Set<string>();
+    collection.features.forEach((feature, index) => {
+      const name = neighborhoodFeatureName(feature.properties);
+      const key = name?.toLowerCase();
+      if (name === null || seen.has(key!)) {
+        ctx.addIssue({ code: 'custom', path: ['features', index], message: 'invalid_name' });
+        return;
+      }
+      seen.add(key!);
+    });
+  });
+export type NeighborhoodsUpload = z.infer<typeof neighborhoodsUploadSchema>;
+
+export const neighborhoodsSummarySchema = z.object({
+  count: z.number().int().nonnegative(),
+  source: z.enum(['ibge', 'tenant']).nullable(),
+});
+export type NeighborhoodsSummary = z.infer<typeof neighborhoodsSummarySchema>;
 
 // Interesse por cidade (P5)
 

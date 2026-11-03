@@ -70,7 +70,7 @@ describe('findMunicipalityAt', () => {
   });
 
   it('com limites sobrepostos, fica o menor que contém o ponto', async () => {
-    // Como a "Cidade Demo" do seed, que fica dentro do limite real de São Paulo.
+    // Um polígono pequeno dentro de outro maior, como um limite desenhado à mão dentro do real.
     await upsertMunicipalities(owner.db, [
       {
         ibgeCode: '9999803',

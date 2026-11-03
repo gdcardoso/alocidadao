@@ -292,9 +292,11 @@ Os textos das Decisões do plano já foram aprovados. Abaixo, só o que quem imp
 ### Em aberto depois do pronto para validação
 
 - [x] ~~Mascarar CPF e e-mail na rota de gestores do backoffice~~ (resolvido na rodada final).
-- **Importar a malha real do IBGE** por UF (`pnpm --filter @alocidadao/db import:neighborhoods`) e conferir o tempo e o resultado com um município real; só a carga por arquivo da prefeitura foi vista no navegador.
+- **Importar a malha real do IBGE** por UF (`pnpm --filter @alocidadao/db import:neighborhoods`) e conferir o tempo e o resultado com um município real. Em 03/11/2026 a demo mudou para Goiânia, mas a malha de bairros do IBGE (Censo 2022) de GO só tem Pires do Rio e Posse (32 bairros), sem Goiânia. A carga do IBGE continua sem conferência com dado real.
+- [x] **Demo em Goiânia (03/11/2026):** o seed cria a Prefeitura de Goiânia (5208707) com o limite real do município quando a malha está no banco (`pnpm db:import:municipalities`); sem ela, um quadrado em torno da Praça Cívica. A tela 5c usa Senador Canedo; a P5, Anápolis e Aparecida de Goiânia. Os 687 bairros da prefeitura (dados abertos de Goiânia, sem glebas) estão em `packages/db/data/goiania-bairros.geojson`, carregados pelo backoffice e conferidos no navegador: as 12 ocorrências da demo caem no Setor Central (8) e no Setor Sul (4), e o filtro de bairro do mapa funciona.
+- Demo em Goiânia, o que ficou: os telefones de teste continuam com DDD 11; textos novos do seed para o usuário confirmar (endereços da demo: Rua 3, Av. Goiás, Rua 84, Av. Anhanguera, Rua 10, Av. República do Líbano, Av. 85, Rua 82, Av. Tocantins, Rua 4, Av. Paranaíba, Av. T-63, Rua 9).
 - [x] Selo do prazo atrasada com tom próprio (vermelho) no painel do ponto (resolvido na rodada final). Continua em aberto: manter o selo quando o ponto aberto sai dos resultados do filtro.
-- **Seed:** vigência do contrato da Prefeitura Demo A começando amanhã.
+- **Seed:** vigência do contrato da prefeitura demo (hoje a Prefeitura de Goiânia) começando amanhã.
 - **Setores:** tirar o `⋯` do cabeçalho da `DepartmentsPage`.
 - [x] **Task 4:** `?bairro=` com valor fora da lista da prefeitura aparecia como opção (resolvido na rodada final: é ignorado, como no caso sem bairros, no mapa e nas duas listas).
 - [x] **Task 10** (resolvido na rodada final: audita a página 1 sem busca em qualquer situação e a consulta tem `staleTime` de 5 minutos): a leitura da lista de cidadãos só gravava auditoria na primeira página, sem busca e sem filtro de situação; uma chamada direta com filtro não audita. Auditar a página 1 sem busca em qualquer situação e dar `staleTime` à consulta para a tela não auditar de novo ao refazer a busca.

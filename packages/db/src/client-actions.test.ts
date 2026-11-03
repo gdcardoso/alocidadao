@@ -213,11 +213,11 @@ describe('dados de demonstração', () => {
     for (const row of rows) expect(row.icon).toBeTruthy();
 
     const demo = await app.db.transaction((tx) =>
-      findMunicipalityAt(tx, { lat: -23.5505, lng: -46.6333 }),
+      findMunicipalityAt(tx, { lat: -16.6799, lng: -49.255 }),
     );
-    expect(demo).toEqual({ ibgeCode: '9999901', name: 'Cidade Demo', state: 'SP' });
+    expect(demo).toEqual({ ibgeCode: '5208707', name: 'Goiânia', state: 'GO' });
     const unserved = await app.db.transaction((tx) => findMunicipalityAt(tx, DEMO_UNSERVED_CENTER));
-    expect(unserved).toEqual({ ibgeCode: '9999902', name: 'Vila Sem Adesão', state: 'SP' });
+    expect(unserved).toEqual({ ibgeCode: '5220454', name: 'Senador Canedo', state: 'GO' });
     expect(await app.db.transaction((tx) => findActiveTenantAt(tx, DEMO_UNSERVED_CENTER))).toBe(
       undefined,
     );
@@ -418,10 +418,10 @@ describe('dados de demonstração', () => {
     }
     expect(addresses).toEqual([...DEMO_ADDRESSES]);
     expect(DEMO_ADDRESSES).toEqual([
-      'Rua das Flores, 120 — Centro',
-      'Av. Brasil, 1450',
-      'Rua Ipê, 33',
-      'Rua XV, 88',
+      'Rua 3, 120 — Setor Central',
+      'Av. Goiás, 1450',
+      'Rua 84, 33',
+      'Av. Anhanguera, 88',
     ]);
   });
 

@@ -372,7 +372,7 @@ describe('dados de demonstração do painel', () => {
         name: teams.name,
         baseAddress: teams.baseAddress,
         distance: sql<number | null>`ST_Distance(${teams.baseLocation}::geography,
-          ST_SetSRID(ST_MakePoint(-46.6333, -23.5505), 4326)::geography)`,
+          ST_SetSRID(ST_MakePoint(-49.255, -16.6799), 4326)::geography)`,
         department: departments.name,
       })
       .from(teams)
@@ -380,7 +380,7 @@ describe('dados de demonstração do painel', () => {
       .where(eq(teams.tenantId, tenantId));
     const byName = Object.fromEntries(teamRows.map((row) => [row.name, row]));
     expect(byName['Equipe Obras – Centro']).toMatchObject({
-      baseAddress: 'Rua do Paço, 50',
+      baseAddress: 'Rua 82, 50',
       department: 'Obras',
     });
     expect(Number(byName['Equipe Obras – Centro']!.distance)).toBeGreaterThan(800);

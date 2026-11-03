@@ -37,7 +37,7 @@ const owner = createDatabase(API_TEST_OWNER_URL);
 const appDb = createDatabase(API_TEST_APP_URL);
 const storage = createStorage(testStorageConfig);
 
-const DEMO_CENTER: GeoPoint = { lat: -23.5505, lng: -46.6333 };
+const DEMO_CENTER: GeoPoint = { lat: -16.6799, lng: -49.255 };
 const CONTEST_NOTICE =
   'Outro morador informou que o problema continua; a prefeitura vai reavaliar.';
 

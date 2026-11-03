@@ -29,7 +29,7 @@ import {
   workOrders,
 } from './schema.js';
 
-export const DEMO_IBGE_CODE = '9999901';
+export const DEMO_IBGE_CODE = '5208707';
 const AGENT_EMAIL = 'agente.demo@alocidadao.dev';
 export const AGENT_PHONE = '+5511900000001';
 const CITIZEN_EMAIL = 'cidadao.demo@alocidadao.dev';
@@ -52,29 +52,26 @@ const CLEANING_TEAM_NAME = 'Equipe Limpeza – Centro';
 const CLEANING_CATEGORY_NAMES = ['Lixo e entulho', 'Poda de árvore'];
 const CATEGORY_NAME = 'Buraco na via';
 
-/** Ponto de referência (centro de São Paulo) em torno do qual ficam as solicitações. */
-const CENTER = { lat: -23.5505, lng: -46.6333 };
+/** Ponto de referência (Praça Cívica, Goiânia) em torno do qual ficam as solicitações. */
+const CENTER = { lat: -16.6799, lng: -49.255 };
 
-/** Meia-largura, em graus, do limite quadrado da prefeitura demo em torno de CENTER (≈ 5,5 km). */
+/**
+ * Meia-largura, em graus, do quadrado em torno de CENTER (≈ 5,5 km) que faz as vezes do limite de
+ * Goiânia num banco sem a malha de municípios do IBGE (os testes).
+ */
 const BOUNDARY_HALF_SIDE = 0.05;
 
 /**
- * Centro do município vizinho inventado "Vila Sem Adesão" (9999902), sem prefeitura: um quadrado
- * do mesmo tamanho, colado a leste do limite da demo. Serve para ver a tela 5c no emulador.
+ * Centro de Senador Canedo (5220454), vizinho a leste de Goiânia, sem prefeitura. Serve para ver a
+ * tela 5c no emulador.
  */
-export const DEMO_UNSERVED_CENTER: GeoPoint = {
-  lat: CENTER.lat,
-  lng: CENTER.lng + 2 * BOUNDARY_HALF_SIDE,
-};
-const DEMO_UNSERVED_IBGE_CODE = '9999902';
+export const DEMO_UNSERVED_CENTER: GeoPoint = { lat: -16.708, lng: -49.092 };
+const DEMO_UNSERVED_IBGE_CODE = '5220454';
 
-/**
- * Outros dois municípios inventados sem prefeitura, longe da demo (1 e 2 graus ao norte), só para a
- * P5 (interesse por cidade) ter uma lista.
- */
+/** Outros dois vizinhos sem prefeitura, só para a P5 (interesse por cidade) ter uma lista. */
 const DEMO_INTEREST_MUNICIPALITIES = [
-  { ibgeCode: '9999903', name: 'Serra Sem Adesão', state: 'MG', dLat: 1 },
-  { ibgeCode: '9999904', name: 'Porto Sem Adesão', state: 'RJ', dLat: 2 },
+  { ibgeCode: '5201108', name: 'Anápolis', center: { lat: -16.3281, lng: -48.9534 } },
+  { ibgeCode: '5201405', name: 'Aparecida de Goiânia', center: { lat: -16.8198, lng: -49.2469 } },
 ] as const;
 
 /** Os 9 tipos da tela 5, com o ícone Lucide, o grupo e o raio de agrupamento (spec 5.2). */
@@ -113,10 +110,10 @@ const EXTRA_CITIZENS = [
 
 /** Endereços do primeiro relato de cada atividade da demo, na ordem de DEMO_WORK_ORDERS. */
 export const DEMO_ADDRESSES = [
-  'Rua das Flores, 120 — Centro',
-  'Av. Brasil, 1450',
-  'Rua Ipê, 33',
-  'Rua XV, 88',
+  'Rua 3, 120 — Setor Central',
+  'Av. Goiás, 1450',
+  'Rua 84, 33',
+  'Av. Anhanguera, 88',
 ] as const;
 
 interface DemoWorkOrder {
@@ -124,7 +121,7 @@ interface DemoWorkOrder {
   description: string;
   /** Endereço do primeiro relato (os cartões e o detalhe do agente mostram). */
   address: string;
-  /** Deslocamento fixo em graus (1e-3 de latitude ≈ 111 m; de longitude ≈ 102 m nesta latitude). */
+  /** Deslocamento fixo em graus (1e-3 de latitude ≈ 111 m; de longitude ≈ 107 m nesta latitude). */
   dLat: number;
   dLng: number;
   /** Há quantas horas o gestor atribuiu a atividade à equipe. */
@@ -226,7 +223,7 @@ interface DemoQueueItem {
 const DEMO_QUEUE: DemoQueueItem[] = [
   {
     description: DEMO_REVIEW_DESCRIPTIONS[0],
-    address: 'Rua Bela Cintra, 210',
+    address: 'Rua 10, 210',
     dLat: -0.0005,
     dLng: -0.001,
     status: 'awaiting_review',
@@ -239,7 +236,7 @@ const DEMO_QUEUE: DemoQueueItem[] = [
   },
   {
     description: DEMO_REVIEW_DESCRIPTIONS[1],
-    address: 'Rua da Consolação, 2300',
+    address: 'Av. República do Líbano, 2300',
     dLat: 0.0015,
     dLng: -0.0015,
     status: 'awaiting_review',
@@ -250,7 +247,7 @@ const DEMO_QUEUE: DemoQueueItem[] = [
   },
   {
     description: DEMO_IMPEDIMENT_DESCRIPTION,
-    address: 'Av. Rebouças, 1100',
+    address: 'Av. 85, 1100',
     dLat: -0.002,
     dLng: -0.0005,
     status: 'impeded',
@@ -728,7 +725,7 @@ const DEMO_TEAMS: DemoTeam[] = [
     department: DEPARTMENT_NAME,
     // A cerca de 1 km ao sul do centro.
     base: {
-      address: 'Rua do Paço, 50',
+      address: 'Rua 82, 50',
       location: { lat: CENTER.lat - 1 * DEG_PER_KM, lng: CENTER.lng },
     },
   },
@@ -737,7 +734,7 @@ const DEMO_TEAMS: DemoTeam[] = [
     department: DEPARTMENT_NAME,
     // A cerca de 5 km ao norte do centro.
     base: {
-      address: 'Av. Santos Dumont, 800',
+      address: 'Av. Tocantins, 800',
       location: { lat: CENTER.lat + 5 * DEG_PER_KM, lng: CENTER.lng },
     },
   },
@@ -813,7 +810,7 @@ interface DemoTriage {
 const DEMO_TRIAGE: DemoTriage[] = [
   {
     description: 'Buraco fundo no meio da rua, os carros desviam para a contramão',
-    address: 'Rua Augusta, 900',
+    address: 'Rua 4, 900',
     categoryName: CATEGORY_NAME,
     dLat: -0.004,
     dLng: -0.003,
@@ -824,7 +821,7 @@ const DEMO_TRIAGE: DemoTriage[] = [
   {
     // A 10 m da anterior, dentro do raio de 15 m do tipo: vira sugestão de junção.
     description: 'Buraco pequeno perto do bueiro',
-    address: 'Rua Augusta, 910',
+    address: 'Rua 4, 910',
     categoryName: CATEGORY_NAME,
     dLat: -0.004 + 0.01 * DEG_PER_KM,
     dLng: -0.003,
@@ -833,7 +830,7 @@ const DEMO_TRIAGE: DemoTriage[] = [
   },
   {
     description: 'Poste apagado há uma semana, a rua fica escura à noite',
-    address: 'Rua Vergueiro, 1200',
+    address: 'Av. Paranaíba, 1200',
     categoryName: 'Iluminação',
     dLat: 0.003,
     dLng: -0.002,
@@ -842,7 +839,7 @@ const DEMO_TRIAGE: DemoTriage[] = [
   },
   {
     description: 'Calçada quebrada, cadeirante não consegue passar',
-    address: 'Av. Paulista, 1500',
+    address: 'Av. T-63, 1500',
     categoryName: 'Calçada',
     dLat: -0.003,
     dLng: 0.003,
@@ -851,7 +848,7 @@ const DEMO_TRIAGE: DemoTriage[] = [
   },
   {
     description: 'Entulho jogado na esquina há dias',
-    address: 'Rua Oscar Freire, 300',
+    address: 'Rua 9, 300',
     categoryName: 'Lixo e entulho',
     dLat: 0.004,
     dLng: 0.002,
@@ -1050,7 +1047,7 @@ async function retireStrayOccurrences(
 }
 
 /**
- * Cria a prefeitura de demonstração (IBGE 9999901) com equipe, agente, cidadãos, gestor e as
+ * Cria a prefeitura de demonstração (Goiânia, IBGE 5208707) com equipe, agente, cidadãos, gestor e as
  * atividades de DEMO_WORK_ORDERS, cada uma na sua ocorrência e atribuída à equipe pelo gestor.
  * Idempotente: reencontra o que já existe e só cria o que falta; se uma migração apagou os dados
  * operacionais, recria as atividades. Com `reset`, cancela as atividades ativas da demo e cria
@@ -1128,40 +1125,29 @@ async function seedCatalog(tx: Transaction, tenantId: string): Promise<void> {
 }
 
 /**
- * Municípios da demo: "Cidade Demo" (9999901), com o mesmo limite da prefeitura, e o vizinho
- * "Vila Sem Adesão" (9999902), sem prefeitura. Idempotente.
+ * Municípios da demo: Goiânia e os vizinhos sem prefeitura (Senador Canedo, Anápolis e Aparecida de
+ * Goiânia). Num banco sem a malha do IBGE, cada um entra com um quadrado em torno do centro; o que
+ * já veio da malha (db:import:municipalities) fica como está. Idempotente.
  */
 async function seedMunicipalities(tx: Transaction): Promise<void> {
   await tx
     .insert(municipalities)
     .values([
-      {
-        ibgeCode: DEMO_IBGE_CODE,
-        name: 'Cidade Demo',
-        state: 'SP',
-        boundary: squareAround(CENTER),
-      },
+      { ibgeCode: DEMO_IBGE_CODE, name: 'Goiânia', state: 'GO', boundary: squareAround(CENTER) },
       {
         ibgeCode: DEMO_UNSERVED_IBGE_CODE,
-        name: 'Vila Sem Adesão',
-        state: 'SP',
+        name: 'Senador Canedo',
+        state: 'GO',
         boundary: squareAround(DEMO_UNSERVED_CENTER),
       },
       ...DEMO_INTEREST_MUNICIPALITIES.map((item) => ({
         ibgeCode: item.ibgeCode,
         name: item.name,
-        state: item.state,
-        boundary: squareAround({ lat: CENTER.lat + item.dLat, lng: CENTER.lng }),
+        state: 'GO',
+        boundary: squareAround(item.center),
       })),
     ])
-    .onConflictDoUpdate({
-      target: municipalities.ibgeCode,
-      set: {
-        name: sql`excluded.name`,
-        state: sql`excluded.state`,
-        boundary: sql`excluded.boundary`,
-      },
-    });
+    .onConflictDoNothing({ target: municipalities.ibgeCode });
 }
 
 /**
@@ -1182,7 +1168,7 @@ async function seedCityInterest(tx: Transaction, citizenId: string): Promise<voi
   const [second, third] = EXTRA_CITIZENS.map(
     (citizen) => extras.find((row) => row.email === citizen.email)!.id,
   );
-  const [serra, porto] = DEMO_INTEREST_MUNICIPALITIES.map((item) => item.ibgeCode);
+  const [anapolis, aparecida] = DEMO_INTEREST_MUNICIPALITIES.map((item) => item.ibgeCode);
   const now = Date.now();
   const at = (days: number) => new Date(now - days * DAY_MS);
   await tx
@@ -1191,9 +1177,9 @@ async function seedCityInterest(tx: Transaction, citizenId: string): Promise<voi
       { ibgeCode: DEMO_UNSERVED_IBGE_CODE, userId: citizenId, createdAt: at(45) },
       { ibgeCode: DEMO_UNSERVED_IBGE_CODE, userId: second!, createdAt: at(12) },
       { ibgeCode: DEMO_UNSERVED_IBGE_CODE, userId: third!, createdAt: at(2) },
-      { ibgeCode: serra!, userId: citizenId, createdAt: at(20) },
-      { ibgeCode: serra!, userId: second!, createdAt: at(5) },
-      { ibgeCode: porto!, userId: third!, createdAt: at(1) },
+      { ibgeCode: anapolis!, userId: citizenId, createdAt: at(20) },
+      { ibgeCode: anapolis!, userId: second!, createdAt: at(5) },
+      { ibgeCode: aparecida!, userId: third!, createdAt: at(1) },
       { ibgeCode: DEMO_IBGE_CODE, userId: second!, createdAt: at(60) },
     ])
     .onConflictDoNothing();
@@ -1302,10 +1288,13 @@ async function seedTenantData(tx: Transaction): Promise<SeedBase> {
   // next_request_protocol() lê a prefeitura de app_current_tenant().
   await tx.execute(sql`select set_config('app.tenant_id', ${tenantId}, true)`);
 
-  // Limite quadrado em torno de CENTER; também preenche a prefeitura demo criada antes do limite.
+  // Limite real de Goiânia, se a malha do IBGE já está no banco; senão o quadrado em torno de
+  // CENTER. Também preenche a prefeitura demo criada antes do limite.
   const setBoundary = sql`
       update tenants
-      set boundary = ${squareAround(CENTER)}
+      set boundary = coalesce(
+        (select boundary from municipalities where ibge_code = ${DEMO_IBGE_CODE}),
+        ${squareAround(CENTER)})
       where id = ${tenantId} and boundary is null`;
 
   if (existing) {
@@ -1339,10 +1328,10 @@ async function seedTenantData(tx: Transaction): Promise<SeedBase> {
 
   await tx.insert(tenants).values({
     id: tenantId,
-    name: 'Município Demo A',
-    displayName: 'Prefeitura Demo A',
-    city: 'Demo A',
-    state: 'SP',
+    name: 'Município de Goiânia',
+    displayName: 'Prefeitura de Goiânia',
+    city: 'Goiânia',
+    state: 'GO',
     ibgeCode: DEMO_IBGE_CODE,
     status: 'active',
   });

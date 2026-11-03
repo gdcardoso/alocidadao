@@ -80,7 +80,7 @@ export function WorkOrderMap({ items, here, online, bottomInset, onOpen }: WorkO
           initialViewState={
             initialBounds
               ? { bounds: initialBounds, padding }
-              : { center: [-46.6333, -23.5505], zoom: 12 }
+              : { center: [-49.255, -16.6799], zoom: 12 }
           }
         />
         {items.map((item) => {

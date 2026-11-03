@@ -31,6 +31,16 @@ pnpm db:migrate       # aplica as migrações
 pnpm dev              # API (3333), web (5173) e Expo
 ```
 
+Para a demo (Prefeitura de Goiânia), com o banco migrado:
+
+```bash
+pnpm db:import:municipalities  # limites reais dos municípios (a prefeitura usa o de Goiânia)
+pnpm db:seed:dev               # prefeitura, equipe, agente, cidadãos, gestor e atividades
+```
+
+Depois, no backoffice, carregue `packages/db/data/goiania-bairros.geojson` na aba Contrato da
+prefeitura (ver `packages/db/data/README.md`).
+
 Copie os `.env.example` de `apps/api`, `apps/web` e `apps/mobile` para `.env` e ajuste. Para testar o app em aparelho físico, use o IP da sua máquina em `EXPO_PUBLIC_API_URL`.
 
 ## Comandos

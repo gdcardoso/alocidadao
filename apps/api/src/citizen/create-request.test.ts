@@ -33,7 +33,7 @@ const appDb = createDatabase(API_TEST_APP_URL);
 const storage = createStorage(testStorageConfig);
 
 /** Centro da prefeitura demo (o mesmo do seed). */
-const DEMO_CENTER: GeoPoint = { lat: -23.5505, lng: -46.6333 };
+const DEMO_CENTER: GeoPoint = { lat: -16.6799, lng: -49.255 };
 
 const connection: ConnectionContext = {
   networkType: 'cellular',
@@ -321,7 +321,7 @@ describe('POST /citizen/requests', () => {
     expect(res.statusCode).toBe(422);
     expect(res.json()).toEqual({
       code: 'municipality_not_served',
-      municipality: { ibgeCode: '9999902', name: 'Vila Sem Adesão', state: 'SP' },
+      municipality: { ibgeCode: '5220454', name: 'Senador Canedo', state: 'GO' },
     });
   });
 

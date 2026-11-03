@@ -59,7 +59,7 @@ try {
       `  Painel, admin interno: CPF ${ADMIN_CPF} (${ADMIN_EMAIL})`,
       `  Painel, suporte interno: CPF ${SUPPORT_CPF} (${SUPPORT_EMAIL})`,
       '',
-      'Município sem prefeitura (tela 5c): Vila Sem Adesão (9999902)',
+      'Município sem prefeitura (tela 5c): Senador Canedo (5220454)',
       `  Centro: ${DEMO_UNSERVED_CENTER.lat}, ${DEMO_UNSERVED_CENTER.lng}`,
       `  GPS do emulador Android: adb emu geo fix ${DEMO_UNSERVED_CENTER.lng} ${DEMO_UNSERVED_CENTER.lat}`,
       '',

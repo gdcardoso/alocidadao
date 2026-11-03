@@ -22,7 +22,7 @@ const owner = createDatabase(API_TEST_OWNER_URL);
 const appDb = createDatabase(API_TEST_APP_URL);
 
 /** Centro da prefeitura demo (o mesmo do seed). */
-const DEMO_CENTER: GeoPoint = { lat: -23.5505, lng: -46.6333 };
+const DEMO_CENTER: GeoPoint = { lat: -16.6799, lng: -49.255 };
 
 let app: Awaited<ReturnType<typeof buildApp>>;
 let demoTenantId: string;
@@ -92,9 +92,9 @@ describe('GET /citizen/locate', () => {
     if (body.status !== 'served') throw new Error(`status ${body.status}`);
     expect(body.tenant).toEqual({
       id: demoTenantId,
-      displayName: 'Prefeitura Demo A',
-      city: 'Demo A',
-      state: 'SP',
+      displayName: 'Prefeitura de Goiânia',
+      city: 'Goiânia',
+      state: 'GO',
       centralPhone: null,
     });
     const names = body.categories.map((c) => c.name);
@@ -119,7 +119,7 @@ describe('GET /citizen/locate', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({
       status: 'not_served',
-      municipality: { ibgeCode: '9999902', name: 'Vila Sem Adesão', state: 'SP' },
+      municipality: { ibgeCode: '5220454', name: 'Senador Canedo', state: 'GO' },
     });
   });
 
@@ -263,14 +263,14 @@ describe('POST /citizen/city-interest', () => {
         method: 'POST',
         url: '/citizen/city-interest',
         headers,
-        payload: { ibgeCode: '9999902' },
+        payload: { ibgeCode: '5220454' },
       });
       expect(res.statusCode).toBe(204);
     }
     const rows = await owner.db
       .select()
       .from(cityInterest)
-      .where(and(eq(cityInterest.userId, citizenId), eq(cityInterest.ibgeCode, '9999902')));
+      .where(and(eq(cityInterest.userId, citizenId), eq(cityInterest.ibgeCode, '5220454')));
     expect(rows).toHaveLength(1);
 
     const unknown = await app.inject({
@@ -306,7 +306,7 @@ describe('citizen access', () => {
       method: 'POST',
       url: '/citizen/city-interest',
       headers: frozenHeaders,
-      payload: { ibgeCode: '9999902' },
+      payload: { ibgeCode: '5220454' },
     });
     expect(res.statusCode).toBe(401);
     expect(res.json()).toEqual({ code: 'unauthorized' });

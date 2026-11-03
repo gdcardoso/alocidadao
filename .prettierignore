@@ -6,3 +6,4 @@ packages/db/migrations/meta
 .superpowers
 apps/mobile/android
 apps/mobile/ios
+packages/db/data/*.geojson

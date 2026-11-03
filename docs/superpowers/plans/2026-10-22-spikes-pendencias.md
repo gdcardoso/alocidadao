@@ -304,7 +304,7 @@ Os textos das Decisões do plano já foram aprovados. Abaixo, só o que quem imp
 - [x] Selo do prazo atrasada com tom próprio (vermelho) no painel do ponto (resolvido na rodada final). Continua em aberto: manter o selo quando o ponto aberto sai dos resultados do filtro.
 - **Seed:** vigência do contrato da prefeitura demo (hoje a Prefeitura de Goiânia) começando amanhã.
 - **Setores:** tirar o `⋯` do cabeçalho da `DepartmentsPage`.
-- **Aba Cidadãos da P3 (visto no Pencil, 03/11/2026):** a 1440x900 a tabela tem 1220 px num cartão de 1134 px e a coluna Situação passa da borda (sem rolagem horizontal). Caminho: rolagem horizontal no cartão ou colunas mais estreitas.
+- [x] **Aba Cidadãos da P3 (visto no Pencil, 03/11/2026):** a 1440x900 a tabela tinha 1220 px num cartão de 1134 px e a coluna Situação passava da borda. Corrigido com colunas mais estreitas (1130 px). Na mesma conferência, a tabela de agentes do painel (`AgentsTable`) passava 6 px (800 em 794) e ficou com 790 px. As demais tabelas do painel e do backoffice cabem a 1440 px.
 - [x] **Task 4:** `?bairro=` com valor fora da lista da prefeitura aparecia como opção (resolvido na rodada final: é ignorado, como no caso sem bairros, no mapa e nas duas listas).
 - [x] **Task 10** (resolvido na rodada final: audita a página 1 sem busca em qualquer situação e a consulta tem `staleTime` de 5 minutos): a leitura da lista de cidadãos só gravava auditoria na primeira página, sem busca e sem filtro de situação; uma chamada direta com filtro não audita. Auditar a página 1 sem busca em qualquer situação e dar `staleTime` à consulta para a tela não auditar de novo ao refazer a busca.
 - Menores das revisões, agrupados:

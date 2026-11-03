@@ -292,4 +292,4 @@ Em `docs/superpowers/specs/telas-backoffice/`:
 
 Ficam como capturas do código (sem tela própria no Pencil, o bloco é o mesmo da P6e e da P4b): `P6-equipe.png`, `P4-criar-conta-nova.png` e `P2-conta-congelada.png`.
 
-Visto na passagem para o Pencil: na aba Cidadãos (P3e), a 1440x900 a tabela tem 1220 px num cartão de 1134 px e a coluna Situação passa da borda (o Pencil mostra como está no código). Anotado nas pendências.
+Visto na passagem para o Pencil: na aba Cidadãos (P3e), a 1440x900 a tabela passava da borda do cartão. Corrigido no código no mesmo dia (colunas mais estreitas) e a P3e reimportada.

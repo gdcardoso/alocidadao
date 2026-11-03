@@ -73,7 +73,7 @@ export function AgentsTable({ agents, onAction }: AgentsTableProps) {
     {
       key: 'agent',
       header: 'Agente',
-      width: 250,
+      width: 240,
       render: (agent) => (
         <div className={styles.cell}>
           <span className={styles.avatar} aria-hidden="true">

@@ -63,25 +63,25 @@ export function CitizensTab({ tenant }: TenantTabProps) {
   });
 
   const columns: DataTableColumn<CitizenRow>[] = [
-    { key: 'name', header: 'Nome', width: 220, render: (row) => row.name },
+    { key: 'name', header: 'Nome', width: 200, render: (row) => row.name },
     {
       key: 'phone',
       header: 'Celular',
-      width: 150,
+      width: 140,
       render: (row) => <span className={styles.muted}>{row.phoneMasked ?? '—'}</span>,
     },
     {
       key: 'email',
       header: 'E-mail',
-      width: 200,
+      width: 190,
       render: (row) => <span className={styles.muted}>{row.emailMasked ?? '—'}</span>,
     },
-    { key: 'requests', header: 'Solicitações', width: 120, render: (row) => row.requestCount },
-    { key: 'open', header: 'Abertas', width: 90, render: (row) => row.openCount },
+    { key: 'requests', header: 'Solicitações', width: 110, render: (row) => row.requestCount },
+    { key: 'open', header: 'Abertas', width: 80, render: (row) => row.openCount },
     {
       key: 'lastRequest',
       header: 'Última solicitação',
-      width: 170,
+      width: 160,
       render: (row) => (
         <span className={styles.muted}>{formatNumericDateTime(new Date(row.lastRequestAt))}</span>
       ),
@@ -89,7 +89,7 @@ export function CitizensTab({ tenant }: TenantTabProps) {
     {
       key: 'lastActive',
       header: 'Último acesso',
-      width: 150,
+      width: 140,
       render: (row) => (
         <span className={styles.muted}>
           {formatLastAccess(row.lastActiveAt ? new Date(row.lastActiveAt) : null, now)}
@@ -99,7 +99,7 @@ export function CitizensTab({ tenant }: TenantTabProps) {
     {
       key: 'situation',
       header: 'Situação',
-      width: 120,
+      width: 110,
       render: (row) => (
         <Badge tone={SITUATION_TONE[row.situation]}>
           {CITIZEN_SITUATION_LABELS[row.situation]}

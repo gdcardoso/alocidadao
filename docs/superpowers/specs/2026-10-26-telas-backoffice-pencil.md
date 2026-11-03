@@ -264,22 +264,32 @@ Estados:
 
 ---
 
-## 7. Telas do 6b (capturas do código, Pencil pendente)
+## 7. Telas do 6b e abas da P3 (Pencil, 03/11/2026)
 
-O limite de uso do pen.dev bloqueou o desenho das telas do 6b no Pencil. Elas foram feitas no código seguindo o padrão deste documento, e as capturas abaixo (Playwright, 1440x900, 1x) servem para o usuário aprovar. Em 31/10/2026 as telas aprovadas são desenhadas no Pencil (Task 1b do plano `2026-10-28-backoffice-6b.md`), e as exportações do Pencil substituem estas capturas. Os textos e as escolhas visuais a confirmar estão em `docs/superpowers/plans/2026-10-22-spikes-pendencias.md`, seção "Plano 6b".
+As telas do 6b e as abas da P3 do pronto para validação foram feitas no código antes do Pencil (o limite de uso do pen.dev bloqueou a Task 1 do 6b). Em 03/11/2026 elas foram passadas para o Pencil (Task 1b): cada tela foi aberta no código rodando (1440x900, banco de desenvolvimento com a Prefeitura de Goiânia) e importada pelo navegador do Pencil como camadas editáveis, com o menu lateral trocado pelo componente `Componente · Menu backoffice` e acertos onde a importação perde estado (valor de `select`, caixas de seleção, data no formato do navegador, posição do menu ⋯ e do escurecimento). Os textos são os confirmados pelo usuário em 03/11/2026. As capturas abaixo são exportações do Pencil.
+
+No Pencil, as telas novas ficam abaixo da seção Backoffice: linha "Equipe, auditoria e conta bloqueada" (P6a a P6e, P7, P5b), P4b e P4c ao lado da P4, e a linha "Abas da prefeitura" (P3a a P3f).
 
 Em `docs/superpowers/specs/telas-backoffice/`:
 
-| Captura                           | O que mostra                                                                  |
-| --------------------------------- | ----------------------------------------------------------------------------- |
-| `P5-menu-situacao.png`            | P5 com selos de situação, `Já é cliente` e o menu ⋯ aberto com as 6 situações |
-| `P6-equipe.png`                   | P6 com a equipe e os cartões de papel                                         |
-| `P6-adicionar-pessoa.png`         | Janela `Adicionar pessoa` preenchida                                          |
-| `P6-menu-e-confirmacoes.png`      | Menu ⋯ de uma pessoa (`Editar`, `Trocar papel`, `Remover da equipe`)          |
-| `P6-confirmacao-trocar-papel.png` | Confirmação de troca de papel                                                 |
-| `P6-confirmacao-remover.png`      | Confirmação de remoção                                                        |
-| `P6-conta-congelada.png`          | Bloco de conta bloqueada na janela da P6                                      |
-| `P7-auditoria.png`                | P7 com filtros e a lista                                                      |
-| `P4-conta-congelada.png`          | Bloco de conta bloqueada no `Novo gestor` do painel em modo suporte           |
-| `P4-criar-conta-nova.png`         | Confirmação `Criar conta nova?` sobre a janela do gestor                      |
-| `P2-conta-congelada.png`          | Bloco de conta bloqueada no admin da P2                                       |
+| Captura                           | Tela no Pencil                                                            |
+| --------------------------------- | ------------------------------------------------------------------------- |
+| `P5-menu-situacao.png`            | P5b: menu ⋯ aberto com as 6 situações                                     |
+| `P6-adicionar-pessoa.png`         | P6a: janela `Adicionar pessoa` preenchida                                 |
+| `P6-menu-e-confirmacoes.png`      | P6b: menu ⋯ de uma pessoa (`Editar`, `Trocar papel`, `Remover da equipe`) |
+| `P6-confirmacao-trocar-papel.png` | P6c: confirmação de troca de papel                                        |
+| `P6-confirmacao-remover.png`      | P6d: confirmação de remoção                                               |
+| `P6-conta-congelada.png`          | P6e: bloco de conta bloqueada na janela da P6                             |
+| `P7-auditoria.png`                | P7: filtros e a lista                                                     |
+| `P4-conta-congelada.png`          | P4b: bloco de conta bloqueada no `Novo gestor` do painel em modo suporte  |
+| `P4-recuperar-conta.png`          | P4c: `Recuperar conta antiga` com o código enviado                        |
+| `P3-aba-contrato.png`             | P3a: Contrato com edição e Bairros (687 bairros enviados pela prefeitura) |
+| `P3-aba-equipes.png`              | P3b: Equipes e agentes                                                    |
+| `P3-aba-gestores.png`             | P3c: Gestores com CPF e e-mail mascarados                                 |
+| `P3-aba-categorias.png`           | P3d: Categorias                                                           |
+| `P3-aba-cidadaos.png`             | P3e: Cidadãos mascarados                                                  |
+| `P3-aba-auditoria.png`            | P3f: Auditoria da prefeitura                                              |
+
+Ficam como capturas do código (sem tela própria no Pencil, o bloco é o mesmo da P6e e da P4b): `P6-equipe.png`, `P4-criar-conta-nova.png` e `P2-conta-congelada.png`.
+
+Visto na passagem para o Pencil: na aba Cidadãos (P3e), a 1440x900 a tabela tem 1220 px num cartão de 1134 px e a coluna Situação passa da borda (o Pencil mostra como está no código). Anotado nas pendências.

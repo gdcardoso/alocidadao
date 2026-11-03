@@ -185,7 +185,7 @@ As telas do 6b foram feitas no código antes do Pencil (o limite de uso do pen.d
 
 ### Em aberto depois do 6b
 
-- **Task 1b, 31/10/2026:** passar as telas do 6b (P5 com menu, P6 com janela e confirmações, P7, bloco de conta bloqueada) e o sino de avisos do painel (Plano 7, captura `docs/superpowers/specs/telas-painel/sino-avisos.png`) para o Pencil e validar lá. As capturas do código em `docs/superpowers/specs/telas-backoffice/` são substituídas pelas exportações do Pencil.
+- [x] **Task 1b, 31/10/2026:** passar as telas do 6b (P5 com menu, P6 com janela e confirmações, P7, bloco de conta bloqueada) e o sino de avisos do painel (Plano 7, captura `docs/superpowers/specs/telas-painel/sino-avisos.png`) para o Pencil e validar lá. As capturas do código em `docs/superpowers/specs/telas-backoffice/` são substituídas pelas exportações do Pencil. Feito em 03/11/2026: telas importadas do código rodando para o Pencil (o mapa foi editado a partir da W1), junto com as abas da P3 e a W8 do pronto para validação; exportações nos specs (`2026-10-26-telas-backoffice-pencil.md` seção 7 e `2026-10-26-telas-painel-pencil.md` seção 7).
 - Encerrar o modo suporte por tempo sem atividade. Hoje a saída implícita só grava `support.leave` ao entrar de novo no modo suporte ou no painel por login.
 - [x] Abas da P3 além de Visão geral (Contrato, Equipes e agentes, Gestores, Categorias, Cidadãos, Auditoria): feitas no pronto para validação (sem Pencil; ver a seção "Pronto para validação").
 - O último Admin pode ser congelado pelo número reaproveitado: um Admin com telefone (cidadão que virou equipe), parado há 90 dias, é congelado quando alguém cadastra o número (`auth_freeze_stale_account`, da 0014). `platform_require_other_admin` só conta contas ativas, mas nada impede o congelamento. Pouco provável; caminho sugerido: `auth_freeze_stale_account` pular contas com `platform_role`.
@@ -225,7 +225,7 @@ Feito no Plano 7 (`2026-10-29-notificacoes.md`): avisos gerados no banco por gat
 
 ### Em aberto depois do Plano 7
 
-- **Sino no Pencil, 31/10/2026:** junto com a Task 1b do 6b (ver "Em aberto depois do 6b").
+- [x] **Sino no Pencil, 31/10/2026:** junto com a Task 1b do 6b (ver "Em aberto depois do 6b"). Feito em 03/11/2026 (W1d).
 - **Testes em aparelho do toque no push** (roteiro na seção 5 do `0002`): agente com o app no modo cidadão toca num push de atividade (troca de modo e de prefeitura e depois abre a atividade); app fechado aberto pelo toque (partida a frio). Os dois só têm teste de unidade.
 - **'Concluída sem fotos' não sai pela API de hoje:** concluir pelo agente exige ao menos uma foto, então o sino só mostra 'sem fotos' para eventos gravados sem foto (o seed de desenvolvimento e a simulação da passada). O texto fica para quando houver conclusão sem foto.
 - Menores das revisões, agrupados:
@@ -304,6 +304,7 @@ Os textos das Decisões do plano já foram aprovados. Abaixo, só o que quem imp
 - [x] Selo do prazo atrasada com tom próprio (vermelho) no painel do ponto (resolvido na rodada final). Continua em aberto: manter o selo quando o ponto aberto sai dos resultados do filtro.
 - **Seed:** vigência do contrato da prefeitura demo (hoje a Prefeitura de Goiânia) começando amanhã.
 - **Setores:** tirar o `⋯` do cabeçalho da `DepartmentsPage`.
+- **Aba Cidadãos da P3 (visto no Pencil, 03/11/2026):** a 1440x900 a tabela tem 1220 px num cartão de 1134 px e a coluna Situação passa da borda (sem rolagem horizontal). Caminho: rolagem horizontal no cartão ou colunas mais estreitas.
 - [x] **Task 4:** `?bairro=` com valor fora da lista da prefeitura aparecia como opção (resolvido na rodada final: é ignorado, como no caso sem bairros, no mapa e nas duas listas).
 - [x] **Task 10** (resolvido na rodada final: audita a página 1 sem busca em qualquer situação e a consulta tem `staleTime` de 5 minutos): a leitura da lista de cidadãos só gravava auditoria na primeira página, sem busca e sem filtro de situação; uma chamada direta com filtro não audita. Auditar a página 1 sem busca em qualquer situação e dar `staleTime` à consulta para a tela não auditar de novo ao refazer a busca.
 - Menores das revisões, agrupados:

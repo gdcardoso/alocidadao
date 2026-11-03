@@ -449,3 +449,13 @@ Estados:
 - **Notificações em tempo real** (novos itens na fila, contadores atualizando) não indicadas.
 - **Modo suporte** (P4): além da faixa, não há indicação do que muda (ações bloqueadas? auditoria visível?).
 - Textos e dados são exemplos (Prefeitura de São Paulo, Carlos Almeida, protocolos, contagens, distâncias).
+
+## 7. Telas do Plano 7 e do pronto para validação (Pencil, 03/11/2026)
+
+Feitas no código antes do Pencil e passadas para ele em 03/11/2026 (Task 1b). O mapa não pode ser importado pelo navegador do Pencil (a importação trava no mapa), então a W1c e a W1d são cópias da W1 editadas no Pencil conforme a tela do código; a W8 foi importada do código rodando. Textos confirmados pelo usuário em 03/11/2026.
+
+| Captura (`docs/superpowers/specs/telas-painel/`) | Tela no Pencil                                                                                                                                                                                |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `W1c-mapa-prazo-bairro.png`                      | W1c: filtros de Prazo e Bairro, faixa de números do dia (Na triagem, Em atendimento, Vencem em 2 dias, Atrasadas), pinos e legenda pela situação do prazo, sino e Dados da prefeitura no menu |
+| `sino-avisos.png`                                | W1d: painel `Avisos` aberto, com não lidos destacados e `Marcar todos como lidos`                                                                                                             |
+| `W8-dados-da-prefeitura.png`                     | W8: Dados da prefeitura (só leitura) para o gestor                                                                                                                                            |

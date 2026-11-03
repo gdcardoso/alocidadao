@@ -156,6 +156,8 @@ Feito no 6b (`2026-10-28-backoffice-6b.md`): P5 Interesse por cidade, P6 Equipe 
 
 ### Textos novos do 6b para o usuário confirmar
 
+**Confirmados pelo usuário em 03/11/2026 ("aprovo tudo").**
+
 As telas do 6b foram feitas no código antes do Pencil (o limite de uso do pen.dev bloqueou a Task 1). Os textos abaixo não vêm do Pencil; os do spec e do plano estão marcados com "(plano)".
 
 - **P6 Equipe Alô Cidadão:**
@@ -215,6 +217,8 @@ Feito no Plano 7 (`2026-10-29-notificacoes.md`): avisos gerados no banco por gat
 - [x] O Laboratório do app mandava `status` para `/dev/push`, que passou a pedir `kind` (achado na passada do Plano 7; corrigido com teste).
 
 ### Textos novos do Plano 7 para o usuário confirmar
+
+**Confirmados pelo usuário em 03/11/2026 ("aprovo tudo").**
 
 - **Sino do painel (sem Pencil; captura `docs/superpowers/specs/telas-painel/sino-avisos.png`):** 'Avisos' (título e `aria-label` do botão); 'Marcar todos como lidos'; vazio 'Nenhum aviso por enquanto.'; contador '99+' acima de 99; hora do aviso no formato relativo do painel ('há 1 min', 'há 1 h').
 - **Já aprovados com o plano:** os textos do push (título 'Alô Cidadão' e os 11 tipos da tabela das Decisões do `2026-10-29-notificacoes.md`) e o e-mail da conclusão (assunto e corpo). Vistos no log da passada sem mudança.
@@ -282,6 +286,8 @@ Achados da passada:
 
 ### Textos novos para o usuário confirmar
 
+**Confirmados pelo usuário em 03/11/2026 ("aprovo tudo").**
+
 Os textos das Decisões do plano já foram aprovados. Abaixo, só o que quem implementou criou fora delas, mais o que a passada mostrou.
 
 - **Dados da prefeitura (Task 7):** rótulos 'Nome de exibição', 'Município e UF', 'Código IBGE', 'Central de atendimento', 'Situação', 'Plano', 'Vigência', 'Usuários do painel'; 'A partir de dd/mm/aaaa' (contrato sem data final); 'Carregando…'; 'Não foi possível carregar os dados da prefeitura.'; '—' para campo vazio; 'Cidade · UF'.
@@ -294,7 +300,7 @@ Os textos das Decisões do plano já foram aprovados. Abaixo, só o que quem imp
 - [x] ~~Mascarar CPF e e-mail na rota de gestores do backoffice~~ (resolvido na rodada final).
 - **Importar a malha real do IBGE** por UF (`pnpm --filter @alocidadao/db import:neighborhoods`) e conferir o tempo e o resultado com um município real. Em 03/11/2026 a demo mudou para Goiânia, mas a malha de bairros do IBGE (Censo 2022) de GO só tem Pires do Rio e Posse (32 bairros), sem Goiânia. A carga do IBGE continua sem conferência com dado real.
 - [x] **Demo em Goiânia (03/11/2026):** o seed cria a Prefeitura de Goiânia (5208707) com o limite real do município quando a malha está no banco (`pnpm db:import:municipalities`); sem ela, um quadrado em torno da Praça Cívica. A tela 5c usa Senador Canedo; a P5, Anápolis e Aparecida de Goiânia. Os 687 bairros da prefeitura (dados abertos de Goiânia, sem glebas) estão em `packages/db/data/goiania-bairros.geojson`, carregados pelo backoffice e conferidos no navegador: as 12 ocorrências da demo caem no Setor Central (8) e no Setor Sul (4), e o filtro de bairro do mapa funciona.
-- Demo em Goiânia, o que ficou: os telefones de teste continuam com DDD 11; textos novos do seed para o usuário confirmar (endereços da demo: Rua 3, Av. Goiás, Rua 84, Av. Anhanguera, Rua 10, Av. República do Líbano, Av. 85, Rua 82, Av. Tocantins, Rua 4, Av. Paranaíba, Av. T-63, Rua 9).
+- Demo em Goiânia, o que ficou: os telefones de teste continuam com DDD 11. Endereços novos do seed confirmados pelo usuário em 03/11/2026 (endereços da demo: Rua 3, Av. Goiás, Rua 84, Av. Anhanguera, Rua 10, Av. República do Líbano, Av. 85, Rua 82, Av. Tocantins, Rua 4, Av. Paranaíba, Av. T-63, Rua 9).
 - [x] Selo do prazo atrasada com tom próprio (vermelho) no painel do ponto (resolvido na rodada final). Continua em aberto: manter o selo quando o ponto aberto sai dos resultados do filtro.
 - **Seed:** vigência do contrato da prefeitura demo (hoje a Prefeitura de Goiânia) começando amanhã.
 - **Setores:** tirar o `⋯` do cabeçalho da `DepartmentsPage`.

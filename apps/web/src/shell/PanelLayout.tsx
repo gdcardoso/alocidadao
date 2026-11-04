@@ -150,6 +150,9 @@ export function PanelLayout() {
         >
           Tentar de novo
         </Button>
+        <Button variant="secondary" size="sm" onClick={() => void signOut()}>
+          Sair
+        </Button>
       </main>
     );
   }

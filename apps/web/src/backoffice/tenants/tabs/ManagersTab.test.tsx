@@ -98,6 +98,35 @@ describe('ManagersTab', () => {
     ).toBeInTheDocument();
   });
 
+  it('offers the resend only to active rows with an e-mail', async () => {
+    const row = (
+      userId: string,
+      name: string,
+      emailMasked: string | null,
+      status: 'active' | 'inactive',
+    ) => ({
+      userId,
+      name,
+      cpfMasked: null,
+      emailMasked,
+      role: 'manager' as const,
+      status,
+      departments: [],
+    });
+    load.mockResolvedValue({
+      items: [
+        row('11111111-1111-4111-8111-111111111111', 'Com Email', 'c•••@exemplo.com', 'active'),
+        row('22222222-2222-4222-8222-222222222222', 'Sem Email', null, 'active'),
+        row('33333333-3333-4333-8333-333333333333', 'Desativado', 'd•••@exemplo.com', 'inactive'),
+      ],
+    });
+    renderTab();
+    await screen.findByText('Com Email');
+    expect(screen.getByRole('button', { name: 'Ações de Com Email' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Ações de Sem Email' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Ações de Desativado' })).toBeNull();
+  });
+
   it('shows an alert when loading fails', async () => {
     load.mockRejectedValue(new Error('boom'));
     renderTab();

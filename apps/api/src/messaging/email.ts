@@ -24,6 +24,11 @@ export function createLogEmailSender(log: FastifyBaseLogger): EmailSender {
   };
 }
 
+/** Nome de exibição entre aspas (RFC 5322), com `\` e `"` escapados, se tiver caractere especial. */
+function displayName(name: string): string {
+  return /[,;<>"()@:[\]\\]/.test(name) ? `"${name.replace(/[\\"]/g, '\\$&')}"` : name;
+}
+
 /** Envio pelo Resend (https://resend.com/docs/api-reference/emails/send-email). */
 export function createResendEmailSender({
   apiKey,
@@ -37,7 +42,7 @@ export function createResendEmailSender({
   return {
     send: async ({ to, subject, text, html, fromName }) => {
       const address = /<([^>]+)>/.exec(from)?.[1] ?? from;
-      const sender = fromName ? `${fromName} <${address}>` : from;
+      const sender = fromName ? `${displayName(fromName)} <${address}>` : from;
       const response = await fetchFn('https://api.resend.com/emails', {
         method: 'POST',
         headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },

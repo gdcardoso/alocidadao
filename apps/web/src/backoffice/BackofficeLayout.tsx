@@ -50,6 +50,9 @@ export function BackofficeLayout() {
         <Button variant="secondary" size="sm" onClick={() => void query.refetch()}>
           Tentar de novo
         </Button>
+        <Button variant="secondary" size="sm" onClick={() => void signOut()}>
+          Sair
+        </Button>
       </main>
     );
   }

@@ -67,4 +67,26 @@ describe('createResendEmailSender', () => {
     expect(bodies[1]!.from).toBe('Alô Cidadão <nao-responda@alocidadao.com.br>');
     expect(bodies[1]).not.toHaveProperty('html');
   });
+
+  it('quotes a display name with special characters per RFC 5322', async () => {
+    const bodies: Record<string, unknown>[] = [];
+    const fakeFetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+      bodies.push(JSON.parse(init!.body as string));
+      return new Response('{}', { status: 200 });
+    }) as typeof fetch;
+    const sender = createResendEmailSender({
+      apiKey: 're_test',
+      from: 'Alô Cidadão <nao-responda@alocidadao.com.br>',
+      fetch: fakeFetch,
+    });
+    await sender.send({
+      to: 'a@b.com',
+      subject: 's',
+      text: 't',
+      fromName: 'Alô Cidadão · Prefeitura de Silva, "Sul"',
+    });
+    expect(bodies[0]!.from).toBe(
+      '"Alô Cidadão · Prefeitura de Silva, \\"Sul\\"" <nao-responda@alocidadao.com.br>',
+    );
+  });
 });

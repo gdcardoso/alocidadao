@@ -218,7 +218,11 @@ export function TeamsPage() {
                 ) : agentsQuery.data && agentsQuery.data.items.length === 0 ? (
                   <p className={styles.state}>Nenhum agente nesta equipe.</p>
                 ) : agentsQuery.data ? (
-                  <AgentsTable agents={agentsQuery.data.items} onAction={onAgentAction} />
+                  <AgentsTable
+                    agents={agentsQuery.data.items}
+                    onAction={onAgentAction}
+                    canInvite={context.tenant.status === 'active'}
+                  />
                 ) : null}
                 <p className={styles.note}>
                   <Info size={16} aria-hidden="true" />O agente entra no app com o celular

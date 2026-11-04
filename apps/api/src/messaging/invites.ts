@@ -19,6 +19,9 @@ function escapeHtml(value: string): string {
     .replace(/'/g, '&#39;');
 }
 
+/** Endereço da tela de entrada do painel, sem barra dupla. */
+const entryUrl = (links: InviteLinks) => `${links.panelUrl.replace(/\/+$/, '')}/entrar`;
+
 const firstName = (name: string) => name.trim().split(/\s+/)[0] ?? name;
 
 function button(label: string, href: string): string {
@@ -69,7 +72,7 @@ export function panelInviteEmail(p: {
       (s) => s,
       (s) => s,
     ),
-    `Entrar no painel: ${p.links.panelUrl}`,
+    `Entrar no painel: ${entryUrl(p.links)}`,
     LOGIN_TEXT,
     FOOTER_TEXT,
   ].join('\n\n');
@@ -78,7 +81,7 @@ export function panelInviteEmail(p: {
     paragraphs: [
       escapeHtml(greeting),
       intro(escapeHtml, (s) => `<b>${s}</b>`),
-      centered(button('Entrar no painel', p.links.panelUrl)),
+      centered(button('Entrar no painel', entryUrl(p.links))),
       LOGIN_TEXT,
     ],
   });
@@ -155,7 +158,7 @@ export function staffInviteEmail(p: {
   const text = [
     greeting,
     `Você foi adicionado à equipe do Alô Cidadão com o papel ${role}.`,
-    `Entrar no backoffice: ${p.links.panelUrl}`,
+    `Entrar no backoffice: ${entryUrl(p.links)}`,
     LOGIN_TEXT,
     FOOTER_TEXT,
   ].join('\n\n');
@@ -163,7 +166,7 @@ export function staffInviteEmail(p: {
     paragraphs: [
       escapeHtml(greeting),
       `Você foi adicionado à equipe do Alô Cidadão com o papel <b>${escapeHtml(role)}</b>.`,
-      centered(button('Entrar no backoffice', p.links.panelUrl)),
+      centered(button('Entrar no backoffice', entryUrl(p.links))),
       LOGIN_TEXT,
     ],
   });

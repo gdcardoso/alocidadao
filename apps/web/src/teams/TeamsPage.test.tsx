@@ -111,7 +111,11 @@ const carla = agent({
   status: 'inactive',
 });
 
-function renderPage(role: PanelContext['role'] = 'manager', path = '/equipes') {
+function renderPage(
+  role: PanelContext['role'] = 'manager',
+  path = '/equipes',
+  tenantStatus: PanelContext['tenant']['status'] = 'active',
+) {
   const session = createPanelSession({
     client: {
       panelRefresh: vi.fn(async () => ({ accessToken: 't', accessExpiresInSeconds: 900 })),
@@ -120,7 +124,7 @@ function renderPage(role: PanelContext['role'] = 'manager', path = '/equipes') {
   });
   session.signIn({ accessToken: 't', accessExpiresInSeconds: 900 });
   const context: PanelContext = {
-    tenant: { id: tenantId, displayName: 'Prefeitura', status: 'active', bounds: null },
+    tenant: { id: tenantId, displayName: 'Prefeitura', status: tenantStatus, bounds: null },
     user: { id: '5a4d3f2b-8c1e-4e6f-8a7b-9c0d1e2f3a4b', name: 'Carlos' },
     role,
     departments: [],
@@ -305,6 +309,14 @@ describe('TeamsPage', () => {
     await user.click(screen.getByRole('button', { name: 'Ações de Carla Dias' }));
     expect(screen.queryByRole('menuitem', { name: 'Reenviar convite' })).not.toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: 'Trocar e-mail' })).not.toBeInTheDocument();
+  });
+
+  it('resend invite is hidden while the tenant is still onboarding', async () => {
+    const user = renderPage('manager', '/equipes', 'onboarding');
+    await screen.findByText('Marcos Lima');
+    await user.click(screen.getByRole('button', { name: 'Ações de João Pereira' }));
+    expect(screen.queryByRole('menuitem', { name: 'Reenviar convite' })).not.toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Trocar e-mail' })).toBeInTheDocument();
   });
 
   it('resend invite toasts the masked email, then shows the wait and the inactive tenant message', async () => {

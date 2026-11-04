@@ -165,9 +165,16 @@ export function registerBackofficeInviteRoutes(
       const { id: tenantId, userId } = request.params;
       const ctx = { ...staff, tenantId };
       const [tenant] = await withContext(db, ctx, (tx) =>
-        tx.select({ id: tenants.id }).from(tenants).where(eq(tenants.id, tenantId)),
+        tx
+          .select({ id: tenants.id, status: tenants.status })
+          .from(tenants)
+          .where(eq(tenants.id, tenantId)),
       );
       if (!tenant) return reply.code(404).send({ code: 'tenant_not_found' });
+      // Em implantação os gestores já trabalham; só a prefeitura suspensa fica sem convite.
+      if (tenant.status === 'suspended') {
+        return reply.code(409).send({ code: 'invite_not_allowed' });
+      }
       const loaded = await loadManagerInvite(db, staffPanelIdentity(staff, tenantId), userId, {
         allowAdmin: true,
       });

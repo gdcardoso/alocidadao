@@ -127,6 +127,17 @@ describe('sidebar', () => {
   });
 });
 
+describe('load error', () => {
+  it('offers Sair next to Tentar de novo and signs out', async () => {
+    panelContext.mockRejectedValue(new Error('offline'));
+    const { session } = await renderApp();
+    const user = userEvent.setup();
+    expect(await screen.findByRole('button', { name: 'Tentar de novo' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Sair' }));
+    expect(session.getState().status).toBe('signed_out');
+  });
+});
+
 describe('no access', () => {
   it('403 not_a_member shows the no-access page', async () => {
     panelContext.mockRejectedValue(new ApiError(403, { code: 'not_a_member' }));

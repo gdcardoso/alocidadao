@@ -14,6 +14,8 @@ export type AgentAction =
 export interface AgentsTableProps {
   agents: AgentRow[];
   onAction: (action: AgentAction, agent: AgentRow) => void;
+  /** Só com a prefeitura ativa o convite chega ao agente. */
+  canInvite: boolean;
 }
 
 function initials(name: string): string {
@@ -53,14 +55,18 @@ function sortAgents(agents: readonly AgentRow[]): AgentRow[] {
   );
 }
 
-function menuItems(agent: AgentRow, onAction: AgentsTableProps['onAction']): RowMenuItem[] {
+function menuItems(
+  agent: AgentRow,
+  onAction: AgentsTableProps['onAction'],
+  canInvite: boolean,
+): RowMenuItem[] {
   const items: RowMenuItem[] = [];
   if (agent.lastActiveAt === null) {
     items.push({ label: 'Trocar número', onSelect: () => onAction('change_phone', agent) });
   }
   if (agent.status !== 'inactive') {
     items.push({ label: 'Trocar e-mail', onSelect: () => onAction('change_email', agent) });
-    if (agent.email) {
+    if (canInvite && agent.email) {
       items.push({ label: 'Reenviar convite', onSelect: () => onAction('resend_invite', agent) });
     }
   }
@@ -74,7 +80,7 @@ function menuItems(agent: AgentRow, onAction: AgentsTableProps['onAction']): Row
 }
 
 /** Tabela de agentes da equipe (W6): sem a coluna "Em aberto". */
-export function AgentsTable({ agents, onAction }: AgentsTableProps) {
+export function AgentsTable({ agents, onAction, canInvite }: AgentsTableProps) {
   const now = useNow();
   const columns: DataTableColumn<AgentRow>[] = [
     {
@@ -117,7 +123,9 @@ export function AgentsTable({ agents, onAction }: AgentsTableProps) {
       key: 'actions',
       header: '',
       width: 70,
-      render: (agent) => <RowMenu label={agent.name} items={menuItems(agent, onAction)} />,
+      render: (agent) => (
+        <RowMenu label={agent.name} items={menuItems(agent, onAction, canInvite)} />
+      ),
     },
   ];
   return (

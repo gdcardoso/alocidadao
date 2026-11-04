@@ -66,20 +66,22 @@ export function ManagersTab({ tenant, onOpenPanel }: ReadOnlyTabProps) {
       key: 'actions',
       header: '',
       width: 60,
-      render: (row) => (
-        <RowMenu
-          label={row.name}
-          items={[
-            {
-              label: 'Reenviar convite',
-              onSelect: () => {
-                setActionError(null);
-                resend.mutate(row);
+      // Conta desativada ou sem e-mail não recebe convite: sem menu.
+      render: (row) =>
+        row.status === 'inactive' || row.emailMasked === null ? null : (
+          <RowMenu
+            label={row.name}
+            items={[
+              {
+                label: 'Reenviar convite',
+                onSelect: () => {
+                  setActionError(null);
+                  resend.mutate(row);
+                },
               },
-            },
-          ]}
-        />
-      ),
+            ]}
+          />
+        ),
     },
   ];
 

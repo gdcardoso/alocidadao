@@ -105,6 +105,14 @@ describe('BackofficeLayout', () => {
     expect(screen.queryByRole('heading', { name: 'Equipe Alô Cidadão' })).not.toBeInTheDocument();
   });
 
+  it('load error offers Sair next to Tentar de novo and logs out', async () => {
+    backofficeContext.mockRejectedValue(new Error('offline'));
+    const { panelLogout } = renderApp('/backoffice/prefeituras');
+    expect(await screen.findByRole('button', { name: 'Tentar de novo' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Sair' }));
+    await waitFor(() => expect(panelLogout).toHaveBeenCalled());
+  });
+
   it('non-staff opening the backoffice goes to the map', async () => {
     backofficeContext.mockRejectedValue(new ApiError(403, { code: 'not_platform_staff' }));
     renderApp('/backoffice/prefeituras');

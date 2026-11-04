@@ -91,7 +91,7 @@ const setEmail = (userId: string, email: string | null) =>
   owner.db.update(users).set({ email }).where(eq(users.id, userId));
 
 /** Prefeitura (ativa ou em implantação) com Obras, categoria Buraco, equipe Norte, admin e gestor. */
-async function seedTenant(status: 'active' | 'onboarding' = 'active') {
+async function seedTenant(status: 'active' | 'onboarding' | 'suspended' = 'active') {
   const tenantId = await fx.createTenant(status);
   const worksId = await withContext(owner.db, { tenantId }, async (tx) => {
     const [dept] = await tx.insert(departments).values({ tenantId, name: 'Obras' }).returning();
@@ -537,6 +537,19 @@ describe('resend invite', () => {
       supportId,
     );
     expect(unknown.statusCode).toBe(404);
+  });
+
+  it('P3 resend is refused for a suspended tenant', async () => {
+    const supportId = await fx.newStaff('support');
+    const base = await seedTenant('suspended');
+    await setEmail(base.adminId, newEmail('admin'));
+    const response = await backoffice(
+      'POST',
+      `/backoffice/tenants/${base.tenantId}/managers/${base.adminId}/invite`,
+      supportId,
+    );
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toEqual({ code: 'invite_not_allowed' });
   });
 
   it('P6 resend sends the staff invite, is audited and admin only', async () => {

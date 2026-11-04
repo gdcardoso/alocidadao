@@ -7,7 +7,7 @@ import {
 } from './invites.js';
 
 const links: InviteLinks = {
-  panelUrl: 'http://painel.test/entrar',
+  panelUrl: 'http://painel.test',
   playStoreUrl: 'http://play.test/app',
   appStoreUrl: 'http://apple.test/app',
 };
@@ -39,6 +39,7 @@ describe('panelInviteEmail', () => {
     expect(m.subject).toBe('Você foi convidado para o painel do Alô Cidadão');
     expect(m.fromName).toBe('Alô Cidadão · Prefeitura de Goiânia');
     expect(m.html).toContain('href="http://painel.test/entrar"');
+    expect(m.text).toContain('http://painel.test/entrar');
     expect(m.html).toContain('Entrar no painel');
     expect(m.text).toContain('digite o seu CPF');
     expect(m.text).toContain('Não existe senha');
@@ -74,6 +75,29 @@ describe('agentInviteEmail', () => {
     expect(m.html).toContain('Procure <b>Alô Cidadão</b> na loja');
     expect(m.html).not.toContain('Baixar');
     expect(m.text).not.toContain('Baixar');
+  });
+});
+
+describe('entry link', () => {
+  it('points the panel and staff buttons to /entrar without a double slash', () => {
+    const slash = { ...links, panelUrl: 'http://painel.test/' };
+    const panelMail = panelInviteEmail({
+      to: 'a@b.com',
+      name: 'Ana',
+      tenantName: 'Prefeitura',
+      role: 'manager',
+      links: slash,
+    });
+    const staffMail = staffInviteEmail({
+      to: 'a@b.com',
+      name: 'Ana',
+      platformRole: 'admin',
+      links: slash,
+    });
+    for (const m of [panelMail, staffMail]) {
+      expect(m.html).toContain('href="http://painel.test/entrar"');
+      expect(m.text).toContain('http://painel.test/entrar');
+    }
   });
 });
 

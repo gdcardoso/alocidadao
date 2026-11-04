@@ -8,9 +8,30 @@ import { createSessionManager } from './session';
 // Renovação e saída usam o cliente sem sessão: o token vai explícito ou nem vai.
 export const session = createSessionManager({ store: secureStore, api });
 
+let termsRequiredHandler: (() => void) | null = null;
+
+/** O SessionProvider registra aqui o que fazer quando a API pede o aceite dos Termos. */
+export function setTermsRequiredHandler(handler: (() => void) | null): void {
+  termsRequiredHandler = handler;
+}
+
+/** `fetch` que avisa o app quando uma chamada volta 403 `terms_required`. */
+const fetchWatchingTerms: typeof fetch = async (input, init) => {
+  const response = await fetch(input, init);
+  if (response.status === 403) {
+    const body: unknown = await response
+      .clone()
+      .json()
+      .catch(() => null);
+    if ((body as { code?: string } | null)?.code === 'terms_required') termsRequiredHandler?.();
+  }
+  return response;
+};
+
 /** Cliente da API com o token da sessão (ex.: `me`). */
 export const sessionApi = createApiClient({
   baseUrl: API_URL,
+  fetch: fetchWatchingTerms,
   getToken: () => session.getAccessToken(),
 });
 

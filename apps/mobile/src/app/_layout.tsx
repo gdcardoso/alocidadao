@@ -64,6 +64,9 @@ function RootStack() {
       <Stack.Protected guard={status === 'signedIn'}>
         <Stack.Screen name="(app)" options={{ animation: 'fade' }} />
       </Stack.Protected>
+      {/* Textos legais: abertos do cadastro, da caixa de aceite e do Perfil. */}
+      <Stack.Screen name="termos" />
+      <Stack.Screen name="privacidade" />
       {/* Laboratório e kit de componentes: só em desenvolvimento. */}
       <Stack.Protected guard={__DEV__}>
         <Stack.Screen

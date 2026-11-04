@@ -13,7 +13,7 @@ import {
   type LucideIcon,
 } from 'lucide-react-native';
 import { Fragment, useState, type ReactNode } from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { sessionApi } from '../auth/native-session';
 import { useSession } from '../auth/use-session';
 import { deleteAccountErrorMessage, pendingCount, signOutWarning } from '../citizen/profile-view';
@@ -24,9 +24,6 @@ import { FormError } from '../ui/FormLayout';
 import { formatPhoneBR, initials } from '../ui/format';
 import { Screen } from '../ui/Screen';
 import { colors, fonts, radius, space } from '../ui/theme';
-
-const TERMS_URL = 'https://alocidadao.com.br/termos';
-const PRIVACY_URL = 'https://alocidadao.com.br/privacidade';
 
 /** Envios na fila (de qualquer tipo) que a saída apagaria. Sem conseguir ler, conta zero. */
 async function countPendingUploads(): Promise<number> {
@@ -81,7 +78,6 @@ export function ProfileContent() {
     }
   };
 
-  const open = (url: string) => void Linking.openURL(url).catch(() => undefined);
   const go = (href: Href) => router.push(href);
 
   return (
@@ -134,12 +130,12 @@ export function ProfileContent() {
           </Section>
 
           <Section title="Sobre">
-            <Row icon={FileText} label="Termos de Uso" link onPress={() => open(TERMS_URL)} />
+            <Row icon={FileText} label="Termos de Uso" link onPress={() => go('/termos')} />
             <Row
               icon={ShieldCheck}
               label="Política de Privacidade"
               link
-              onPress={() => open(PRIVACY_URL)}
+              onPress={() => go('/privacidade')}
             />
           </Section>
 

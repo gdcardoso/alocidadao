@@ -4,8 +4,8 @@ import { useState } from 'react';
 import { apiErrorCode, apiErrorMessage, SIGNUP_EXPIRED_MESSAGE } from '../../auth/login-flow';
 import { useSession } from '../../auth/use-session';
 import { api } from '../../lib/api';
+import { TermsCheckbox } from '../../legal/TermsCheckbox';
 import { PrimaryButton } from '../../ui/Button';
-import { Checkbox } from '../../ui/Checkbox';
 import { FormError, FormLayout, FormText, FormTitle } from '../../ui/FormLayout';
 import { Header } from '../../ui/Header';
 import { TextField } from '../../ui/TextField';
@@ -113,11 +113,7 @@ export default function QuaseLa() {
         help="Ajuda a recuperar sua conta se você trocar de número."
         error={emailError}
       />
-      <Checkbox
-        checked={accepted}
-        onChange={setAccepted}
-        label="Li e aceito os Termos de Uso e a Política de Privacidade."
-      />
+      <TermsCheckbox checked={accepted} onChange={setAccepted} />
     </FormLayout>
   );
 }

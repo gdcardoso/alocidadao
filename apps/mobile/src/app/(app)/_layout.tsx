@@ -1,4 +1,5 @@
 import { Stack } from 'expo-router';
+import { needsTermsAcceptance } from '../../legal/terms-route';
 import { useSession } from '../../auth/use-session';
 import { useOutboxSync } from '../../offline/use-outbox-sync';
 import { colors } from '../../ui/theme';
@@ -14,16 +15,21 @@ export const unstable_settings = { initialRouteName: '(tabs)' };
  * abas do outro modo ficam proibidas: trocar de modo tira da pilha as telas do modo anterior.
  */
 export default function AppLayout() {
-  const { mode } = useSession();
+  const { mode, me } = useSession();
+  // Conta que ainda não aceitou os Termos só enxerga a tela de aceite.
+  const mustAccept = needsTermsAcceptance(me);
   // A fila offline sai sozinha enquanto a pessoa está logada (rede, primeiro plano, espera).
   useOutboxSync();
   return (
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
-      <Stack.Protected guard={mode === 'citizen'}>
+      <Stack.Protected guard={mode === 'citizen' && !mustAccept}>
         <Stack.Screen name="(tabs)" />
       </Stack.Protected>
-      <Stack.Protected guard={mode === 'agent'}>
+      <Stack.Protected guard={mode === 'agent' && !mustAccept}>
         <Stack.Screen name="agente" />
+      </Stack.Protected>
+      <Stack.Protected guard={mustAccept}>
+        <Stack.Screen name="aceite" />
       </Stack.Protected>
     </Stack>
   );

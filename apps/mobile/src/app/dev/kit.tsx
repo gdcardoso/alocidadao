@@ -122,7 +122,7 @@ export default function Kit() {
           <Checkbox
             checked={terms}
             onChange={setTerms}
-            label="Li e aceito os Termos de Uso e a Política de Privacidade."
+            label="Li e aceito os Termos de Uso e estou ciente da Política de Privacidade."
           />
         </Section>
 

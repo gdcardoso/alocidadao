@@ -18,7 +18,7 @@ import {
   type AppMode,
 } from './app-mode';
 import { OUTBOX_OWNER_KEY } from './login-flow';
-import { session, sessionApi } from './native-session';
+import { session, sessionApi, setTermsRequiredHandler } from './native-session';
 import { restoreSession, signInWithOwnerCheck, signOutSafely } from './session-flow';
 import { SessionContext, type SessionStatus, type SignOutOptions } from './use-session';
 
@@ -103,6 +103,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       else throw error;
     }
   }, [dropSession]);
+
+  // 403 `terms_required` em qualquer chamada: `me` volta com `termsAccepted: false` e o
+  // layout leva à tela de aceite.
+  useEffect(() => {
+    setTermsRequiredHandler(() => void refreshMe().catch(() => undefined));
+    return () => setTermsRequiredHandler(null);
+  }, [refreshMe]);
 
   const signIn = useCallback(async (tokens: SessionTokens) => {
     const current = await signInWithOwnerCheck({

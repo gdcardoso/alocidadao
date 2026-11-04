@@ -45,7 +45,7 @@ CREATE FUNCTION panel_find_or_create_agent_user(p_name text, p_phone text, p_ema
     ELSIF v_email IS NULL AND p_email IS NOT NULL THEN
       -- O e-mail recupera a conta no app e é o segundo fator do painel; fora do modo suporte, não
       -- grava em quem tem acesso de gestão em qualquer prefeitura ou qualquer vínculo (até de
-      -- cidadão) em outra. Mais estrita que panel_change_agent_email.
+      -- cidadão) em outra. Mesma trava de panel_change_agent_email.
       IF NOT app_is_platform_staff() AND EXISTS (
         SELECT 1 FROM memberships m
         WHERE m.user_id = v_id
@@ -70,9 +70,10 @@ GRANT EXECUTE ON FUNCTION panel_find_or_create_agent_user(text, text, text) TO a
 --> statement-breakpoint
 
 -- ── Troca do e-mail do agente (espelho de panel_change_manager_email) ──
--- O e-mail é o segundo fator de entrada no painel: recusa (email_change_not_allowed) conta da equipe
--- interna e, fora do modo suporte, quem tem acesso de gestão em qualquer prefeitura ou é agente em
--- outra prefeitura. Não reenvia o convite.
+-- O e-mail é o segundo fator de entrada no painel e recupera a conta no app: recusa
+-- (email_change_not_allowed) conta da equipe interna e, fora do modo suporte, quem tem acesso de
+-- gestão em qualquer prefeitura ou qualquer vínculo (até de cidadão) em outra prefeitura, a mesma
+-- trava do cadastro. Não reenvia o convite.
 
 CREATE FUNCTION panel_change_agent_email(p_user_id uuid, p_email text)
   RETURNS void
@@ -104,10 +105,7 @@ CREATE FUNCTION panel_change_agent_email(p_user_id uuid, p_email text)
       NOT app_is_platform_staff() AND EXISTS (
         SELECT 1 FROM memberships m
         WHERE m.user_id = p_user_id
-          AND (
-            m.role IN ('manager', 'tenant_admin')
-            OR (m.role = 'field_agent' AND m.tenant_id <> app_current_tenant())
-          )
+          AND (m.role IN ('manager', 'tenant_admin') OR m.tenant_id <> app_current_tenant())
       )
     ) THEN
       RAISE EXCEPTION 'email_change_not_allowed'

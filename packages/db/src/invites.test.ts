@@ -324,6 +324,17 @@ describe('troca de e-mail do agente', () => {
     });
   });
 
+  it('troca de e-mail do agente recusa cidadã de outra prefeitura', async () => {
+    const person = await createUser();
+    await link(a.tenantId, person, 'field_agent');
+    await link(b.tenantId, person, 'citizen');
+    expect(await pgError(changeAgentEmail(asManagerA(), person, newEmail()))).toMatchObject({
+      code: '23514',
+      message: 'email_change_not_allowed',
+    });
+    expect((await userRow(person)).email).toBeNull();
+  });
+
   it('recusa agente de outra prefeitura', async () => {
     const person = await createUser({ email: newEmail() });
     await link(a.tenantId, person, 'field_agent', 'invited');
@@ -337,8 +348,6 @@ describe('troca de e-mail do agente', () => {
   it('aceita agente só desta prefeitura', async () => {
     const person = await createUser();
     await link(a.tenantId, person, 'field_agent');
-    // Ser cidadão em outra prefeitura não trava a troca.
-    await link(b.tenantId, person, 'citizen');
     const email = newEmail();
     await changeAgentEmail(asManagerA(), person, email);
     expect((await userRow(person)).email).toBe(email);

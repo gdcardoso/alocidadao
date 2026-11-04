@@ -13,7 +13,7 @@ export const storedPhoneSchema = z.string().regex(/^\+[1-9][0-9]{7,14}$/, 'Telef
 export const codeSchema = z.string().regex(/^[0-9]{6}$/, 'Código inválido');
 
 /** Versão vigente dos Termos de Uso. */
-export const TERMS_VERSION = '2026-10-23';
+export const TERMS_VERSION = '2026-11-04';
 export const CODE_LENGTH = 6;
 export const CODE_TTL_SECONDS = 600;
 export const CODE_RESEND_SECONDS = 60;

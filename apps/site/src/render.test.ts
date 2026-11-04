@@ -107,6 +107,10 @@ describe('renderHome', () => {
     expect(html).toContain('src="/img/agente-concluir.webp"');
   });
 
+  it('shows a stock service photo on the drawn "concluded" phone', () => {
+    expect(html).toMatch(/<div class="ph-photo"><img src="\/img\/fotos\/iluminacao-poste\.webp"/);
+  });
+
   it('has no emoji', () => {
     // © e ® são pictográficos no Unicode, mas não emoji
     expect(html).not.toMatch(/(?![©®])\p{Extended_Pictographic}/u);

@@ -74,14 +74,21 @@ interface SiteImage {
 
 const PANEL_MAP: Omit<SiteImage, 'alt'> = {
   src: '/img/painel-mapa.webp',
-  width: 1440,
-  height: 900,
+  width: 2160,
+  height: 1350,
 };
 const AGENT_FINISH: SiteImage = {
   src: '/img/agente-concluir.webp',
   width: 780,
   height: 1436,
   alt: 'App do agente concluindo um atendimento',
+};
+/** Foto de banco (ver public/img/fotos/CREDITOS.md) na tela desenhada do serviço concluído. */
+const SERVICE_PHOTO: SiteImage = {
+  src: '/img/fotos/iluminacao-poste.webp',
+  width: 600,
+  height: 900,
+  alt: '',
 };
 /**
  * Telas do app do cidadão. Enquanto não há captura, os celulares são desenhados em HTML (como no
@@ -181,7 +188,7 @@ function citizenDoneScreen(): string {
   if (CITIZEN_DONE) return img(CITIZEN_DONE, ' loading="lazy"');
   return `<div class="ph ph-done" role="img" aria-label="App do cidadão com um serviço concluído e a foto">
 <b class="lex ph-title">Serviço concluído</b>
-<div class="ph-photo">foto do serviço</div>
+<div class="ph-photo">${img(SERVICE_PHOTO, ' loading="lazy"')}</div>
 <div class="card"><b>Lâmpada queimada</b><br><small>Resolvido pela equipe de Iluminação</small></div>
 <div class="ph-confirm">Confirmar</div>
 </div>`;

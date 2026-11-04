@@ -10,3 +10,6 @@ secrets/
 *.p8
 google-services.json
 GoogleService-Info.plist
+
+# Rascunhos do brainstorming e da execução de planos
+.superpowers/

@@ -65,6 +65,8 @@ export const membershipStatus = pgEnum('membership_status', MEMBERSHIP_STATUSES)
 export const accountStatus = pgEnum('account_status', ACCOUNT_STATUSES);
 export const platformRole = pgEnum('platform_role', PLATFORM_ROLES);
 export const commercialStatus = pgEnum('commercial_status', COMMERCIAL_STATUSES);
+/** Tipo de convite por e-mail: gestão (admin e gestor), agente e equipe interna. */
+export const inviteKind = pgEnum('invite_kind', ['panel', 'agent', 'staff']);
 
 // ── Tabelas globais (sem tenant_id) ────────────────────────────────────────
 
@@ -796,5 +798,28 @@ export const panelNotifications = pgTable(
       foreignColumns: [workOrders.tenantId, workOrders.id],
     }),
     index('panel_notifications_user_idx').on(t.userId, t.tenantId, t.createdAt.desc()),
+  ],
+);
+
+/**
+ * Cada envio de convite por e-mail. Serve para achar o agente que ainda não recebeu (nenhuma linha
+ * `agent` no par pessoa/prefeitura) e para o limite de reenvio. `tenant_id` nulo só no convite da
+ * equipe interna. Sem GRANT para app_user: só as funções SECURITY DEFINER leem e escrevem.
+ */
+export const inviteDeliveries = pgTable(
+  'invite_deliveries',
+  {
+    id: id(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id),
+    tenantId: uuid('tenant_id').references(() => tenants.id),
+    kind: inviteKind('kind').notNull(),
+    sentBy: uuid('sent_by').references(() => users.id),
+    sentAt: timestamp('sent_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index().on(t.userId, t.tenantId, t.kind, t.sentAt.desc()),
+    check('invite_deliveries_tenant_check', sql`(${t.kind} = 'staff') = (${t.tenantId} is null)`),
   ],
 );

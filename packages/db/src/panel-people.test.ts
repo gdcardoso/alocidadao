@@ -88,7 +88,7 @@ const asAdmin = (): DbContext => ({ tenantId: tenantA, userId: adminId });
 function findOrCreateAgent(context: DbContext, name: string, phone: string) {
   return withContext(app.db, context, async (tx) => {
     const result = await tx.execute<{ id: string }>(
-      sql`select panel_find_or_create_agent_user(${name}, ${phone}) as id`,
+      sql`select id from panel_find_or_create_agent_user(${name}, ${phone}, null)`,
     );
     return result.rows[0]!.id;
   });

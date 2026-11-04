@@ -585,7 +585,9 @@ describe('equipe interna', () => {
     });
 
     expect(
-      await pgError(call(inSupport, sql`select panel_find_or_create_agent_user('X', ${phone})`)),
+      await pgError(
+        call(inSupport, sql`select * from panel_find_or_create_agent_user('X', ${phone}, null)`),
+      ),
     ).toMatchObject({ code: '23514', message: 'staff_account_not_allowed' });
     expect(
       await pgError(

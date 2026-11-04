@@ -251,7 +251,7 @@ export async function addAgent(
       if ((await queryTeams(tx, identity, teamId)).length === 0) throw new Refusal(TEAM_NOT_FOUND);
 
       const found = await tx.execute<{ id: string }>(
-        sql`SELECT panel_find_or_create_agent_user(${body.name}, ${body.phone}) AS id`,
+        sql`SELECT id FROM panel_find_or_create_agent_user(${body.name}, ${body.phone}, NULL)`,
       );
       const userId = found.rows[0]!.id;
 

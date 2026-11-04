@@ -295,6 +295,20 @@
       "when": 1793477580572,
       "tag": "0041_neighborhoods_reject_empty",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1793804022360,
+      "tag": "0042_invite_deliveries",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1793804026912,
+      "tag": "0043_invites",
+      "breakpoints": true
     }
   ]
 }

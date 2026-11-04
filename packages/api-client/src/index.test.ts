@@ -416,7 +416,11 @@ describe('panel calls', () => {
     );
     const api = createApiClient({ baseUrl: 'http://api', fetch: fakeFetch });
     const error = await api
-      .panelAddAgent(TENANT_ID, REQUEST_ID, { name: 'Maria Souza', phone: '+5511999990000' })
+      .panelAddAgent(TENANT_ID, REQUEST_ID, {
+        name: 'Maria Souza',
+        phone: '+5511999990000',
+        email: 'maria@exemplo.com',
+      })
       .catch((e: unknown) => e);
     expect(calls[0]?.url).toBe(`http://api/panel/teams/${REQUEST_ID}/agents`);
     expect(error).toBeInstanceOf(ApiError);
@@ -424,6 +428,23 @@ describe('panel calls', () => {
       code: 'agent_in_other_team',
       teamName: 'Equipe Norte',
     });
+  });
+
+  it('panel invite resend posts to the manager and agent routes with the tenant', async () => {
+    const { calls, fakeFetch } = recorder(() => Response.json({ maskedEmail: 'm•••@exemplo.com' }));
+    const api = createApiClient({ baseUrl: 'http://api', fetch: fakeFetch });
+    expect(await api.panelResendManagerInvite(TENANT_ID, REQUEST_ID)).toEqual({
+      maskedEmail: 'm•••@exemplo.com',
+    });
+    await api.panelResendAgentInvite(TENANT_ID, REQUEST_ID);
+    expect(calls.map((c) => c.url)).toEqual([
+      `http://api/panel/managers/${REQUEST_ID}/invite`,
+      `http://api/panel/agents/${REQUEST_ID}/invite`,
+    ]);
+    for (const call of calls) {
+      expect(call.init?.method).toBe('POST');
+      expect(new Headers(call.init?.headers).get('x-tenant-id')).toBe(TENANT_ID);
+    }
   });
 
   it('panelUpdateCategory sends PATCH', async () => {
@@ -690,6 +711,22 @@ describe('backoffice calls', () => {
         path: `/backoffice/tenants/${U}/managers`,
         response: () => Response.json({ items: [] }),
         result: { items: [] },
+      },
+      {
+        name: 'tenant manager invite',
+        call: (a) => a.backofficeResendTenantManagerInvite(U, U),
+        method: 'POST',
+        path: `/backoffice/tenants/${U}/managers/${U}/invite`,
+        response: () => Response.json({ maskedEmail: 'a•••@exemplo.com' }),
+        result: { maskedEmail: 'a•••@exemplo.com' },
+      },
+      {
+        name: 'staff invite',
+        call: (a) => a.backofficeResendStaffInvite(U),
+        method: 'POST',
+        path: `/backoffice/staff/${U}/invite`,
+        response: () => Response.json({ maskedEmail: 'b•••@exemplo.com' }),
+        result: { maskedEmail: 'b•••@exemplo.com' },
       },
       {
         name: 'tenant categories',

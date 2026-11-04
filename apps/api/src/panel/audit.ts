@@ -40,7 +40,9 @@ export const PANEL_AUDIT_ACTIONS: Record<string, StaffAuditAction> = {
   'PATCH /panel/teams/:id': 'team.update',
   'POST /panel/teams/:id/agents': 'agent.create',
   'PATCH /panel/agents/:userId': 'agent.update',
+  'POST /panel/agents/:userId/invite': 'invite.resend',
   'POST /panel/managers': 'manager.create',
+  'POST /panel/managers/:userId/invite': 'invite.resend',
   'PATCH /panel/managers/:userId': 'manager.update',
   'POST /panel/categories': 'category.create',
   'PATCH /panel/categories/:id': 'category.update',
@@ -84,7 +86,8 @@ export function auditTarget(url: string, params: unknown): AuditTarget {
   return { targetType: null, targetId: null };
 }
 
-type AuditContext = { tenantId: string; userId: string; platformRole: PlatformRole };
+/** `tenantId` nulo: ação do backoffice sem prefeitura (ex.: reenvio do convite da equipe). */
+type AuditContext = { tenantId: string | null; userId: string; platformRole: PlatformRole };
 type AuditEvent = {
   action: StaffAuditAction;
   targetType: string | null;
@@ -120,7 +123,10 @@ export async function recordStaffAudit(
   context: AuditContext,
   event: AuditEvent,
 ): Promise<void> {
-  await withContext(db, context, (tx) => insertStaffAudit(tx, context, event));
+  const { tenantId, userId, platformRole } = context;
+  await withContext(db, { ...(tenantId ? { tenantId } : {}), userId, platformRole }, (tx) =>
+    insertStaffAudit(tx, context, event),
+  );
 }
 
 /**

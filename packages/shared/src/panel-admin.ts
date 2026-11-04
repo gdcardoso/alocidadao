@@ -77,10 +77,15 @@ export type TeamUpdateBody = z.infer<typeof teamUpdateBodySchema>;
 
 // Agentes
 
+/** E-mail de gestor e agente: guardado em minúsculas. */
+const lowercaseEmailSchema = z.email().transform((value) => value.toLowerCase());
+
 export const agentRowSchema = z.object({
   userId: z.uuid(),
   name: z.string(),
   phone: z.string().nullable(),
+  /** Sem máscara, como na lista de gestores; nulo em agentes antigos. */
+  email: z.string().nullable(),
   status: membershipStatusSchema,
   lastActiveAt: z.iso.datetime().nullable(),
 });
@@ -92,16 +97,22 @@ export type AgentsResponse = z.infer<typeof agentsResponseSchema>;
 export const agentCreateBodySchema = z.object({
   name: nameSchema(PERSON_NAME_MAX),
   phone: phoneSchema,
+  email: lowercaseEmailSchema,
 });
 export type AgentCreateBody = z.infer<typeof agentCreateBodySchema>;
 
 export const agentUpdateBodySchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('change_phone'), phone: phoneSchema }),
+  z.object({ action: z.literal('change_email'), email: lowercaseEmailSchema }),
   z.object({ action: z.literal('move'), teamId: z.uuid() }),
   z.object({ action: z.literal('deactivate') }),
   z.object({ action: z.literal('reactivate') }),
 ]);
 export type AgentUpdateBody = z.infer<typeof agentUpdateBodySchema>;
+
+/** Resposta de "Reenviar convite" (gestor, agente e equipe Alô Cidadão). */
+export const inviteResendResponseSchema = z.object({ maskedEmail: z.string() });
+export type InviteResendResponse = z.infer<typeof inviteResendResponseSchema>;
 
 // Gestores
 
@@ -136,7 +147,7 @@ export type StaffManagerRow = z.infer<typeof staffManagerRowSchema>;
 export const staffManagersResponseSchema = z.object({ items: z.array(staffManagerRowSchema) });
 export type StaffManagersResponse = z.infer<typeof staffManagersResponseSchema>;
 
-const managerEmailSchema = z.email().transform((value) => value.toLowerCase());
+const managerEmailSchema = lowercaseEmailSchema;
 const departmentIdsSchema = z.array(z.uuid()).min(1);
 
 export const managerCreateBodySchema = z.object({

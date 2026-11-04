@@ -51,6 +51,8 @@ async function call(
 }
 
 let phoneCounter = 0;
+let emailCounter = 0;
+const newEmail = () => `agente.${Date.now()}.${emailCounter++}@teste.dev`;
 const newPhone = () =>
   `+5541977${String(Date.now() % 100_000).padStart(5, '0')}${phoneCounter++ % 10}`;
 
@@ -223,6 +225,7 @@ describe('equipes e agentes na API', () => {
       {
         name: 'Novo Agente',
         phone,
+        email: newEmail(),
       },
     );
     expect(response.statusCode).toBe(201);
@@ -257,6 +260,7 @@ describe('equipes e agentes na API', () => {
       {
         name: 'Nome Digitado',
         phone: base.citizen.phone,
+        email: base.citizen.email,
       },
     );
     expect(response.statusCode).toBe(201);
@@ -282,6 +286,7 @@ describe('equipes e agentes na API', () => {
       {
         name: 'Qualquer',
         phone: agent!.phone,
+        email: newEmail(),
       },
     );
     expect(other.statusCode).toBe(409);
@@ -295,6 +300,7 @@ describe('equipes e agentes na API', () => {
       {
         name: 'Qualquer',
         phone: agent!.phone,
+        email: newEmail(),
       },
     );
     expect(same.statusCode).toBe(409);
@@ -311,6 +317,7 @@ describe('equipes e agentes na API', () => {
       {
         name: 'Novo Agente',
         phone: newPhone(),
+        email: newEmail(),
       },
     );
     expect(response.statusCode).toBe(404);
@@ -326,6 +333,7 @@ describe('equipes e agentes na API', () => {
       {
         name: 'Agente Novo',
         phone: newPhone(),
+        email: newEmail(),
       },
     );
     const freshId = agentRowSchema.parse(fresh.json()).userId;

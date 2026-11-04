@@ -5,7 +5,9 @@ import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { requireAuth } from '../auth/plugin.js';
+import { registerBackofficeInviteRoutes } from '../invites/routes.js';
 import type { EmailSender } from '../messaging/email.js';
+import type { InviteLinks } from '../messaging/invites.js';
 import { recordImplicitSupportLeave, recordStaffAudit } from '../panel/audit.js';
 import { registerAuditRoutes } from './audit-routes.js';
 import { registerCitizenRoutes } from './citizens.js';
@@ -27,8 +29,10 @@ export interface BackofficeDeps {
   secret: string;
   /** Código fixo (só desenvolvimento). */
   devFixedCode?: string;
-  /** Envio do código de recuperação da conta congelada. */
+  /** Envio do código de recuperação da conta congelada e dos convites. */
   email: EmailSender;
+  /** Endereços dos botões do convite. */
+  invites: InviteLinks;
 }
 
 const tenantParamsSchema = z.object({ id: z.uuid() });
@@ -45,7 +49,7 @@ const staffErrors = {
  * requireAuth só para receber o 403 `not_platform_staff`.
  */
 export function registerBackofficeRoutes(instance: FastifyInstance, deps: BackofficeDeps) {
-  const { db } = deps;
+  const { db, email, invites } = deps;
   const app = instance.withTypeProvider<ZodTypeProvider>();
   const preHandler = requireAuth(['app', 'panel']);
 
@@ -96,13 +100,14 @@ export function registerBackofficeRoutes(instance: FastifyInstance, deps: Backof
       },
     );
 
-  registerTenantRoutes(instance, { db, preHandler });
+  registerTenantRoutes(instance, { db, email, invites, preHandler });
   registerTenantListRoutes(instance, { db, preHandler });
   registerCitizenRoutes(instance, { db, preHandler });
   registerNeighborhoodRoutes(instance, { db, preHandler });
-  registerCreateTenantRoutes(instance, { db, preHandler });
+  registerCreateTenantRoutes(instance, { db, email, invites, preHandler });
   registerCityInterestRoutes(instance, { db, preHandler });
-  registerStaffRoutes(instance, { db, preHandler });
+  registerStaffRoutes(instance, { db, email, invites, preHandler });
+  registerBackofficeInviteRoutes(instance, { db, email, invites, preHandler });
   registerAuditRoutes(instance, { db, preHandler });
   registerFrozenAccountRoutes(instance, { ...deps, preHandler });
 

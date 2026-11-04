@@ -421,6 +421,7 @@ describe('gestores, categorias e setores na API', () => {
     const agent = await call('POST', `/panel/teams/${teamId}/agents`, base.adminId, base.tenantId, {
       name: 'Pessoa da Equipe',
       phone: staff!.phone,
+      email,
     });
     expect(agent.statusCode).toBe(409);
     expect(agent.json()).toEqual({ code: 'staff_account_not_allowed' });

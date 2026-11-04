@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  agentCreateBodySchema,
   agentUpdateBodySchema,
   categoryCreateBodySchema,
   categoryUpdateBodySchema,
@@ -51,6 +52,26 @@ describe('agentUpdateBodySchema', () => {
     expect(agentUpdateBodySchema.safeParse({ action: 'deactivate' }).success).toBe(true);
     expect(agentUpdateBodySchema.safeParse({ action: 'reactivate' }).success).toBe(true);
     expect(agentUpdateBodySchema.safeParse({ action: 'delete' }).success).toBe(false);
+    expect(
+      agentUpdateBodySchema.parse({ action: 'change_email', email: 'Ana@Exemplo.com' }),
+    ).toEqual({ action: 'change_email', email: 'ana@exemplo.com' });
+    expect(agentUpdateBodySchema.safeParse({ action: 'change_email', email: 'x' }).success).toBe(
+      false,
+    );
+  });
+});
+
+describe('agentCreateBodySchema', () => {
+  it('agent body requires the email and lowercases it', () => {
+    const body = agentCreateBodySchema.parse({
+      name: 'Ana Souza',
+      phone: '+5511988771020',
+      email: 'Ana@Exemplo.com',
+    });
+    expect(body.email).toBe('ana@exemplo.com');
+    expect(
+      agentCreateBodySchema.safeParse({ name: 'Ana Souza', phone: '+5511988771020' }).success,
+    ).toBe(false);
   });
 });
 

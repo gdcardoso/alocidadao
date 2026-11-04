@@ -89,7 +89,11 @@ describe('auditoria do modo suporte', () => {
         }
       }
     });
-    registerPanelRoutes(probe, { db: appDb.db });
+    registerPanelRoutes(probe, {
+      db: appDb.db,
+      email: testAuthOptions.email,
+      invites: { panelUrl: 'http://painel.teste', playStoreUrl: null, appStoreUrl: null },
+    });
     await probe.ready();
     await probe.close();
 
@@ -264,6 +268,7 @@ describe('auditoria do modo suporte', () => {
       payload: {
         name: 'Agente Novo',
         phone: `+55419${String(randomInt(0, 100_000_000)).padStart(8, '0')}`,
+        email: `agente.${randomInt(0, 1e9)}@teste.dev`,
       },
     });
     expect(response.statusCode).toBe(201);

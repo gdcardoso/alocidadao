@@ -19,6 +19,7 @@ import { registerDevManagerActions } from './dev/manager-actions.js';
 import { registerDevPush, type PushSenders } from './dev/push.js';
 import { registerDevWorkOrders } from './dev/work-orders.js';
 import type { EmailSender } from './messaging/email.js';
+import type { InviteLinks } from './messaging/invites.js';
 import { createLogSmsSender, type SmsSender } from './messaging/sms.js';
 import { registerMeRoutes } from './me/routes.js';
 import { startScheduler, type Scheduler } from './notifications/scheduler.js';
@@ -61,7 +62,15 @@ export interface AppOptions {
    * as /agent/*, só com `auth`.
    */
   auth?: AuthOptions;
+  /** Endereços dos botões do e-mail de convite. Padrão: o painel local, sem lojas. */
+  invites?: InviteLinks;
 }
+
+const LOCAL_INVITE_LINKS: InviteLinks = {
+  panelUrl: 'http://localhost:5173',
+  playStoreUrl: null,
+  appStoreUrl: null,
+};
 
 /**
  * Registra o @fastify/rate-limit no escopo, com a resposta 429
@@ -111,6 +120,7 @@ export async function buildApp({
   devRoutes = false,
   auth,
   notifications,
+  invites = LOCAL_INVITE_LINKS,
 }: AppOptions = {}) {
   const app = Fastify({ logger }).withTypeProvider<ZodTypeProvider>();
   app.setValidatorCompiler(validatorCompiler);
@@ -163,7 +173,7 @@ export async function buildApp({
     // vem antes das rotas, para o gancho valer em todas.
     await app.register(async (scope) => {
       registerPanelAudit(scope, database);
-      registerPanelRoutes(scope, { db: database, storage });
+      registerPanelRoutes(scope, { db: database, storage, email: auth.email, invites });
     });
     // Backoffice da equipe interna: escopo próprio, sem limite por IP.
     await app.register(async (scope) => {
@@ -172,6 +182,7 @@ export async function buildApp({
         secret: auth.secret,
         devFixedCode: auth.devFixedCode,
         email: auth.email,
+        invites,
       });
     });
     // Cidadão: escopo próprio, sem o limite por IP do /auth/*.

@@ -21,11 +21,14 @@ import {
   USER_EMAIL_CONSTRAINT,
   violatedConstraint,
 } from '../db-errors.js';
+import { sendInvite, type InviteTarget } from '../invites/send.js';
+import type { EmailSender } from '../messaging/email.js';
+import type { InviteLinks } from '../messaging/invites.js';
 import { Refusal } from '../panel/actions.js';
 import { insertStaffAudit } from '../panel/audit.js';
 import { requirePlatformStaff } from './staff.js';
 
-const { tenants, tenantContracts, memberships, departments, categories } = schema;
+const { tenants, tenantContracts, memberships, departments, categories, users } = schema;
 
 const staffErrors = {
   400: apiErrorSchema,
@@ -77,7 +80,12 @@ function translateDbError(error: unknown): CreateRefusal | undefined {
 /** Rotas da P2: busca de município e criação da prefeitura. */
 export function registerCreateTenantRoutes(
   instance: FastifyInstance,
-  { db, preHandler }: { db: Database; preHandler: preHandlerHookHandler },
+  {
+    db,
+    email,
+    invites,
+    preHandler,
+  }: { db: Database; email: EmailSender; invites: InviteLinks; preHandler: preHandlerHookHandler },
 ) {
   const app = instance.withTypeProvider<ZodTypeProvider>();
 
@@ -151,8 +159,9 @@ export function registerCreateTenantRoutes(
       const body = request.body;
       const tenantId = randomUUID();
 
+      let invite: InviteTarget;
       try {
-        await withContext(db, { ...staff, tenantId }, (tx) =>
+        invite = await withContext(db, { ...staff, tenantId }, (tx) =>
           createTenant(tx, staff, tenantId, body),
         );
       } catch (error) {
@@ -162,6 +171,12 @@ export function registerCreateTenantRoutes(
         const { status, ...payload } = refusal;
         return reply.code(status).send(payload);
       }
+      // Convite de gestão do admin da prefeitura, depois do commit.
+      await sendInvite(
+        { db, email, links: invites, log: request.log },
+        { ...staff, tenantId },
+        invite,
+      );
       return reply.code(201).send({ id: tenantId });
     },
   );
@@ -172,7 +187,7 @@ async function createTenant(
   staff: { userId: string; platformRole: 'admin' | 'support' },
   tenantId: string,
   body: TenantCreateBody,
-) {
+): Promise<InviteTarget> {
   const found = await tx.execute<{ name: string; state: string }>(
     sql`select name, state from municipalities where ibge_code = ${body.ibgeCode}`,
   );
@@ -241,4 +256,16 @@ async function createTenant(
     { ...staff, tenantId },
     { action: 'tenant.create', targetType: 'tenant', targetId: tenantId },
   );
+
+  // A conta que já existia mantém o nome: o convite usa o gravado.
+  const [admin] = await tx.select({ name: users.name }).from(users).where(eq(users.id, userId));
+  return {
+    kind: 'panel',
+    userId,
+    tenantId,
+    to: email ?? body.admin.email,
+    name: admin?.name ?? body.admin.name,
+    tenantName: body.displayName,
+    role: 'tenant_admin',
+  };
 }

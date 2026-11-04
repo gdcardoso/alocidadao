@@ -50,6 +50,10 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { requireAuth } from '../auth/plugin.js';
+import { registerPanelInviteRoutes } from '../invites/routes.js';
+import { sendInvite } from '../invites/send.js';
+import type { EmailSender } from '../messaging/email.js';
+import type { InviteLinks } from '../messaging/invites.js';
 import type { Storage } from '../storage/s3.js';
 import {
   assignOccurrence,
@@ -62,7 +66,7 @@ import {
 import { registerAdminRoutes } from './admin.js';
 import { loadPanelContext, loadPanelCounts } from './context.js';
 import { loadCategoryOptions, loadInProgress, loadRequestList } from './lists.js';
-import { requirePanelMember } from './member.js';
+import { panelDbContext, requirePanelMember } from './member.js';
 import {
   loadNotifications,
   markAllNotificationsRead,
@@ -101,6 +105,10 @@ export interface PanelDeps {
   db: Database;
   /** Sem ele, as miniaturas dos relatos saem sem URL (`photoUrl: null`). */
   storage?: Storage;
+  /** Envio dos convites (gestor e agente). */
+  email: EmailSender;
+  /** Endereços dos botões do convite. */
+  invites: InviteLinks;
 }
 
 const occurrenceParamsSchema = z.object({ id: z.uuid() });
@@ -125,7 +133,10 @@ const actionErrors = {
 const sendActionError = (reply: FastifyReply, { error }: ActionError) =>
   reply.code(error.status).send({ code: error.code });
 
-const teamsErrorSchema = apiErrorSchema.extend({ teamName: z.string().optional() });
+const teamsErrorSchema = apiErrorSchema.extend({
+  teamName: z.string().optional(),
+  maskedEmail: z.string().optional(),
+});
 const userParamsSchema = z.object({ userId: z.uuid() });
 
 const sendTeamsError = (
@@ -135,7 +146,11 @@ const sendTeamsError = (
   reply
     .code(error.status)
     .send(
-      'teamName' in error ? { code: error.code, teamName: error.teamName } : { code: error.code },
+      'teamName' in error
+        ? { code: error.code, teamName: error.teamName }
+        : 'maskedEmail' in error
+          ? { code: error.code, maskedEmail: error.maskedEmail }
+          : { code: error.code },
     );
 
 /**
@@ -144,7 +159,7 @@ const sendTeamsError = (
  */
 export function registerPanelRoutes(instance: FastifyInstance, deps: PanelDeps) {
   const app = instance.withTypeProvider<ZodTypeProvider>();
-  const { db, storage } = deps;
+  const { db, storage, email, invites } = deps;
   const panelAuth = requireAuth(['panel']);
 
   app.get(
@@ -721,9 +736,18 @@ export function registerPanelRoutes(instance: FastifyInstance, deps: PanelDeps) 
       if (!identity) return reply;
       const result = await addAgent(db, identity, request.params.id, request.body);
       if ('error' in result) return sendTeamsError(reply, result);
+      const { agent, invite } = result.ok;
+      // Em implantação não há convite: ele sai quando a prefeitura for ativada.
+      if (invite) {
+        await sendInvite(
+          { db, email, links: invites, log: request.log },
+          panelDbContext(identity),
+          invite,
+        );
+      }
       // No modo suporte, a auditoria aponta o agente criado ou vinculado, não a equipe da url.
-      request.auditTarget = { targetType: 'agent', targetId: result.ok.userId };
-      return reply.code(201).send(result.ok);
+      request.auditTarget = { targetType: 'agent', targetId: agent.userId };
+      return reply.code(201).send(agent);
     },
   );
 
@@ -742,8 +766,9 @@ export function registerPanelRoutes(instance: FastifyInstance, deps: PanelDeps) 
       if (!identity) return reply;
       const result = await updateAgent(db, identity, request.params.userId, request.body);
       if ('error' in result) return sendTeamsError(reply, result);
-      // No modo suporte, a troca do celular (que recebe o código de login) tem ação própria.
+      // No modo suporte, a troca do celular ou do e-mail (que recebem o código) tem ação própria.
       if (request.body.action === 'change_phone') request.auditAction = 'agent.phone_change';
+      if (request.body.action === 'change_email') request.auditAction = 'agent.email_change';
       return result.ok;
     },
   );
@@ -761,5 +786,6 @@ export function registerPanelRoutes(instance: FastifyInstance, deps: PanelDeps) 
     },
   );
 
-  registerAdminRoutes(instance, { db });
+  registerAdminRoutes(instance, { db, email, invites });
+  registerPanelInviteRoutes(instance, { db, email, invites });
 }

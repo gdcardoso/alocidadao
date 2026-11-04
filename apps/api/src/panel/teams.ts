@@ -10,7 +10,7 @@ import type {
   TeamSummary,
   TeamUpdateBody,
 } from '@alocidadao/shared';
-import { ACTIVE_WORK_ORDER_STATUSES } from '@alocidadao/shared';
+import { ACTIVE_WORK_ORDER_STATUSES, maskEmail } from '@alocidadao/shared';
 import { and, eq, sql, type SQL } from 'drizzle-orm';
 import {
   isPgError,
@@ -18,13 +18,15 @@ import {
   PHONE_ACTIVE_CONSTRAINT,
   TEAM_MEMBER_CONSTRAINT,
   TEAM_NAME_CONSTRAINT,
+  USER_EMAIL_CONSTRAINT,
   violatedConstraint,
 } from '../db-errors.js';
+import type { InviteTarget } from '../invites/send.js';
 import { Refusal, run, runOrRefuse } from './actions.js';
 import type { PanelIdentity } from './member.js';
 import { sqlList } from './occurrences.js';
 
-const { memberships, teamMembers, teams, users } = schema;
+const { memberships, teamMembers, teams, tenants, users } = schema;
 
 type TeamsError =
   | { status: 404; code: 'team_not_found' | 'agent_not_found' }
@@ -35,9 +37,15 @@ type TeamsError =
         | 'agent_already_in_team'
         | 'phone_change_not_allowed'
         | 'phone_in_use'
-        | 'staff_account_not_allowed';
+        | 'staff_account_not_allowed'
+        | 'email_in_use'
+        | 'email_change_not_allowed'
+        | 'tenant_not_active'
+        | 'invite_not_allowed'
+        | 'email_missing';
     }
   | { status: 409; code: 'agent_in_other_team'; teamName?: string }
+  | { status: 409; code: 'email_mismatch'; maskedEmail: string }
   | { status: 422; code: 'department_not_eligible' | 'team_not_eligible' };
 
 export type TeamsResult<T> = { ok: T } | { error: TeamsError };
@@ -197,6 +205,7 @@ type AgentQueryRow = {
   user_id: string;
   name: string;
   phone: string | null;
+  email: string | null;
   status: AgentRow['status'];
   last_active_ms: number | null;
 };
@@ -207,7 +216,7 @@ async function queryAgents(
   filter: { teamId?: string; userId?: string },
 ): Promise<AgentRow[]> {
   const result = await tx.execute<AgentQueryRow>(sql`
-    SELECT u.id AS user_id, u.name, u.phone, m.status,
+    SELECT u.id AS user_id, u.name, u.phone, u.email, m.status,
       (extract(epoch FROM u.last_active_at) * 1000)::float8 AS last_active_ms
     FROM team_members tm
     JOIN teams t ON t.tenant_id = tm.tenant_id AND t.id = tm.team_id
@@ -224,6 +233,7 @@ async function queryAgents(
     userId: row.user_id,
     name: row.name,
     phone: row.phone,
+    email: row.email,
     status: row.status,
     lastActiveAt: row.last_active_ms === null ? null : new Date(row.last_active_ms).toISOString(),
   }));
@@ -240,20 +250,39 @@ export async function loadTeamAgents(
   });
 }
 
+/** Nome de exibição e status da prefeitura do painel (a política de tenants deixa ler). */
+export async function queryTenant(tx: Transaction, tenantId: string) {
+  const [tenant] = await tx
+    .select({ name: tenants.displayName, status: tenants.status })
+    .from(tenants)
+    .where(eq(tenants.id, tenantId));
+  return tenant!;
+}
+
+/**
+ * Cadastra o agente na equipe. Com a prefeitura ativa, devolve também o convite a enviar depois
+ * do commit; em implantação, `invite` é nulo (o convite sai na ativação).
+ */
 export async function addAgent(
   db: Database,
   identity: PanelIdentity,
   teamId: string,
   body: AgentCreateBody,
-): Promise<TeamsResult<AgentRow>> {
+): Promise<TeamsResult<{ agent: AgentRow; invite: InviteTarget | null }>> {
   try {
     return await runTeams(db, identity, async (tx) => {
-      if ((await queryTeams(tx, identity, teamId)).length === 0) throw new Refusal(TEAM_NOT_FOUND);
+      const [team] = await queryTeams(tx, identity, teamId);
+      if (!team) throw new Refusal(TEAM_NOT_FOUND);
 
-      const found = await tx.execute<{ id: string }>(
-        sql`SELECT id FROM panel_find_or_create_agent_user(${body.name}, ${body.phone}, NULL)`,
+      const found = await tx.execute<{ id: string; email: string | null }>(
+        sql`SELECT id, email FROM panel_find_or_create_agent_user(${body.name}, ${body.phone}, ${body.email})`,
       );
-      const userId = found.rows[0]!.id;
+      const { id: userId, email } = found.rows[0]!;
+      // Pessoa achada pelo celular que já tem outro e-mail: o convite iria para um endereço que
+      // quem cadastra não conhece; recusa mostrando o e-mail mascarado.
+      if (email !== null && email.toLowerCase() !== body.email) {
+        throw new Refusal({ status: 409, code: 'email_mismatch', maskedEmail: maskEmail(email) });
+      }
 
       const current = await tx
         .select({ teamId: teamMembers.teamId, teamName: teams.name })
@@ -291,9 +320,26 @@ export async function addAgent(
       }
       await tx.insert(teamMembers).values({ tenantId: identity.tenantId, teamId, userId });
 
-      return (await queryAgents(tx, identity, { userId }))[0]!;
+      const agent = (await queryAgents(tx, identity, { userId }))[0]!;
+      const tenant = await queryTenant(tx, identity.tenantId);
+      const invite: InviteTarget | null =
+        tenant.status === 'active'
+          ? {
+              kind: 'agent',
+              userId,
+              tenantId: identity.tenantId,
+              to: email ?? body.email,
+              name: agent.name,
+              tenantName: tenant.name,
+              teamName: team.name,
+              phone: agent.phone ?? body.phone,
+            }
+          : null;
+      return { agent, invite };
     });
   } catch (error) {
+    const emailError = translateEmailError(error);
+    if (emailError) return fail(emailError);
     if (isStaffAccount(error)) return fail(STAFF_ACCOUNT_NOT_ALLOWED);
     if (isUniqueViolation(error) && violatedConstraint(error) === PHONE_ACTIVE_CONSTRAINT) {
       return fail({ status: 409, code: 'phone_in_use' });
@@ -304,6 +350,17 @@ export async function addAgent(
     }
     throw error;
   }
+}
+
+/** E-mail de outra conta ou pessoa cujo e-mail só o suporte troca (cadastro e troca de e-mail). */
+function translateEmailError(error: unknown): TeamsError | undefined {
+  if (isPgError(error, '23514', 'email_change_not_allowed')) {
+    return { status: 409, code: 'email_change_not_allowed' };
+  }
+  if (isUniqueViolation(error) && violatedConstraint(error) === USER_EMAIL_CONSTRAINT) {
+    return { status: 409, code: 'email_in_use' };
+  }
+  return undefined;
 }
 
 const setAgentStatus = (
@@ -338,6 +395,10 @@ export async function updateAgent(
         case 'change_phone':
           await tx.execute(sql`SELECT panel_change_agent_phone(${userId}, ${body.phone})`);
           break;
+        // Não reenvia o convite: quem troca usa "Reenviar convite" depois.
+        case 'change_email':
+          await tx.execute(sql`SELECT panel_change_agent_email(${userId}, ${body.email})`);
+          break;
         case 'move': {
           if ((await queryTeams(tx, identity, body.teamId)).length === 0) {
             throw new Refusal(TEAM_NOT_ELIGIBLE);
@@ -365,6 +426,8 @@ export async function updateAgent(
       return (await queryAgents(tx, identity, { userId }))[0]!;
     });
   } catch (error) {
+    const emailError = translateEmailError(error);
+    if (emailError) return fail(emailError);
     if (isStaffAccount(error)) return fail(STAFF_ACCOUNT_NOT_ALLOWED);
     if (isPgError(error, '23514', 'phone_change_not_allowed')) {
       return fail({ status: 409, code: 'phone_change_not_allowed' });
@@ -375,6 +438,56 @@ export async function updateAgent(
     }
     throw error;
   }
+}
+
+/**
+ * Convite do agente para "Reenviar convite": agente da prefeitura no alcance de quem pede, com a
+ * prefeitura ativa, vínculo convidado ou ativo, conta ativa e e-mail.
+ */
+export async function loadAgentInvite(
+  db: Database,
+  identity: PanelIdentity,
+  userId: string,
+): Promise<TeamsResult<InviteTarget>> {
+  return runTeams(db, identity, async (tx) => {
+    const result = await tx.execute<{
+      name: string;
+      email: string | null;
+      phone: string | null;
+      status: AgentRow['status'];
+      account_active: boolean;
+      team_name: string;
+    }>(sql`
+      SELECT u.name, u.email, u.phone, m.status, t.name AS team_name,
+        (u.account_status = 'active' AND u.deleted_at IS NULL) AS account_active
+      FROM team_members tm
+      JOIN teams t ON t.tenant_id = tm.tenant_id AND t.id = tm.team_id
+      JOIN memberships m ON m.tenant_id = tm.tenant_id AND m.user_id = tm.user_id
+        AND m.role = 'field_agent'
+      JOIN users u ON u.id = tm.user_id
+      WHERE tm.tenant_id = ${identity.tenantId}
+        AND tm.user_id = ${userId}
+        AND ${scopeSql(identity, sql`t.department_id`)}
+    `);
+    const agent = result.rows[0];
+    if (!agent) throw new Refusal(AGENT_NOT_FOUND);
+    const tenant = await queryTenant(tx, identity.tenantId);
+    if (tenant.status !== 'active') throw new Refusal({ status: 409, code: 'tenant_not_active' });
+    if (agent.status === 'inactive' || !agent.account_active || agent.phone === null) {
+      throw new Refusal({ status: 409, code: 'invite_not_allowed' });
+    }
+    if (agent.email === null) throw new Refusal({ status: 409, code: 'email_missing' });
+    return {
+      kind: 'agent' as const,
+      userId,
+      tenantId: identity.tenantId,
+      to: agent.email,
+      name: agent.name,
+      tenantName: tenant.name,
+      teamName: agent.team_name,
+      phone: agent.phone,
+    };
+  });
 }
 
 // ── Setores ──

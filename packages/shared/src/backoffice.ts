@@ -81,6 +81,8 @@ export const STAFF_AUDIT_ACTIONS = [
   'account.recover',
   'account.release_cpf',
   'tenant.citizens_view',
+  'invite.resend',
+  'agent.email_change',
 ] as const;
 export type StaffAuditAction = (typeof STAFF_AUDIT_ACTIONS)[number];
 
@@ -123,6 +125,8 @@ export const STAFF_AUDIT_ACTION_LABELS: Record<StaffAuditAction, string> = {
   'account.recover': 'Recuperou uma conta congelada',
   'account.release_cpf': 'Liberou o CPF de uma conta congelada',
   'tenant.citizens_view': 'Consultou os cidadãos',
+  'invite.resend': 'Reenviou um convite',
+  'agent.email_change': 'Trocou o e-mail de um agente',
 };
 
 /** Catálogo copiado para a prefeitura nova (os raios são os do seed de desenvolvimento). */

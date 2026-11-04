@@ -90,6 +90,7 @@ async function backofficeWriteRoutes(): Promise<string[]> {
     db: appDb.db,
     secret: testAuthOptions.secret,
     email: testAuthOptions.email,
+    invites: { panelUrl: 'http://painel.teste', playStoreUrl: null, appStoreUrl: null },
   });
   await probe.ready();
   await probe.close();
@@ -244,6 +245,25 @@ const SCENARIOS: Record<string, (staffId: string) => Promise<Scenario>> = {
         payload: { name: 'Nome Trocado', email },
       },
       personal: ['Nome Trocado', email],
+    };
+  },
+  'POST /backoffice/staff/:userId/invite': async () => {
+    const target = await fx.newStaff('support');
+    const email = newEmail();
+    await owner.db.update(users).set({ email }).where(eq(users.id, target));
+    return {
+      call: { method: 'POST', url: `/backoffice/staff/${target}/invite` },
+      personal: [email],
+    };
+  },
+  'POST /backoffice/tenants/:id/managers/:userId/invite': async () => {
+    const tenantId = await fx.createTenant('active');
+    const adminId = await fx.newAdmin(tenantId);
+    const email = newEmail();
+    await owner.db.update(users).set({ email }).where(eq(users.id, adminId));
+    return {
+      call: { method: 'POST', url: `/backoffice/tenants/${tenantId}/managers/${adminId}/invite` },
+      personal: [email],
     };
   },
   'DELETE /backoffice/staff/:userId': async () => {

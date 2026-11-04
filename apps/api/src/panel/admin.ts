@@ -35,9 +35,12 @@ import {
   USER_EMAIL_CONSTRAINT,
   violatedConstraint,
 } from '../db-errors.js';
+import type { EmailSender } from '../messaging/email.js';
+import type { InviteLinks } from '../messaging/invites.js';
+import { sendInvite, type InviteTarget } from '../invites/send.js';
 import { Refusal, run, runOrRefuse } from './actions.js';
-import { requirePanelAdmin, type PanelIdentity } from './member.js';
-import { queryDepartments } from './teams.js';
+import { panelDbContext, requirePanelAdmin, type PanelIdentity } from './member.js';
+import { queryDepartments, queryTenant } from './teams.js';
 
 const { categories, departmentManagers, departments, memberships } = schema;
 
@@ -209,11 +212,12 @@ async function replaceDepartments(
     );
 }
 
+/** Cadastra o gestor e devolve também o convite de gestão, a enviar depois do commit. */
 export function createManager(
   db: Database,
   identity: PanelIdentity,
   body: ManagerCreateBody,
-): Promise<AdminResult<ManagerRow>> {
+): Promise<AdminResult<{ manager: ManagerRow; invite: InviteTarget }>> {
   return guard(() =>
     runAdmin(db, identity, async (tx) => {
       const departmentIds = await requireDepartments(tx, identity, body.departmentIds);
@@ -250,9 +254,59 @@ export function createManager(
       }
       await replaceDepartments(tx, identity, userId, departmentIds);
 
-      return (await queryManagers(tx, identity, userId))[0]!;
+      const row = (await queryManagers(tx, identity, userId))[0]!;
+      const tenant = await queryTenant(tx, identity.tenantId);
+      const invite: InviteTarget = {
+        kind: 'panel',
+        userId,
+        tenantId: identity.tenantId,
+        to: email ?? body.email,
+        name: row.name,
+        tenantName: tenant.name,
+        role: 'manager',
+      };
+      return { manager: row, invite };
     }),
   );
+}
+
+type InviteRefusal = { status: 404 | 409; code: string };
+
+/**
+ * Convite de gestão para "Reenviar convite": gestor da prefeitura (com `allowAdmin`, também o
+ * admin, para a P3), com vínculo ativo, conta ativa e e-mail. Quem tem os dois papéis conta como
+ * admin, como na lista.
+ */
+export function loadManagerInvite(
+  db: Database,
+  identity: PanelIdentity,
+  userId: string,
+  { allowAdmin }: { allowAdmin: boolean },
+): Promise<{ ok: InviteTarget } | { error: InviteRefusal }> {
+  return runOrRefuse<InviteRefusal, InviteTarget>(db, identity, async (tx) => {
+    const [person] = await queryManagers(tx, identity, userId);
+    if (!person || (person.role === 'tenant_admin' && !allowAdmin)) {
+      throw new Refusal(MANAGER_NOT_FOUND);
+    }
+    const account = await tx.execute<{ active: boolean }>(sql`
+      SELECT (account_status = 'active' AND deleted_at IS NULL) AS active
+      FROM users WHERE id = ${userId}
+    `);
+    if (person.status !== 'active' || !account.rows[0]?.active) {
+      throw new Refusal({ status: 409, code: 'invite_not_allowed' });
+    }
+    if (person.email === null) throw new Refusal({ status: 409, code: 'email_missing' });
+    const tenant = await queryTenant(tx, identity.tenantId);
+    return {
+      kind: 'panel',
+      userId: person.userId,
+      tenantId: identity.tenantId,
+      to: person.email,
+      name: person.name,
+      tenantName: tenant.name,
+      role: person.role,
+    };
+  });
 }
 
 const setManagerStatus = (
@@ -456,7 +510,10 @@ const errors = {
 } as const;
 
 /** Rotas do painel que só o admin da prefeitura usa: gestores, categorias e setores. */
-export function registerAdminRoutes(instance: FastifyInstance, { db }: { db: Database }) {
+export function registerAdminRoutes(
+  instance: FastifyInstance,
+  { db, email, invites }: { db: Database; email: EmailSender; invites: InviteLinks },
+) {
   const app = instance.withTypeProvider<ZodTypeProvider>();
   const preHandler = requireAuth(['panel']);
   const idParams = z.object({ id: z.uuid() });
@@ -483,7 +540,12 @@ export function registerAdminRoutes(instance: FastifyInstance, { db }: { db: Dat
       if (!identity) return reply;
       const result = await createManager(db, identity, request.body);
       if ('error' in result) return sendAdminError(reply, result);
-      return reply.code(201).send(result.ok);
+      await sendInvite(
+        { db, email, links: invites, log: request.log },
+        panelDbContext(identity),
+        result.ok.invite,
+      );
+      return reply.code(201).send(result.ok.manager);
     },
   );
 

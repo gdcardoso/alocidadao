@@ -82,7 +82,7 @@ describe('backoffice contracts', () => {
     }
     expect(STAFF_AUDIT_ACTION_LABELS['tenant.contract_update']).toBe('Editou o contrato');
     expect(STAFF_AUDIT_ACTION_LABELS['tenant.citizens_view']).toBe('Consultou os cidadãos');
-    expect(STAFF_AUDIT_ACTIONS).toHaveLength(38);
+    expect(STAFF_AUDIT_ACTIONS).toHaveLength(40);
   });
 
   it('every commercial status and staff audit action has a label', () => {
@@ -98,6 +98,8 @@ describe('backoffice contracts', () => {
     );
     expect(STAFF_AUDIT_ACTION_LABELS['manager.email_change']).toBe('Trocou o e-mail de um gestor');
     expect(STAFF_AUDIT_ACTION_LABELS['agent.phone_change']).toBe('Trocou o celular de um agente');
+    expect(STAFF_AUDIT_ACTION_LABELS['invite.resend']).toBe('Reenviou um convite');
+    expect(STAFF_AUDIT_ACTION_LABELS['agent.email_change']).toBe('Trocou o e-mail de um agente');
   });
 
   it('city interest csv uses semicolons, BOM, pt-BR dates and Sim/Não', () => {

@@ -39,6 +39,8 @@ import {
   agentWorkOrderCardSchema,
   agentRowSchema,
   agentsResponseSchema,
+  inviteResendResponseSchema,
+  type InviteResendResponse,
   categoriesResponseSchema,
   categoryRowSchema,
   departmentRowSchema,
@@ -524,6 +526,20 @@ export function createApiClient({
         await send('GET', tenantPath(id, 'managers'), undefined, options),
       ),
 
+    backofficeResendTenantManagerInvite: async (
+      tenantId: string,
+      userId: string,
+      options?: RequestOptions,
+    ): Promise<InviteResendResponse> =>
+      inviteResendResponseSchema.parse(
+        await send(
+          'POST',
+          tenantPath(tenantId, `managers/${encodeURIComponent(userId)}/invite`),
+          undefined,
+          options,
+        ),
+      ),
+
     backofficeTenantCategories: async (
       id: string,
       options?: RequestOptions,
@@ -632,6 +648,19 @@ export function createApiClient({
     ): Promise<void> => {
       await send('PATCH', `/backoffice/staff/${encodeURIComponent(userId)}`, body, options);
     },
+
+    backofficeResendStaffInvite: async (
+      userId: string,
+      options?: RequestOptions,
+    ): Promise<InviteResendResponse> =>
+      inviteResendResponseSchema.parse(
+        await send(
+          'POST',
+          `/backoffice/staff/${encodeURIComponent(userId)}/invite`,
+          undefined,
+          options,
+        ),
+      ),
 
     backofficeRemoveStaff: async (userId: string, options?: RequestOptions): Promise<void> => {
       await send('DELETE', `/backoffice/staff/${encodeURIComponent(userId)}`, undefined, options);
@@ -1021,6 +1050,18 @@ export function createApiClient({
         }),
       ),
 
+    panelResendAgentInvite: async (
+      tenantId: string,
+      userId: string,
+      options?: RequestOptions,
+    ): Promise<InviteResendResponse> =>
+      inviteResendResponseSchema.parse(
+        await send('POST', `/panel/agents/${encodeURIComponent(userId)}/invite`, undefined, {
+          ...options,
+          tenantId,
+        }),
+      ),
+
     panelDepartments: async (
       tenantId: string,
       options?: RequestOptions,
@@ -1071,6 +1112,18 @@ export function createApiClient({
     ): Promise<ManagerRow> =>
       managerRowSchema.parse(
         await send('PATCH', `/panel/managers/${encodeURIComponent(userId)}`, body, {
+          ...options,
+          tenantId,
+        }),
+      ),
+
+    panelResendManagerInvite: async (
+      tenantId: string,
+      userId: string,
+      options?: RequestOptions,
+    ): Promise<InviteResendResponse> =>
+      inviteResendResponseSchema.parse(
+        await send('POST', `/panel/managers/${encodeURIComponent(userId)}/invite`, undefined, {
           ...options,
           tenantId,
         }),

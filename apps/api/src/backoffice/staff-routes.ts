@@ -20,6 +20,9 @@ import {
   USER_EMAIL_CONSTRAINT,
   violatedConstraint,
 } from '../db-errors.js';
+import { sendInvite } from '../invites/send.js';
+import type { EmailSender } from '../messaging/email.js';
+import type { InviteLinks } from '../messaging/invites.js';
 import { requirePlatformStaff } from './staff.js';
 
 const { users } = schema;
@@ -72,7 +75,12 @@ type StaffDbRow = {
 /** Rotas da P6 (Equipe Alô Cidadão): só o Admin. Cada função do banco grava a própria auditoria. */
 export function registerStaffRoutes(
   instance: FastifyInstance,
-  { db, preHandler }: { db: Database; preHandler: preHandlerHookHandler },
+  {
+    db,
+    email: emailSender,
+    invites,
+    preHandler,
+  }: { db: Database; email: EmailSender; invites: InviteLinks; preHandler: preHandlerHookHandler },
 ) {
   const app = instance.withTypeProvider<ZodTypeProvider>();
 
@@ -119,13 +127,20 @@ export function registerStaffRoutes(
       const staff = await requirePlatformStaff(db, request, reply, ['admin']);
       if (!staff) return reply;
       const body = request.body;
+      let person: { id: string; name: string; email: string | null };
       try {
-        const { rows } = await withContext(db, staff, (tx) =>
-          tx.execute<{ id: string }>(
+        person = await withContext(db, staff, async (tx) => {
+          const { rows } = await tx.execute<{ id: string }>(
             sql`select platform_staff_add(${body.name}, ${body.cpf}, ${body.email}, ${body.platformRole}::platform_role) as id`,
-          ),
-        );
-        return reply.code(201).send({ id: rows[0]!.id });
+          );
+          const id = rows[0]!.id;
+          // A conta que já existia mantém o nome; o e-mail é o digitado (senão, email_mismatch).
+          const [user] = await tx
+            .select({ name: users.name, email: users.email })
+            .from(users)
+            .where(eq(users.id, id));
+          return { id, name: user?.name ?? body.name, email: user?.email ?? null };
+        });
       } catch (error) {
         const refusal = translateStaffError(error);
         if (!refusal || refusal.status !== 409) throw error;
@@ -136,6 +151,15 @@ export function registerStaffRoutes(
         }
         return reply.code(409).send({ code: refusal.code });
       }
+      // Convite da equipe Alô Cidadão, depois do commit.
+      await sendInvite({ db, email: emailSender, links: invites, log: request.log }, staff, {
+        kind: 'staff',
+        userId: person.id,
+        to: person.email ?? body.email,
+        name: person.name,
+        platformRole: body.platformRole,
+      });
+      return reply.code(201).send({ id: person.id });
     },
   );
 

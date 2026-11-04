@@ -13,6 +13,9 @@ import { and, desc, eq, sql } from 'drizzle-orm';
 import type { FastifyInstance, preHandlerHookHandler } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
+import { sendInvite, type InviteTarget } from '../invites/send.js';
+import type { EmailSender } from '../messaging/email.js';
+import type { InviteLinks } from '../messaging/invites.js';
 import { insertStaffAudit } from '../panel/audit.js';
 import { requirePlatformStaff } from './staff.js';
 
@@ -142,9 +145,22 @@ async function loadTenantDetail(tx: Transaction, tenantId: string) {
   };
 }
 
+type PendingAgentRow = {
+  user_id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  team_name: string | null;
+};
+
 export function registerTenantRoutes(
   instance: FastifyInstance,
-  { db, preHandler }: { db: Database; preHandler: preHandlerHookHandler },
+  {
+    db,
+    email,
+    invites,
+    preHandler,
+  }: { db: Database; email: EmailSender; invites: InviteLinks; preHandler: preHandlerHookHandler },
 ) {
   const app = instance.withTypeProvider<ZodTypeProvider>();
 
@@ -331,10 +347,12 @@ export function registerTenantRoutes(
       const tenantId = request.params.id;
       const transition = TRANSITIONS[request.body.action];
 
+      // Convites dos agentes cadastrados na implantação: só na ativação (não na reativação).
+      const pending: InviteTarget[] = [];
       const outcome = await withContext(db, { ...staff, tenantId }, async (tx) => {
         // Trava a linha: duas mudanças simultâneas não passam pela mesma checagem.
         const [tenant] = await tx
-          .select({ status: tenants.status })
+          .select({ status: tenants.status, name: tenants.displayName })
           .from(tenants)
           .where(eq(tenants.id, tenantId))
           .for('update');
@@ -360,12 +378,39 @@ export function registerTenantRoutes(
           { ...staff, tenantId },
           { action: transition.audit, targetType: 'tenant', targetId: tenantId },
         );
+        if (request.body.action === 'activate') {
+          const { rows } = await tx.execute<PendingAgentRow>(
+            sql`select * from invite_pending_agents(${tenantId})`,
+          );
+          for (const row of rows) {
+            // Agente sempre tem equipe e celular; sem eles o e-mail não tem o que dizer.
+            if (row.team_name === null || row.phone === null) continue;
+            pending.push({
+              kind: 'agent',
+              userId: row.user_id,
+              tenantId,
+              to: row.email,
+              name: row.name,
+              tenantName: tenant.name,
+              teamName: row.team_name,
+              phone: row.phone,
+            });
+          }
+        }
         return 'ok' as const;
       });
 
       if (outcome === 'not_found') return reply.code(404).send({ code: 'tenant_not_found' });
       if (outcome === 'conflict') return reply.code(409).send({ code: 'tenant_status_conflict' });
       if (outcome === 'not_ready') return reply.code(422).send({ code: 'tenant_not_ready' });
+      // Depois do commit, um a um; falha de envio fica no log (o caminho é "Reenviar convite").
+      for (const target of pending) {
+        await sendInvite(
+          { db, email, links: invites, log: request.log },
+          { ...staff, tenantId },
+          target,
+        );
+      }
       return { status: transition.to };
     },
   );

@@ -218,7 +218,13 @@ Um de cada vez, depois dos testes de risco.
    - Plano 8 (infraestrutura): enviar o convite também por SMS e publicar o site (`apps/site`) com os endereços finais de `/termos` e `/privacidade`.
    - Antes da produção: trocar o texto dos Termos e da Política (versão de testes, com marcas `[A DEFINIR: ...]`) pelo texto revisado pelo jurídico.
    - Decidir se o aceite grava o IP, para atender ao art. 15 do Marco Civil da Internet (guarda de registros de acesso).
-10. **Infraestrutura:** Droplet e Spaces na DigitalOcean, backups, observabilidade e publicação nas lojas.
+10. **Página de apresentação:** nova página em `apps/site` com o contato (WhatsApp, e-mail e frase de prazo) editável na tela "Site" do backoffice (somente Admin; tabela `site_contact`, rota pública `GET /public/site-contact` e rotas `GET/PUT /backoffice/site-contact` com auditoria), capturas do painel e fotos de banco. **Feito** (plano `docs/superpowers/plans/2026-11-04-pagina-de-apresentacao.md`). Antes do lançamento:
+
+- Trocar o contato de teste pelo contato real, na tela "Site" do backoffice.
+- Trocar as fotos de banco por fotos reais.
+- Trocar as capturas do painel e incluir capturas do app no simulador.
+
+11. **Infraestrutura:** Droplet e Spaces na DigitalOcean, backups, observabilidade e publicação nas lojas.
 
 ## Perguntas em aberto
 

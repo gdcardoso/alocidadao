@@ -249,6 +249,17 @@ describe('cadastro do agente com e-mail', () => {
     expect((await userRow(person)).email).toBeNull();
   });
 
+  it('pessoa achada sem e-mail, cidadã de outra prefeitura: recusa gravar o e-mail', async () => {
+    const phone = newPhone();
+    const person = await createUser({ phone });
+    await link(b.tenantId, person, 'citizen');
+    expect(await pgError(findOrCreateAgent(asManagerA(), 'X', phone, newEmail()))).toMatchObject({
+      code: '23514',
+      message: 'email_change_not_allowed',
+    });
+    expect((await userRow(person)).email).toBeNull();
+  });
+
   it('pessoa achada sem e-mail com acesso de gestão: recusa', async () => {
     for (const tenantId of [a.tenantId, b.tenantId]) {
       const phone = newPhone();

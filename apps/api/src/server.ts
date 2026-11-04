@@ -54,7 +54,8 @@ const app = await buildApp({
   // Envio dos avisos, confirmação automática e limpeza; para no preClose, antes do pool fechar.
   notifications: { scheduler: true },
   // Não há provedor de SMS: fora de produção o código sai no log; em produção, 503.
-  auth: env.auth && databaseHandle ? { ...env.auth, email } : undefined,
+  // Conta sem aceite dos termos é recusada (terms_required) até aceitar.
+  auth: env.auth && databaseHandle ? { ...env.auth, email, termsGate: true } : undefined,
   invites: env.invites,
 });
 

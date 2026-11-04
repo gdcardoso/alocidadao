@@ -26,6 +26,7 @@ const me = (id: string): MeResponse => ({
   phone: '+5511900000002',
   email: null,
   platformRole: null,
+  termsAccepted: true,
   agentTenants: [],
   panelTenants: [],
 });

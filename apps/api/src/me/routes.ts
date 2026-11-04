@@ -11,6 +11,7 @@ import {
 import {
   CODE_RESEND_SECONDS,
   CODE_TTL_SECONDS,
+  acceptTermsBodySchema,
   apiErrorSchema,
   challengeResponseSchema,
   deviceUpdateBodySchema,
@@ -59,6 +60,7 @@ async function loadMe(tx: Transaction, userId: string): Promise<MeResponse> {
       phone: users.phone,
       email: users.email,
       platformRole: users.platformRole,
+      termsAccepted: sql<boolean>`${users.termsVersion} is not null`,
     })
     .from(users)
     .where(eq(users.id, userId));
@@ -106,12 +108,14 @@ export function registerMeRoutes(instance: FastifyInstance, deps: MeDeps) {
   const app = instance.withTypeProvider<ZodTypeProvider>();
   const { db, secret, devFixedCode, sms, phoneChangeRateLimit } = deps;
   const anyAudience = requireAuth(['app', 'panel']);
+  // Rotas liberadas pelo portão dos termos: a conta sem aceite precisa delas para aceitar.
+  const anyAudienceWithoutTerms = requireAuth(['app', 'panel'], { allowWithoutTerms: true });
   const unauthorized = { code: 'unauthorized' } as const;
 
   app.get(
     '/me',
     {
-      preHandler: anyAudience,
+      preHandler: anyAudienceWithoutTerms,
       schema: { response: { 200: meResponseSchema, 401: apiErrorSchema } },
     },
     async (request, reply) => {
@@ -119,6 +123,29 @@ export function registerMeRoutes(instance: FastifyInstance, deps: MeDeps) {
       const me = await asActiveUser(db, userId, (tx) => loadMe(tx, userId));
       if (me === INACTIVE) return reply.code(401).send(unauthorized);
       return me;
+    },
+  );
+
+  app.post(
+    '/me/terms',
+    {
+      preHandler: anyAudienceWithoutTerms,
+      schema: {
+        body: acceptTermsBodySchema,
+        response: { 204: z.null(), 401: apiErrorSchema },
+      },
+    },
+    async (request, reply) => {
+      const { userId } = request.auth!;
+      const { acceptedTermsVersion } = request.body;
+      const result = await asActiveUser(db, userId, async (tx) => {
+        await tx
+          .update(users)
+          .set({ termsVersion: acceptedTermsVersion, termsAcceptedAt: sql`now()` })
+          .where(eq(users.id, userId));
+      });
+      if (result === INACTIVE) return reply.code(401).send(unauthorized);
+      return reply.code(204).send(null);
     },
   );
 
@@ -166,7 +193,7 @@ export function registerMeRoutes(instance: FastifyInstance, deps: MeDeps) {
   app.put(
     '/me/devices/:installationId',
     {
-      preHandler: requireAuth(['app']),
+      preHandler: requireAuth(['app'], { allowWithoutTerms: true }),
       schema: {
         params: z.object({ installationId: z.uuid() }),
         body: deviceUpdateBodySchema,

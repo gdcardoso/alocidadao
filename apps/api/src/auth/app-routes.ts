@@ -284,7 +284,7 @@ export function registerAppAuthRoutes(instance: FastifyInstance, deps: AuthDeps)
 
   app.post(
     '/auth/logout',
-    { preHandler: requireAuth(['app', 'panel']) },
+    { preHandler: requireAuth(['app', 'panel'], { allowWithoutTerms: true }) },
     async (request, reply) => {
       const { userId, sessionId } = request.auth!;
       await withContext(db, { userId }, async (tx) => {

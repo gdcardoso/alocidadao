@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   TERMS_VERSION,
+  acceptTermsBodySchema,
   maskCpfForStaff,
   maskEmail,
   maskPhone,
@@ -66,10 +67,12 @@ describe('storedPhoneSchema', () => {
       phone: '+14155550123',
       email: null,
       platformRole: null,
+      termsAccepted: true,
       agentTenants: [],
       panelTenants: [],
     };
     expect(meResponseSchema.safeParse(me).success).toBe(true);
+    expect(meResponseSchema.safeParse({ ...me, termsAccepted: undefined }).success).toBe(false);
     expect(meResponseSchema.safeParse({ ...me, phone: 'abc' }).success).toBe(false);
   });
 
@@ -81,6 +84,7 @@ describe('storedPhoneSchema', () => {
       phone: null,
       email: null,
       platformRole: null,
+      termsAccepted: false,
       agentTenants: [],
     };
     expect(
@@ -113,6 +117,18 @@ describe('phoneVerifyResponseSchema', () => {
       }).success,
     ).toBe(true);
     expect(phoneVerifyResponseSchema.safeParse({ status: 'needs_profile' }).success).toBe(false);
+  });
+});
+
+describe('acceptTermsBodySchema', () => {
+  it('accepts only the current terms version', () => {
+    expect(acceptTermsBodySchema.safeParse({ acceptedTermsVersion: TERMS_VERSION }).success).toBe(
+      true,
+    );
+    expect(acceptTermsBodySchema.safeParse({ acceptedTermsVersion: '2026-10-23' }).success).toBe(
+      false,
+    );
+    expect(acceptTermsBodySchema.safeParse({}).success).toBe(false);
   });
 });
 

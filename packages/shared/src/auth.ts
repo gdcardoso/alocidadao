@@ -98,6 +98,10 @@ export const signupBodySchema = z.object({
 });
 export type SignupBody = z.infer<typeof signupBodySchema>;
 
+/** POST /me/terms: aceite dos termos por quem já tem conta. Só a versão atual. */
+export const acceptTermsBodySchema = z.object({ acceptedTermsVersion: z.literal(TERMS_VERSION) });
+export type AcceptTermsBody = z.infer<typeof acceptTermsBodySchema>;
+
 export const recoveryVerifyBodySchema = z.object({
   challengeId: z.uuid(),
   code: codeSchema,
@@ -148,6 +152,8 @@ export const meResponseSchema = z.object({
   phone: storedPhoneSchema.nullable(),
   email: z.string().nullable(),
   platformRole: z.enum(PLATFORM_ROLES).nullable(),
+  /** A conta já aceitou os termos (qualquer versão). Sem aceite, a API recusa com terms_required. */
+  termsAccepted: z.boolean(),
   agentTenants: z.array(z.object({ tenantId: z.uuid(), tenantName: z.string() })),
   panelTenants: z.array(
     z.object({

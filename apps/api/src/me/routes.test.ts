@@ -1,10 +1,11 @@
 import { randomInt, randomUUID } from 'node:crypto';
 import { createDatabase, schema } from '@alocidadao/db';
-import type {
-  ChallengeResponse,
-  MeResponse,
-  PhoneVerifyResponse,
-  SessionTokens,
+import {
+  TERMS_VERSION,
+  type ChallengeResponse,
+  type MeResponse,
+  type PhoneVerifyResponse,
+  type SessionTokens,
 } from '@alocidadao/shared';
 import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -126,6 +127,7 @@ describe('me routes', () => {
       phone: user.phone,
       email: 'ana@exemplo.com',
       platformRole: null,
+      termsAccepted: false,
       agentTenants: [{ tenantId: activeTenant, tenantName: 'Prefeitura Ativa' }],
       panelTenants: [
         {
@@ -586,5 +588,47 @@ describe('me routes', () => {
       payload: { name: 'Congelada' },
     });
     expect(patch.statusCode).toBe(401);
+    const terms = await app.inject({
+      method: 'POST',
+      url: '/me/terms',
+      headers: bearer(session),
+      payload: { acceptedTermsVersion: TERMS_VERSION },
+    });
+    expect(terms.statusCode).toBe(401);
+  });
+
+  it('accepting the terms records the current version', async () => {
+    const user = await createUser();
+    const session = await signIn(user.phone);
+    expect((await getMe(session)).json<MeResponse>().termsAccepted).toBe(false);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/me/terms',
+      headers: bearer(session),
+      payload: { acceptedTermsVersion: TERMS_VERSION },
+    });
+    expect(res.statusCode).toBe(204);
+    const [row] = await owner.db
+      .select({ termsVersion: users.termsVersion, termsAcceptedAt: users.termsAcceptedAt })
+      .from(users)
+      .where(eq(users.id, user.id));
+    expect(row!.termsVersion).toBe(TERMS_VERSION);
+    expect(row!.termsAcceptedAt).toBeInstanceOf(Date);
+    expect((await getMe(session)).json<MeResponse>().termsAccepted).toBe(true);
+
+    const old = await app.inject({
+      method: 'POST',
+      url: '/me/terms',
+      headers: bearer(session),
+      payload: { acceptedTermsVersion: '2026-10-23' },
+    });
+    expect(old.statusCode).toBe(400);
+    const anonymous = await app.inject({
+      method: 'POST',
+      url: '/me/terms',
+      payload: { acceptedTermsVersion: TERMS_VERSION },
+    });
+    expect(anonymous.statusCode).toBe(401);
   });
 });

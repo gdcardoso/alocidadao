@@ -14,6 +14,7 @@ function makeMe(agentTenants: MeResponse['agentTenants'] = []): MeResponse {
     phone: '+5511900000001',
     email: null,
     platformRole: null,
+    termsAccepted: true,
     agentTenants,
     panelTenants: [],
   } as MeResponse;

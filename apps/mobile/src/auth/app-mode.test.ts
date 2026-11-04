@@ -27,6 +27,7 @@ function makeMe(over: Partial<MeResponse> = {}): MeResponse {
     phone: '+5511900000001',
     email: null,
     platformRole: null,
+    termsAccepted: true,
     agentTenants: [],
     panelTenants: [],
     ...over,

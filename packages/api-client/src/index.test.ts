@@ -1,3 +1,4 @@
+import { TERMS_VERSION } from '@alocidadao/shared';
 import { describe, expect, it } from 'vitest';
 import { ApiError, ApiTimeoutError, createApiClient } from './index.js';
 
@@ -125,6 +126,21 @@ describe('api client', () => {
     const api = createApiClient({ baseUrl: 'http://api', fetch: fakeFetch });
     await api.registerDevice(REQUEST_ID, { platform: 'android', appVersion: '1.0.0' });
     expect(sent).toEqual({ url: `http://api/me/devices/${REQUEST_ID}`, method: 'PUT' });
+  });
+
+  it('acceptTerms posts the current version and accepts 204', async () => {
+    let sent: { url: string; method?: string; body: unknown } | null = null;
+    const fakeFetch: typeof fetch = async (input, init) => {
+      sent = { url: String(input), method: init?.method, body: JSON.parse(String(init?.body)) };
+      return new Response(null, { status: 204 });
+    };
+    const api = createApiClient({ baseUrl: 'http://api', fetch: fakeFetch });
+    await api.acceptTerms();
+    expect(sent).toEqual({
+      url: 'http://api/me/terms',
+      method: 'POST',
+      body: { acceptedTermsVersion: TERMS_VERSION },
+    });
   });
 
   it('agent requests send the tenant header', async () => {

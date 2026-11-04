@@ -1,4 +1,6 @@
 import {
+  TERMS_VERSION,
+  type AcceptTermsBody,
   auditResponseSchema,
   citizenListResponseSchema,
   cityInterestResponseSchema,
@@ -1175,6 +1177,12 @@ export function createApiClient({
       options?: RequestOptions,
     ): Promise<MeResponse> =>
       meResponseSchema.parse(await send('POST', '/me/phone/verify', body, options)),
+
+    /** Aceita a versão atual dos termos (POST /me/terms). */
+    acceptTerms: async (options?: RequestOptions): Promise<void> => {
+      const body: AcceptTermsBody = { acceptedTermsVersion: TERMS_VERSION };
+      await send('POST', '/me/terms', body, options);
+    },
 
     deleteMe: async (options?: RequestOptions): Promise<void> => {
       await send('DELETE', '/me', undefined, options);

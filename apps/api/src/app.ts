@@ -39,6 +39,11 @@ export interface AuthOptions {
   rateLimit?: { max: number; timeWindowMs: number };
   /** Limite por conta em POST /me/phone/start (cada SMS custa). Padrão: 5 por hora. */
   phoneChangeRateLimit?: { max: number; timeWindowMs: number };
+  /**
+   * Portão dos termos: conta sem aceite recebe 403 terms_required nas rotas autenticadas (menos
+   * /me, o aceite, a saída e o registro do aparelho). Padrão: desligado; precisa de `database`.
+   */
+  termsGate?: boolean;
 }
 
 export interface AppOptions {
@@ -135,7 +140,9 @@ export async function buildApp({
     time: new Date().toISOString(),
   }));
 
-  registerAuth(app, auth?.secret);
+  registerAuth(app, auth?.secret, {
+    termsGateDb: auth?.termsGate ? database : undefined,
+  });
 
   if (auth && database) {
     const sms =

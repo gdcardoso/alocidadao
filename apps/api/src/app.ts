@@ -70,6 +70,8 @@ export interface AppOptions {
   auth?: AuthOptions;
   /** Endereços dos botões do e-mail de convite. Padrão: o painel local, sem lojas. */
   invites?: InviteLinks;
+  /** Limite por IP em GET /public/site-contact. Padrão: 60 por minuto. */
+  siteContactRateLimit?: { max: number; timeWindowMs: number };
 }
 
 const LOCAL_INVITE_LINKS: InviteLinks = {
@@ -127,6 +129,7 @@ export async function buildApp({
   auth,
   notifications,
   invites = LOCAL_INVITE_LINKS,
+  siteContactRateLimit,
 }: AppOptions = {}) {
   const app = Fastify({ logger }).withTypeProvider<ZodTypeProvider>();
   app.setValidatorCompiler(validatorCompiler);
@@ -147,7 +150,14 @@ export async function buildApp({
 
   if (database) {
     // Contato da página de apresentação: rota pública, sem login.
-    registerPublicSiteRoutes(app, { db: database });
+    // Escopo próprio: o limite por IP vale só para esta rota.
+    await app.register(async (scope) => {
+      await registerRateLimit(scope, {
+        max: siteContactRateLimit?.max ?? 60,
+        timeWindow: siteContactRateLimit?.timeWindowMs ?? 60_000,
+      });
+      registerPublicSiteRoutes(scope, { db: database });
+    });
   }
 
   if (auth && database) {

@@ -57,7 +57,7 @@ const TEAM_NAME = 'Equipe Obras – Centro';
 const POINT: GeoPoint = { lat: -16.7062, lng: -49.2671 };
 const ADDRESS = 'Avenida T-4, Setor Bueno, Goiânia';
 
-const PHOTOS_DIR = fileURLToPath(new URL('../public/img/fotos/', import.meta.url));
+const PHOTOS_DIR = fileURLToPath(new URL('./fixtures/', import.meta.url));
 const BEFORE_PHOTO = `${PHOTOS_DIR}buraco-antes.jpg`;
 const AFTER_PHOTO = `${PHOTOS_DIR}asfalto-depois.jpg`;
 

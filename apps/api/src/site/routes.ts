@@ -57,7 +57,11 @@ export function registerPublicSiteRoutes(instance: FastifyInstance, { db }: { db
       schema: { response: { 200: siteContactResponseSchema } },
     },
     // Sem contexto: a política de leitura de site_contact é USING (true).
-    async () => withContext(db, {}, readContact),
+    async (_request, reply) => {
+      // Cache curto: a página consulta a cada visita e o contato muda raramente.
+      reply.header('Cache-Control', 'public, max-age=60');
+      return withContext(db, {}, readContact);
+    },
   );
 }
 

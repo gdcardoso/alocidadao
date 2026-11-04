@@ -54,6 +54,46 @@ describe('site contact', () => {
     expect(response.headers['access-control-allow-origin']).toBe('*');
   });
 
+  it('public route is cacheable for 60 seconds', async () => {
+    const response = await app.inject({ method: 'GET', url: '/public/site-contact' });
+    expect(response.headers['cache-control']).toBe('public, max-age=60');
+  });
+
+  it('public route is rate limited per IP with the standard 429 body', async () => {
+    const limited = await buildApp({
+      database: appDb.db,
+      auth: testAuthOptions,
+      corsOrigin: PANEL_ORIGIN,
+      siteContactRateLimit: { max: 2, timeWindowMs: 60_000 },
+    });
+    try {
+      const get = () =>
+        limited.inject({
+          method: 'GET',
+          url: '/public/site-contact',
+          headers: { origin: SITE_ORIGIN },
+        });
+      expect((await get()).statusCode).toBe(200);
+      expect((await get()).statusCode).toBe(200);
+      const blocked = await get();
+      expect(blocked.statusCode).toBe(429);
+      expect(blocked.json()).toEqual({
+        code: 'rate_limited',
+        retryAfterSeconds: expect.any(Number),
+      });
+      expect(blocked.headers['access-control-allow-origin']).toBe('*');
+      const health = await limited.inject({
+        method: 'GET',
+        url: '/health',
+        headers: { origin: SITE_ORIGIN },
+      });
+      expect(health.statusCode).toBe(200);
+      expect(health.headers['access-control-allow-origin']).toBe(PANEL_ORIGIN);
+    } finally {
+      await limited.close();
+    }
+  });
+
   it('other routes keep the restricted CORS origin', async () => {
     const response = await app.inject({
       method: 'GET',

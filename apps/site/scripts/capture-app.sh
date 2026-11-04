@@ -17,7 +17,13 @@ CWEBP="${CWEBP:-cwebp}"
 # Largura final das capturas (a do iPhone em 2x).
 WIDTH="${WIDTH:-780}"
 
-if ! command -v xcrun >/dev/null 2>&1 || ! xcrun simctl list devices booted 2>/dev/null | grep -q Booted; then
+# Guarda a saída antes do grep: com `pipefail`, `grep -q` fecha o pipe cedo e o xcrun morre por SIGPIPE.
+BOOTED=""
+if command -v xcrun >/dev/null 2>&1; then
+  BOOTED="$(xcrun simctl list devices booted 2>/dev/null || true)"
+fi
+
+if [[ "$BOOTED" != *Booted* ]]; then
   cat <<'MSG'
 Nenhum simulador iOS ligado.
 

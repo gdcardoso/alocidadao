@@ -83,7 +83,7 @@ const AGENT_FINISH: SiteImage = {
   height: 1436,
   alt: 'App do agente concluindo um atendimento',
 };
-/** Foto de banco (ver public/img/fotos/CREDITOS.md) na tela desenhada do serviço concluído. */
+/** Foto de banco (ver scripts/fixtures/CREDITOS.md) na tela desenhada do serviço concluído. */
 const SERVICE_PHOTO: SiteImage = {
   src: '/img/fotos/iluminacao-poste.webp',
   width: 600,

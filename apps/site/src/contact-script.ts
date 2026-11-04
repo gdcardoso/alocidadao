@@ -20,6 +20,8 @@ export function contactScript(apiUrl: string): string {
   var timer = setTimeout(function () {
     if (controller) controller.abort();
   }, ${CONTACT_TIMEOUT_MS});
+  // Mesmo formato do z.email() do Zod 4: aceita ' + _ - . no começo e recusa ? & # % < > " e espaço.
+  var EMAIL_PATTERN = /^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$/;
   function isText(value, max) {
     return typeof value === 'string' && value.trim().length > 0 && value.trim().length <= max;
   }
@@ -30,7 +32,7 @@ export function contactScript(apiUrl: string): string {
       typeof data.whatsapp === 'string' &&
       /^\\+55[1-9]{2}9[0-9]{8}$/.test(data.whatsapp) &&
       isText(data.email, 254) &&
-      /^[^\\s@<>"']+@[^\\s@<>"']+\\.[^\\s@<>"']+$/.test(data.email.trim()) &&
+      EMAIL_PATTERN.test(data.email.trim()) &&
       isText(data.responseNote, 60)
     );
   }
@@ -54,7 +56,7 @@ export function contactScript(apiUrl: string): string {
       el.textContent = note;
     });
     set('email-link', function (el) {
-      el.setAttribute('href', 'mailto:' + email);
+      el.setAttribute('href', 'mailto:' + encodeURI(email));
     });
     set('email-label', function (el) {
       el.textContent = email;

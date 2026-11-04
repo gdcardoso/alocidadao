@@ -21,7 +21,9 @@ Ficam em `public/img/` e vão para `dist/img/` no build.
   (`docs/superpowers/specs/telas-agente/A3-concluir-atendimento.png`).
 - Telas do app do cidadão: sem captura, os celulares são desenhados em HTML (`CITIZEN_LIST` e
   `CITIZEN_DONE` em `src/render.ts`).
-- `fotos/`: fotos de banco (Unsplash) com origem, autor e licença em `fotos/CREDITOS.md`.
+- `fotos/iluminacao-poste.webp`: foto de banco (Unsplash) da tela desenhada do serviço concluído. Os
+  JPEG originais, usados só por `scripts/demo-scenario.ts`, ficam em `scripts/fixtures/` (fora do
+  build), com origem, autor e licença em `scripts/fixtures/CREDITOS.md`.
 
 ## Capturas do sistema
 

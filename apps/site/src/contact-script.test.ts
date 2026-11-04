@@ -97,6 +97,22 @@ describe('contact script', () => {
     expect(errors).toEqual([]);
   });
 
+  it('applies an address with an apostrophe, as z.email() does', async () => {
+    const { point } = await runScript(() =>
+      okJson({ ...DEFAULT_SITE_CONTACT, email: "o'brien@alocidadao.com.br" }),
+    );
+    expect(point('email-label')?.textContent).toBe("o'brien@alocidadao.com.br");
+    expect(point('email-link')?.getAttribute('href')).toBe("mailto:o'brien@alocidadao.com.br");
+  });
+
+  it.each(['a@b.com?cc=x@y.com', 'a@b.com&bcc=x@y.com', 'a#b@c.com', 'a%40b@c.com', 'a b@c.com'])(
+    'rejects %s and keeps the build values',
+    async (email) => {
+      const { point } = await runScript(() => okJson({ ...DEFAULT_SITE_CONTACT, email }));
+      expect(snapshot(point)).toEqual(BUILD_VALUES);
+    },
+  );
+
   it('inserts HTML from the API as plain text', async () => {
     const { point, doc } = await runScript(() =>
       okJson({ ...DEFAULT_SITE_CONTACT, responseNote: '<b>Rápido</b>' }),

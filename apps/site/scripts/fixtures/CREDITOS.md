@@ -7,8 +7,9 @@ as fotos sem alteração nem montar com elas um serviço concorrente de fotos.
 
 Baixadas em 04/11/2026 pela CDN do Unsplash (`images.unsplash.com`), já reduzidas a no máximo
 1200 px no lado maior e em JPEG (qualidade 70), dentro do limite de envio de foto do app
-(1600 px e 1 MB). `iluminacao-poste.webp` é a mesma foto do poste reduzida a 600 px, usada na
-tela desenhada do serviço concluído. Trocar por fotos reais quando houver.
+(1600 px e 1 MB). `public/img/fotos/iluminacao-poste.webp` (a única que vai para o site) é a mesma foto do poste
+reduzida a 600 px, usada na tela desenhada do serviço concluído. Os JPEG desta pasta só servem ao
+`demo-scenario.ts` e não são publicados. Trocar por fotos reais quando houver.
 
 | Arquivo                | O que mostra                                  | Autor           | Link da foto                                                                                       |
 | ---------------------- | --------------------------------------------- | --------------- | -------------------------------------------------------------------------------------------------- |

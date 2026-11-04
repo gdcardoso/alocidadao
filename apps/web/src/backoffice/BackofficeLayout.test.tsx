@@ -56,13 +56,13 @@ beforeEach(() => {
 });
 
 describe('BackofficeLayout', () => {
-  it('menu shows the four items and the role label', async () => {
+  it('menu shows the five items and the role label', async () => {
     renderApp('/backoffice');
     expect(await screen.findByRole('link', { name: 'Prefeituras' })).toHaveAttribute(
       'href',
       '/backoffice/prefeituras',
     );
-    for (const name of ['Interesse por cidade', 'Equipe Alô Cidadão', 'Auditoria']) {
+    for (const name of ['Interesse por cidade', 'Equipe Alô Cidadão', 'Site', 'Auditoria']) {
       expect(screen.getByRole('link', { name })).toBeInTheDocument();
     }
     expect(screen.getByText('Lucas Prado')).toBeInTheDocument();
@@ -81,7 +81,7 @@ describe('BackofficeLayout', () => {
     await waitFor(() => expect(panelLogout).toHaveBeenCalled());
   });
 
-  it('support does not see Equipe and Auditoria in the menu', async () => {
+  it('support does not see Equipe, Site and Auditoria in the menu', async () => {
     backofficeContext.mockResolvedValue({
       user: { id: userId, name: 'Rafa Souza' },
       platformRole: 'support',
@@ -90,6 +90,7 @@ describe('BackofficeLayout', () => {
     expect(await screen.findByRole('link', { name: 'Prefeituras' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Interesse por cidade' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Equipe Alô Cidadão' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Site' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Auditoria' })).not.toBeInTheDocument();
   });
 

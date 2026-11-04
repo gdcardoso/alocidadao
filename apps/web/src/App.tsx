@@ -3,6 +3,7 @@ import { BackofficeLayout } from './backoffice/BackofficeLayout';
 import { AuditPage } from './backoffice/audit/AuditPage';
 import { TenantDetailPage } from './backoffice/tenants/TenantDetailPage';
 import { CityInterestPage } from './backoffice/interest/CityInterestPage';
+import { SitePage } from './backoffice/site/SitePage';
 import { StaffPage } from './backoffice/staff/StaffPage';
 import { NewTenantPage } from './backoffice/tenants/NewTenantPage';
 import { TenantsPage } from './backoffice/tenants/TenantsPage';
@@ -64,6 +65,7 @@ export default function App() {
             <Route path="prefeituras/:id" element={<TenantDetailPage />} />
             <Route path="interesse" element={<CityInterestPage />} />
             <Route path="equipe" element={<StaffPage />} />
+            <Route path="site" element={<SitePage />} />
             <Route path="auditoria" element={<AuditPage />} />
           </Route>
         </Route>

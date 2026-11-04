@@ -214,7 +214,11 @@ Um de cada vez, depois dos testes de risco.
 6. **Backoffice:** P1 a P6. **Feito** em duas partes (planos `docs/superpowers/plans/2026-10-26-backoffice-6a.md` e `docs/superpowers/plans/2026-10-28-backoffice-6b.md`).
 7. **Notificações:** fila de envio, caixa de entrada, e-mails e conclusão automática em 7 dias. **Feito** (plano `docs/superpowers/plans/2026-10-29-notificacoes.md`); a entrega real de push com Firebase e Apple fica para depois dos testes em aparelho real.
 8. **Pronto para validação:** bairros por prefeitura (malha do IBGE ou arquivo da prefeitura) com filtro no mapa e na lista do painel, mapa com a situação do prazo e os números do dia, Dados da prefeitura, as abas da P3 e as correções que apareceram na demonstração. **Feito** (plano `docs/superpowers/plans/2026-10-31-pronto-para-validacao.md`; pendências na seção "Pronto para validação" do `docs/superpowers/plans/2026-10-22-spikes-pendencias.md`).
-9. **Infraestrutura:** Droplet e Spaces na DigitalOcean, backups, observabilidade e publicação nas lojas.
+9. **Convite e termos:** e-mail de convite (HTML e texto) para gestor e agente, reenvio com espera de 60 s, aceite dos Termos de Uso e da Política de Privacidade com bloqueio na API (`403 terms_required`), tela "Antes de continuar" no painel, no backoffice e no app, e site estático em `apps/site`. **Feito**, com estas pendências:
+   - Plano 8 (infraestrutura): enviar o convite também por SMS e publicar o site (`apps/site`) com os endereços finais de `/termos` e `/privacidade`.
+   - Antes da produção: trocar o texto dos Termos e da Política (versão de testes, com marcas `[A DEFINIR: ...]`) pelo texto revisado pelo jurídico.
+   - Decidir se o aceite grava o IP, para atender ao art. 15 do Marco Civil da Internet (guarda de registros de acesso).
+10. **Infraestrutura:** Droplet e Spaces na DigitalOcean, backups, observabilidade e publicação nas lojas.
 
 ## Perguntas em aberto
 

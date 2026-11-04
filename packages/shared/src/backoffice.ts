@@ -83,6 +83,7 @@ export const STAFF_AUDIT_ACTIONS = [
   'tenant.citizens_view',
   'invite.resend',
   'agent.email_change',
+  'site.contact_update',
 ] as const;
 export type StaffAuditAction = (typeof STAFF_AUDIT_ACTIONS)[number];
 
@@ -127,6 +128,7 @@ export const STAFF_AUDIT_ACTION_LABELS: Record<StaffAuditAction, string> = {
   'tenant.citizens_view': 'Consultou os cidadãos',
   'invite.resend': 'Reenviou um convite',
   'agent.email_change': 'Trocou o e-mail de um agente',
+  'site.contact_update': 'Alterou o contato do site',
 };
 
 /** Catálogo copiado para a prefeitura nova (os raios são os do seed de desenvolvimento). */

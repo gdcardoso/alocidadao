@@ -1,4 +1,4 @@
-import { TERMS_VERSION } from '@alocidadao/shared';
+import { DEFAULT_SITE_CONTACT, TERMS_VERSION } from '@alocidadao/shared';
 import { describe, expect, it } from 'vitest';
 import { ApiError, ApiTimeoutError, createApiClient } from './index.js';
 
@@ -650,6 +650,20 @@ describe('backoffice calls', () => {
     expect(search.calls[0]?.url).toBe('http://api/backoffice/municipalities?q=S%C3%A3o+Paulo');
   });
 
+  it('publicSiteContact reads the public route without a token', async () => {
+    const { calls, fakeFetch } = recorder(() => Response.json(DEFAULT_SITE_CONTACT));
+    const api = createApiClient({ baseUrl: 'http://api', fetch: fakeFetch, getToken: () => 't' });
+    expect(await api.publicSiteContact()).toEqual(DEFAULT_SITE_CONTACT);
+    expect(calls[0]?.url).toBe('http://api/public/site-contact');
+    expect(new Headers(calls[0]?.init?.headers).get('Authorization')).toBeNull();
+  });
+
+  it('publicSiteContact rejects a response outside the schema', async () => {
+    const { fakeFetch } = recorder(() => Response.json({ whatsapp: '+5562982089667' }));
+    const api = createApiClient({ baseUrl: 'http://api', fetch: fakeFetch });
+    await expect(api.publicSiteContact()).rejects.toThrow();
+  });
+
   it('6b backoffice methods call the right paths without x-tenant-id', async () => {
     const U = '7c1d2e3f-4a5b-4c6d-8e7f-901234567891';
     const row = {
@@ -826,6 +840,23 @@ describe('backoffice calls', () => {
         path: '/backoffice/frozen-accounts/recover',
         body: { challengeId: U, code: '123456', email: 'novo@exemplo.com', tenantId: U },
         response: () => new Response(null, { status: 204 }),
+      },
+      {
+        name: 'site contact',
+        call: (a) => a.backofficeSiteContact(),
+        method: 'GET',
+        path: '/backoffice/site-contact',
+        response: () => Response.json(DEFAULT_SITE_CONTACT),
+        result: DEFAULT_SITE_CONTACT,
+      },
+      {
+        name: 'site contact update',
+        call: (a) => a.backofficeUpdateSiteContact(DEFAULT_SITE_CONTACT),
+        method: 'PUT',
+        path: '/backoffice/site-contact',
+        body: DEFAULT_SITE_CONTACT,
+        response: () => Response.json(DEFAULT_SITE_CONTACT),
+        result: DEFAULT_SITE_CONTACT,
       },
       {
         name: 'frozen release',

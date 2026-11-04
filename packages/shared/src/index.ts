@@ -15,6 +15,7 @@ export * from './panel-work.js';
 export * from './panel-admin.js';
 export * from './phone.js';
 export * from './backoffice.js';
+export * from './site.js';
 export * from './notifications.js';
 export * from './deadline.js';
 export * from './legal/index.js';

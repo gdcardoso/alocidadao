@@ -1,5 +1,7 @@
 import {
   TERMS_VERSION,
+  siteContactSchema,
+  type SiteContact,
   type AcceptTermsBody,
   auditResponseSchema,
   citizenListResponseSchema,
@@ -363,6 +365,16 @@ export function createApiClient({
     health: async (): Promise<HealthResponse> =>
       healthResponseSchema.parse(await request('/health')),
 
+    /** Contato da página de apresentação: rota pública, sem token. */
+    publicSiteContact: async (options?: RequestOptions): Promise<SiteContact> =>
+      siteContactSchema.parse(
+        await request(
+          '/public/site-contact',
+          { method: 'GET', signal: options?.signal ?? null },
+          'none',
+        ),
+      ),
+
     phoneStart: async (body: PhoneStartBody): Promise<ChallengeResponse> =>
       challengeResponseSchema.parse(await post('/auth/phone/start', body)),
 
@@ -704,6 +716,15 @@ export function createApiClient({
     ): Promise<void> => {
       await send('POST', '/backoffice/frozen-accounts/recover', body, options);
     },
+
+    backofficeSiteContact: async (options?: RequestOptions): Promise<SiteContact> =>
+      siteContactSchema.parse(await send('GET', '/backoffice/site-contact', undefined, options)),
+
+    backofficeUpdateSiteContact: async (
+      body: SiteContact,
+      options?: RequestOptions,
+    ): Promise<SiteContact> =>
+      siteContactSchema.parse(await send('PUT', '/backoffice/site-contact', body, options)),
 
     backofficeReleaseFrozenCpf: async (
       body: FrozenAccountReleaseBody,

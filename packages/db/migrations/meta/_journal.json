@@ -309,6 +309,20 @@
       "when": 1793804026912,
       "tag": "0043_invites",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1793823584693,
+      "tag": "0044_site_contact_table",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1793823587760,
+      "tag": "0045_site_contact",
+      "breakpoints": true
     }
   ]
 }

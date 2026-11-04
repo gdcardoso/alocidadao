@@ -28,6 +28,7 @@ import {
   pgEnum,
   pgTable,
   primaryKey,
+  smallint,
   text,
   timestamp,
   unique,
@@ -822,4 +823,23 @@ export const inviteDeliveries = pgTable(
     index().on(t.userId, t.tenantId, t.kind, t.sentAt.desc()),
     check('invite_deliveries_tenant_check', sql`(${t.kind} = 'staff') = (${t.tenantId} is null)`),
   ],
+);
+
+/**
+ * Contato da página de apresentação (alocidadao.com.br): uma linha só (`id = 1`), criada pela
+ * migração. Leitura livre (a rota pública não tem login); só o admin da plataforma altera.
+ */
+export const siteContact = pgTable(
+  'site_contact',
+  {
+    id: smallint('id').primaryKey().default(1),
+    /** Celular do WhatsApp em E.164. */
+    whatsapp: text('whatsapp').notNull(),
+    email: text('email').notNull(),
+    /** Frase embaixo do WhatsApp, como "Resposta no mesmo dia". */
+    responseNote: text('response_note').notNull(),
+    updatedAt: updatedAt(),
+    updatedBy: uuid('updated_by').references(() => users.id),
+  },
+  (t) => [check('site_contact_single_row_check', sql`${t.id} = 1`)],
 );

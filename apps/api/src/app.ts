@@ -12,7 +12,7 @@ import {
 import { registerAgentRoutes } from './agent/routes.js';
 import { registerAppAuthRoutes } from './auth/app-routes.js';
 import { registerPanelAuthRoutes } from './auth/panel-routes.js';
-import { registerAuth } from './auth/plugin.js';
+import { registerAuth, requireAuth } from './auth/plugin.js';
 import { registerBackofficeRoutes } from './backoffice/routes.js';
 import { registerCitizenRoutes } from './citizen/routes.js';
 import { registerDevManagerActions } from './dev/manager-actions.js';
@@ -25,6 +25,7 @@ import { registerMeRoutes } from './me/routes.js';
 import { startScheduler, type Scheduler } from './notifications/scheduler.js';
 import { registerPanelAudit } from './panel/audit.js';
 import { registerPanelRoutes } from './panel/routes.js';
+import { registerBackofficeSiteRoutes, registerPublicSiteRoutes } from './site/routes.js';
 import type { Storage } from './storage/s3.js';
 
 export interface AuthOptions {
@@ -144,6 +145,11 @@ export async function buildApp({
     termsGateDb: auth?.termsGate ? database : undefined,
   });
 
+  if (database) {
+    // Contato da página de apresentação: rota pública, sem login.
+    registerPublicSiteRoutes(app, { db: database });
+  }
+
   if (auth && database) {
     const sms =
       auth.sms ?? (process.env.NODE_ENV === 'production' ? undefined : createLogSmsSender(app.log));
@@ -190,6 +196,10 @@ export async function buildApp({
         devFixedCode: auth.devFixedCode,
         email: auth.email,
         invites,
+      });
+      registerBackofficeSiteRoutes(scope, {
+        db: database,
+        preHandler: requireAuth(['app', 'panel']),
       });
     });
     // Cidadão: escopo próprio, sem o limite por IP do /auth/*.

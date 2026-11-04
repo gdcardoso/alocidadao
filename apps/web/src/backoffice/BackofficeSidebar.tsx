@@ -1,6 +1,7 @@
 import { PLATFORM_ROLE_LABELS, type BackofficeContext } from '@alocidadao/shared';
 import { LogOut } from 'lucide-react';
 import { NavLink } from 'react-router';
+import { LegalLinks } from '../legal/LegalLinks';
 import simbolo from '../assets/simbolo.png';
 import { initialsOf } from '../shell/menu';
 import { BACKOFFICE_MENU } from './backoffice-menu';
@@ -55,6 +56,7 @@ export function BackofficeSidebar({ context, onSignOut }: BackofficeSidebarProps
           <LogOut size={18} />
         </button>
       </div>
+      <LegalLinks color="var(--sidebar-dark-muted)" />
     </aside>
   );
 }

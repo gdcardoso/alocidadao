@@ -2,6 +2,7 @@ import type { PanelContext, PanelCounts } from '@alocidadao/shared';
 import { LogOut } from 'lucide-react';
 import { NavLink } from 'react-router';
 import simbolo from '../assets/simbolo.png';
+import { LegalLinks } from '../legal/LegalLinks';
 import { NotificationBell } from './NotificationBell';
 import { initialsOf, MENU_GROUPS, roleLabel } from './menu';
 import styles from './Sidebar.module.css';
@@ -72,6 +73,7 @@ export function Sidebar({ context, counts, onSignOut, support = false }: Sidebar
           </button>
         )}
       </div>
+      <LegalLinks />
     </aside>
   );
 }

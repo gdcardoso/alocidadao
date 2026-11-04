@@ -36,7 +36,7 @@ function meResponse(
     { tenantId, tenantName: 'Prefeitura de São Paulo', role: 'manager', status: 'active' },
   ],
 ) {
-  return { panelTenants } as never;
+  return { panelTenants, termsAccepted: true } as never;
 }
 
 function context(overrides: Partial<PanelContext> = {}): PanelContext {

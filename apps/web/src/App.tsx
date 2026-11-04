@@ -20,6 +20,7 @@ import { RequestsPage } from './lists/RequestsPage';
 import { ReviewPage } from './review/ReviewPage';
 import { TeamsPage } from './teams/TeamsPage';
 import { TriagePage } from './triage/TriagePage';
+import { TermsGate } from './legal/TermsGate';
 import { RequireSession } from './session/RequireSession';
 
 /** Rotas só do admin: o gestor volta para o mapa (`/categorias`) ou para as equipes. */
@@ -34,33 +35,37 @@ export default function App() {
     <Routes>
       <Route path="/entrar" element={<LoginPage />} />
       <Route element={<RequireSession />}>
-        <Route element={<PanelLayout />}>
-          <Route path="/mapa" element={<MapPage />} />
-          <Route path="/triagem" element={<TriagePage />} />
-          <Route path="/revisao" element={<ReviewPage />} />
-          <Route path="/impedimentos" element={<ImpedimentsPage />} />
-          <Route path="/em-atendimento" element={<InProgressPage />} />
-          <Route path="/solicitacoes" element={<RequestsPage />} />
-          <Route path="/equipes" element={<TeamsPage />} />
-          <Route path="/dados" element={<TenantProfilePage />} />
-          <Route element={<AdminOnly fallback="/equipes" />}>
-            <Route path="/equipes/gestores" element={<ManagersPage />} />
-          </Route>
-          <Route element={<AdminOnly fallback="/mapa" />}>
-            <Route path="/categorias" element={<CategoriesPage />} />
-            <Route path="/categorias/setores" element={<DepartmentsPage />} />
+        <Route element={<TermsGate />}>
+          <Route element={<PanelLayout />}>
+            <Route path="/mapa" element={<MapPage />} />
+            <Route path="/triagem" element={<TriagePage />} />
+            <Route path="/revisao" element={<ReviewPage />} />
+            <Route path="/impedimentos" element={<ImpedimentsPage />} />
+            <Route path="/em-atendimento" element={<InProgressPage />} />
+            <Route path="/solicitacoes" element={<RequestsPage />} />
+            <Route path="/equipes" element={<TeamsPage />} />
+            <Route path="/dados" element={<TenantProfilePage />} />
+            <Route element={<AdminOnly fallback="/equipes" />}>
+              <Route path="/equipes/gestores" element={<ManagersPage />} />
+            </Route>
+            <Route element={<AdminOnly fallback="/mapa" />}>
+              <Route path="/categorias" element={<CategoriesPage />} />
+              <Route path="/categorias/setores" element={<DepartmentsPage />} />
+            </Route>
           </Route>
         </Route>
       </Route>
       <Route element={<RequireSession />}>
-        <Route path="/backoffice" element={<BackofficeLayout />}>
-          <Route index element={<Navigate to="/backoffice/prefeituras" replace />} />
-          <Route path="prefeituras" element={<TenantsPage />} />
-          <Route path="prefeituras/nova" element={<NewTenantPage />} />
-          <Route path="prefeituras/:id" element={<TenantDetailPage />} />
-          <Route path="interesse" element={<CityInterestPage />} />
-          <Route path="equipe" element={<StaffPage />} />
-          <Route path="auditoria" element={<AuditPage />} />
+        <Route element={<TermsGate />}>
+          <Route path="/backoffice" element={<BackofficeLayout />}>
+            <Route index element={<Navigate to="/backoffice/prefeituras" replace />} />
+            <Route path="prefeituras" element={<TenantsPage />} />
+            <Route path="prefeituras/nova" element={<NewTenantPage />} />
+            <Route path="prefeituras/:id" element={<TenantDetailPage />} />
+            <Route path="interesse" element={<CityInterestPage />} />
+            <Route path="equipe" element={<StaffPage />} />
+            <Route path="auditoria" element={<AuditPage />} />
+          </Route>
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/mapa" replace />} />

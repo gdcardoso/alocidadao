@@ -1,0 +1,17 @@
+.links {
+  color: var(--text-secondary);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 0 6px;
+}
+
+.link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font-size: 13px;
+  text-decoration: underline;
+  cursor: pointer;
+}

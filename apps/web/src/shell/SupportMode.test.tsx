@@ -55,7 +55,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   sessionStorage.clear();
   // A equipe interna não tem vínculo: `me.panelTenants` vem vazio.
-  vi.mocked(api.me).mockResolvedValue({ panelTenants: [] } as never);
+  vi.mocked(api.me).mockResolvedValue({ panelTenants: [], termsAccepted: true } as never);
   vi.mocked(api.panelContext).mockResolvedValue({
     tenant: { id: tenantId, displayName: 'Prefeitura de Santos', status: 'active', bounds: null },
     user: { id: tenantId, name: 'Lucas Prado' },
@@ -120,7 +120,6 @@ describe('support mode', () => {
     expect(
       await screen.findByText(/Você está na Prefeitura de Santos como equipe Alô Cidadão/),
     ).toBeInTheDocument();
-    expect(api.me).not.toHaveBeenCalled();
     expect(api.panelContext).toHaveBeenCalledWith(tenantId);
     expect(api.panelCounts).toHaveBeenCalledWith(tenantId);
   });
@@ -146,6 +145,7 @@ describe('support mode', () => {
   it('stale key + login as manager lands on the manager own tenant', async () => {
     const own = '9a9a9a9a-8c1e-4e6f-8a7b-9c0d1e2f3a4b';
     vi.mocked(api.me).mockResolvedValue({
+      termsAccepted: true,
       panelTenants: [
         { tenantId: own, tenantName: 'Prefeitura Própria', role: 'manager', status: 'active' },
       ],
@@ -174,6 +174,7 @@ describe('support mode', () => {
       new ApiError(403, { code: 'not_platform_staff' }),
     );
     vi.mocked(api.me).mockResolvedValue({
+      termsAccepted: true,
       panelTenants: [{ tenantId: own, tenantName: 'X', role: 'manager', status: 'active' }],
     } as never);
     renderApp('/mapa', stored);
@@ -193,7 +194,11 @@ describe('support mode', () => {
   ])(
     'staff without support tenant opening the panel goes to the backoffice (%s)',
     async (path, panelTenants) => {
-      vi.mocked(api.me).mockResolvedValue({ panelTenants, platformRole: 'admin' } as never);
+      vi.mocked(api.me).mockResolvedValue({
+        panelTenants,
+        platformRole: 'admin',
+        termsAccepted: true,
+      } as never);
       vi.mocked(api.backofficeTenants).mockResolvedValue({ items: [] } as never);
       renderApp(path);
       expect(await screen.findByRole('link', { name: 'Auditoria' })).toBeInTheDocument();

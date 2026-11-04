@@ -52,7 +52,7 @@ beforeEach(() => {
     platformRole: 'admin',
   });
   // Para quem não é da equipe, o mapa carrega o painel: basta não quebrar.
-  vi.mocked(api.me).mockResolvedValue({ panelTenants: [] } as never);
+  vi.mocked(api.me).mockResolvedValue({ panelTenants: [], termsAccepted: true } as never);
 });
 
 describe('BackofficeLayout', () => {

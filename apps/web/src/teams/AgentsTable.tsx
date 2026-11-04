@@ -8,7 +8,8 @@ import { DataTable, type DataTableColumn } from '../ui/DataTable';
 import { RowMenu, type RowMenuItem } from '../ui/RowMenu';
 import styles from './Teams.module.css';
 
-export type AgentAction = 'change_phone' | 'move' | 'deactivate' | 'reactivate';
+export type AgentAction =
+  'change_phone' | 'change_email' | 'resend_invite' | 'move' | 'deactivate' | 'reactivate';
 
 export interface AgentsTableProps {
   agents: AgentRow[];
@@ -57,6 +58,12 @@ function menuItems(agent: AgentRow, onAction: AgentsTableProps['onAction']): Row
   if (agent.lastActiveAt === null) {
     items.push({ label: 'Trocar número', onSelect: () => onAction('change_phone', agent) });
   }
+  if (agent.status !== 'inactive') {
+    items.push({ label: 'Trocar e-mail', onSelect: () => onAction('change_email', agent) });
+    if (agent.email) {
+      items.push({ label: 'Reenviar convite', onSelect: () => onAction('resend_invite', agent) });
+    }
+  }
   items.push({ label: 'Mudar de equipe', onSelect: () => onAction('move', agent) });
   items.push(
     agent.status === 'inactive'
@@ -88,6 +95,12 @@ export function AgentsTable({ agents, onAction }: AgentsTableProps) {
       header: 'Celular (login)',
       width: 180,
       render: (agent) => (agent.phone ? formatPhoneBR(agent.phone) : '—'),
+    },
+    {
+      key: 'email',
+      header: 'E-mail',
+      width: 240,
+      render: (agent) => agent.email ?? '—',
     },
     { key: 'status', header: 'Situação', width: 140, render: (agent) => statusBadge(agent.status) },
     {

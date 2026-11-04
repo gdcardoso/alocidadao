@@ -20,6 +20,7 @@ vi.mock('../api', () => ({
     panelAgents: vi.fn(),
     panelAddAgent: vi.fn(),
     panelUpdateAgent: vi.fn(),
+    panelResendAgentInvite: vi.fn(),
     panelDepartments: vi.fn(),
   },
 }));
@@ -46,6 +47,7 @@ const updateTeam = vi.mocked(api.panelUpdateTeam);
 const agentsList = vi.mocked(api.panelAgents);
 const addAgent = vi.mocked(api.panelAddAgent);
 const updateAgent = vi.mocked(api.panelUpdateAgent);
+const resendInvite = vi.mocked(api.panelResendAgentInvite);
 const departments = vi.mocked(api.panelDepartments);
 
 const tenantId = '3f2b8c1e-5a4d-4e6f-8a7b-9c0d1e2f3a4b';
@@ -86,6 +88,7 @@ function agent(overrides: Partial<AgentRow>): AgentRow {
     userId: '11111111-1111-4111-8111-111111111111',
     name: 'João Pereira',
     phone: '+5511988771020',
+    email: 'joao@goiania.go.gov.br',
     status: 'active',
     lastActiveAt: '2026-10-20T15:00:00Z',
     ...overrides,
@@ -97,6 +100,7 @@ const marcos = agent({
   userId: '22222222-2222-4222-8222-222222222222',
   name: 'Marcos Lima',
   phone: '+5511966558899',
+  email: null,
   status: 'invited',
   lastActiveAt: null,
 });
@@ -248,10 +252,13 @@ describe('TeamsPage', () => {
     await user.type(within(dialog).getByLabelText('Nome'), 'Ana');
     await user.type(within(dialog).getByLabelText('Celular'), '11988771020');
     expect(within(dialog).getByLabelText('Celular')).toHaveValue('(11) 98877-1020');
+    expect(within(dialog).getByRole('button', { name: 'Adicionar' })).toBeDisabled();
+    await user.type(within(dialog).getByLabelText('E-mail'), 'ana@goiania.go.gov.br');
     await user.click(within(dialog).getByRole('button', { name: 'Adicionar' }));
     expect(addAgent).toHaveBeenCalledWith(tenantId, teamA, {
       name: 'Ana',
       phone: '+5511988771020',
+      email: 'ana@goiania.go.gov.br',
     });
     expect(
       await within(dialog).findByText(
@@ -266,6 +273,89 @@ describe('TeamsPage', () => {
     expect(await screen.findByText('Ana Souza adicionado à equipe.')).toBeInTheDocument();
   });
 
+  it('add agent with another email on the account shows the masked email', async () => {
+    addAgent.mockRejectedValueOnce(
+      new ApiError(409, { code: 'email_mismatch', maskedEmail: 'm•••@goiania.go.gov.br' }),
+    );
+    const user = renderPage();
+    await user.click(await screen.findByRole('button', { name: 'Adicionar agente' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Adicionar agente' });
+    await user.type(within(dialog).getByLabelText('Nome'), 'Ana');
+    await user.type(within(dialog).getByLabelText('Celular'), '11988771020');
+    await user.type(within(dialog).getByLabelText('E-mail'), 'ana@goiania.go.gov.br');
+    await user.click(within(dialog).getByRole('button', { name: 'Adicionar' }));
+    expect(
+      await within(dialog).findByText(
+        'Esta pessoa já tem outro e-mail cadastrado (m•••@goiania.go.gov.br). Use esse e-mail.',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('resend invite is offered only with an email and not to inactive agents', async () => {
+    const user = renderPage();
+    await screen.findByText('Marcos Lima');
+    await user.click(screen.getByRole('button', { name: 'Ações de João Pereira' }));
+    expect(screen.getByRole('menuitem', { name: 'Reenviar convite' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Trocar e-mail' })).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    await user.click(screen.getByRole('button', { name: 'Ações de Marcos Lima' }));
+    expect(screen.queryByRole('menuitem', { name: 'Reenviar convite' })).not.toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Trocar e-mail' })).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    await user.click(screen.getByRole('button', { name: 'Ações de Carla Dias' }));
+    expect(screen.queryByRole('menuitem', { name: 'Reenviar convite' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Trocar e-mail' })).not.toBeInTheDocument();
+  });
+
+  it('resend invite toasts the masked email, then shows the wait and the inactive tenant message', async () => {
+    resendInvite.mockResolvedValueOnce({ maskedEmail: 'm•••@goiania.go.gov.br' });
+    resendInvite.mockRejectedValueOnce(
+      new ApiError(429, { code: 'rate_limited', retryAfterSeconds: 30 }),
+    );
+    resendInvite.mockRejectedValueOnce(new ApiError(409, { code: 'tenant_not_active' }));
+    const user = renderPage();
+    await screen.findByText('Marcos Lima');
+    const resend = async () => {
+      await user.click(screen.getByRole('button', { name: 'Ações de João Pereira' }));
+      await user.click(screen.getByRole('menuitem', { name: 'Reenviar convite' }));
+    };
+    await resend();
+    expect(resendInvite).toHaveBeenCalledWith(tenantId, joao.userId);
+    expect(
+      await screen.findByText('Convite reenviado para m•••@goiania.go.gov.br.'),
+    ).toBeInTheDocument();
+    await resend();
+    expect(await screen.findByText('Aguarde 30 s para reenviar o convite.')).toBeInTheDocument();
+    await resend();
+    expect(
+      await screen.findByText('O convite do agente é enviado quando a prefeitura for ativada.'),
+    ).toBeInTheDocument();
+  });
+
+  it('change email saves the new address and shows the not allowed message', async () => {
+    updateAgent.mockRejectedValueOnce(new ApiError(409, { code: 'email_change_not_allowed' }));
+    updateAgent.mockResolvedValueOnce(joao);
+    const user = renderPage();
+    await screen.findByText('Marcos Lima');
+    await user.click(screen.getByRole('button', { name: 'Ações de Marcos Lima' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Trocar e-mail' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Trocar e-mail' });
+    expect(within(dialog).getByRole('button', { name: 'Salvar' })).toBeDisabled();
+    await user.type(within(dialog).getByLabelText('E-mail'), 'novo@goiania.go.gov.br');
+    await user.click(within(dialog).getByRole('button', { name: 'Salvar' }));
+    expect(updateAgent).toHaveBeenCalledWith(tenantId, marcos.userId, {
+      action: 'change_email',
+      email: 'novo@goiania.go.gov.br',
+    });
+    expect(
+      await within(dialog).findByText(
+        'O e-mail desta pessoa só pode ser trocado pelo suporte do Alô Cidadão.',
+      ),
+    ).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Salvar' }));
+    expect(await screen.findByText('E-mail trocado.')).toBeInTheDocument();
+  });
+
   it('staff_account_not_allowed on agent shows the staff phone message', async () => {
     addAgent.mockRejectedValueOnce(new ApiError(409, { code: 'staff_account_not_allowed' }));
     const user = renderPage();
@@ -273,6 +363,7 @@ describe('TeamsPage', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Adicionar agente' });
     await user.type(within(dialog).getByLabelText('Nome'), 'Ana');
     await user.type(within(dialog).getByLabelText('Celular'), '11988771020');
+    await user.type(within(dialog).getByLabelText('E-mail'), 'ana@goiania.go.gov.br');
     await user.click(within(dialog).getByRole('button', { name: 'Adicionar' }));
     expect(
       await within(dialog).findByText(

@@ -12,6 +12,7 @@ import { Button } from '../../ui/Button';
 import { ConfirmDialog } from '../../ui/ConfirmDialog';
 import { DataTable, type DataTableColumn } from '../../ui/DataTable';
 import { RowMenu, type RowMenuItem } from '../../ui/RowMenu';
+import { inviteErrorMessage, inviteSentMessage } from '../../ui/invite-errors';
 import { useToast } from '../../ui/Toast';
 import { TopBar } from '../../ui/TopBar';
 import { useBackofficeContext } from '../use-backoffice-context';
@@ -78,6 +79,13 @@ export function StaffPage() {
     },
   });
 
+  const resend = useMutation({
+    mutationFn: (member: StaffMember) =>
+      session.withAuth(() => api.backofficeResendStaffInvite(member.userId)),
+    onSuccess: (result) => toast.show(inviteSentMessage(result.maskedEmail)),
+    onError: (error) => setActionError(inviteErrorMessage(error)),
+  });
+
   if (context.data && !isAdmin) return <Navigate to={LIST_PATH} replace />;
 
   function menuItems(row: StaffMember): RowMenuItem[] {
@@ -92,6 +100,13 @@ export function StaffPage() {
     if (row.userId === selfId) return [edit];
     return [
       edit,
+      {
+        label: 'Reenviar convite',
+        onSelect: () => {
+          setActionError(null);
+          resend.mutate(row);
+        },
+      },
       {
         label: 'Trocar papel',
         onSelect: () => {

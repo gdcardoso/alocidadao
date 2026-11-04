@@ -1,4 +1,5 @@
 import {
+  agentCreateBodySchema,
   maskPhoneInput,
   NAME_MIN,
   PERSON_NAME_MAX,
@@ -13,6 +14,7 @@ import { useSession } from '../session/SessionProvider';
 import { usePanel } from '../shell/use-panel';
 import { Button } from '../ui/Button';
 import { Dialog } from '../ui/Dialog';
+import { inviteErrorMessage } from '../ui/invite-errors';
 import { useToast } from '../ui/Toast';
 import { errorCode } from '../occurrence/use-occurrence-actions';
 import { apiErrorField, generalErrorMessage } from './team-errors';
@@ -66,6 +68,44 @@ function PhoneField({ label, value, onChange, error, help }: PhoneFieldProps) {
   );
 }
 
+interface EmailFieldProps {
+  value: string;
+  onChange: (value: string) => void;
+  error: string | null;
+}
+
+function EmailField({ value, onChange, error }: EmailFieldProps) {
+  const id = useId();
+  return (
+    <div className={styles.field}>
+      <div className={styles.labelRow}>
+        <label htmlFor={id} className={styles.label}>
+          E-mail
+        </label>
+        <span className={styles.hint}>obrigatório</span>
+      </div>
+      <input
+        id={id}
+        type="email"
+        autoComplete="off"
+        className={styles.input}
+        value={value}
+        aria-invalid={error !== null}
+        aria-describedby={error ? `${id}-error` : undefined}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      {error ? (
+        <p id={`${id}-error`} className={styles.error}>
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/** E-mail válido para o envio (o mesmo teste da API, sem exigir minúsculas). */
+const isValidEmail = (value: string) => agentCreateBodySchema.shape.email.safeParse(value).success;
+
 function useAfterAgentChange(tenantId: string) {
   const queryClient = useQueryClient();
   return () => queryClient.invalidateQueries({ queryKey: teamsKey(tenantId) });
@@ -85,14 +125,20 @@ export function AddAgentDialog({ team, onClose }: AddAgentDialogProps) {
   const nameId = useId();
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
   const [phoneError, setPhoneError] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
   const [generalError, setGeneralError] = useState<string | null>(null);
   const e164 = phoneFromMasked(phone);
 
   const add = useMutation({
     mutationFn: () =>
       session.withAuth(() =>
-        api.panelAddAgent(tenantId, team.id, { name: name.trim(), phone: e164 ?? '' }),
+        api.panelAddAgent(tenantId, team.id, {
+          name: name.trim(),
+          phone: e164 ?? '',
+          email: email.trim(),
+        }),
       ),
     onSuccess: async (agent: AgentRow) => {
       await refresh();
@@ -112,13 +158,18 @@ export function AddAgentDialog({ team, onClose }: AddAgentDialogProps) {
         setPhoneError('Este agente já está nesta equipe.');
       } else if (code === 'staff_account_not_allowed') {
         setPhoneError('Este número é de alguém da equipe Alô Cidadão. Use outro número.');
+      } else if (code === 'email_mismatch') {
+        setEmailError(inviteErrorMessage(error));
+      } else if (code === 'email_in_use') {
+        setEmailError('Este e-mail já é de outra pessoa.');
       } else {
         setGeneralError(generalErrorMessage(error));
       }
     },
   });
 
-  const canAdd = name.trim().length >= NAME_MIN && e164 !== null && !add.isPending;
+  const canAdd =
+    name.trim().length >= NAME_MIN && e164 !== null && isValidEmail(email.trim()) && !add.isPending;
 
   return (
     <Dialog
@@ -165,6 +216,14 @@ export function AddAgentDialog({ team, onClose }: AddAgentDialogProps) {
         }}
         error={phoneError}
         help="Ele recebe o código de acesso por SMS neste número."
+      />
+      <EmailField
+        value={email}
+        onChange={(value) => {
+          setEmail(value);
+          setEmailError(null);
+        }}
+        error={emailError}
       />
     </Dialog>
   );
@@ -247,6 +306,84 @@ export function ChangePhoneDialog({ agent, onClose }: ChangePhoneDialogProps) {
           setPhoneError(null);
         }}
         error={phoneError}
+      />
+    </Dialog>
+  );
+}
+
+export interface ChangeEmailDialogProps {
+  agent: AgentRow;
+  onClose: () => void;
+}
+
+/** Trocar e-mail: para onde vai o convite do agente. */
+export function ChangeEmailDialog({ agent, onClose }: ChangeEmailDialogProps) {
+  const { tenantId } = usePanel();
+  const { session } = useSession();
+  const toast = useToast();
+  const refresh = useAfterAgentChange(tenantId);
+  const [email, setEmail] = useState(agent.email ?? '');
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [generalError, setGeneralError] = useState<string | null>(null);
+
+  const change = useMutation({
+    mutationFn: () =>
+      session.withAuth(() =>
+        api.panelUpdateAgent(tenantId, agent.userId, {
+          action: 'change_email',
+          email: email.trim(),
+        }),
+      ),
+    onSuccess: async () => {
+      await refresh();
+      toast.show('E-mail trocado.');
+      onClose();
+    },
+    onError: (error) => {
+      const code = errorCode(error);
+      if (code === 'email_in_use') {
+        setEmailError('Este e-mail já é de outra pessoa.');
+      } else if (code === 'email_change_not_allowed') {
+        setGeneralError(inviteErrorMessage(error));
+        void refresh();
+      } else {
+        setGeneralError(inviteErrorMessage(error));
+      }
+    },
+  });
+
+  return (
+    <Dialog
+      title="Trocar e-mail"
+      subtitle={agent.name}
+      onClose={onClose}
+      footer={
+        <>
+          {generalError ? (
+            <p className={`${styles.error} ${styles.footerError}`} role="alert">
+              {generalError}
+            </p>
+          ) : null}
+          <Button variant="secondary" size="sm" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button
+            size="sm"
+            disabled={!isValidEmail(email.trim()) || change.isPending}
+            onClick={() => change.mutate()}
+          >
+            Salvar
+          </Button>
+        </>
+      }
+    >
+      <EmailField
+        value={email}
+        onChange={(value) => {
+          setEmail(value);
+          setEmailError(null);
+        }}
+        error={emailError}
       />
     </Dialog>
   );

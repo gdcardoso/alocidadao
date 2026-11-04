@@ -9,10 +9,16 @@ import { useSession } from '../session/SessionProvider';
 import { usePanel } from '../shell/use-panel';
 import { Button } from '../ui/Button';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { inviteErrorMessage, inviteSentMessage } from '../ui/invite-errors';
 import { Tabs } from '../ui/Tabs';
 import { useToast } from '../ui/Toast';
 import { TopBar } from '../ui/TopBar';
-import { AddAgentDialog, ChangePhoneDialog, MoveAgentDialog } from './AgentDialog';
+import {
+  AddAgentDialog,
+  ChangeEmailDialog,
+  ChangePhoneDialog,
+  MoveAgentDialog,
+} from './AgentDialog';
 import { AgentsTable, type AgentAction } from './AgentsTable';
 import { generalErrorMessage } from './team-errors';
 import { agentsKey, teamsKey } from './team-keys';
@@ -40,6 +46,7 @@ type Dialogs =
   | { kind: 'edit-team' }
   | { kind: 'add-agent' }
   | { kind: 'change-phone'; agent: AgentRow }
+  | { kind: 'change-email'; agent: AgentRow }
   | { kind: 'move'; agent: AgentRow }
   | { kind: 'deactivate'; agent: AgentRow };
 
@@ -107,9 +114,18 @@ export function TeamsPage() {
     },
   });
 
+  const resend = useMutation({
+    mutationFn: (agent: AgentRow) =>
+      session.withAuth(() => api.panelResendAgentInvite(tenantId, agent.userId)),
+    onSuccess: (result) => toast.show(inviteSentMessage(result.maskedEmail)),
+    onError: (error) => setActionError(inviteErrorMessage(error)),
+  });
+
   function onAgentAction(action: AgentAction, agent: AgentRow) {
     setActionError(null);
     if (action === 'change_phone') setDialog({ kind: 'change-phone', agent });
+    else if (action === 'change_email') setDialog({ kind: 'change-email', agent });
+    else if (action === 'resend_invite') resend.mutate(agent);
     else if (action === 'move') setDialog({ kind: 'move', agent });
     else if (action === 'deactivate') setDialog({ kind: 'deactivate', agent });
     else toggle.mutate({ agent, action: 'reactivate' });
@@ -206,7 +222,8 @@ export function TeamsPage() {
                 ) : null}
                 <p className={styles.note}>
                   <Info size={16} aria-hidden="true" />O agente entra no app com o celular
-                  cadastrado aqui. Em "⋯": trocar número, mudar de equipe ou desativar.
+                  cadastrado aqui. Em "⋯": trocar número, trocar e-mail, reenviar convite, mudar de
+                  equipe ou desativar.
                 </p>
               </section>
             ) : null}
@@ -231,6 +248,9 @@ export function TeamsPage() {
       ) : null}
       {dialog?.kind === 'change-phone' ? (
         <ChangePhoneDialog agent={dialog.agent} onClose={close} />
+      ) : null}
+      {dialog?.kind === 'change-email' ? (
+        <ChangeEmailDialog agent={dialog.agent} onClose={close} />
       ) : null}
       {dialog?.kind === 'move' ? (
         <MoveAgentDialog

@@ -1,16 +1,21 @@
 import type { TenantDetail } from '@alocidadao/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ApiError } from '@alocidadao/api-client';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '../../../api';
 import { createPanelSession } from '../../../session/panel-session';
 import { SessionProvider } from '../../../session/SessionProvider';
+import { ToastProvider } from '../../../ui/Toast';
 import { ManagersTab } from './ManagersTab';
 
-vi.mock('../../../api', () => ({ api: { backofficeTenantManagers: vi.fn() } }));
+vi.mock('../../../api', () => ({
+  api: { backofficeTenantManagers: vi.fn(), backofficeResendTenantManagerInvite: vi.fn() },
+}));
 
 const load = vi.mocked(api.backofficeTenantManagers);
+const resendInvite = vi.mocked(api.backofficeResendTenantManagerInvite);
 
 const tenant = { id: '3f2b8c1e-5a4d-4e6f-8a7b-9c0d1e2f3a4b' } as unknown as TenantDetail;
 
@@ -26,7 +31,9 @@ function renderTab(onOpenPanel = vi.fn()) {
   render(
     <QueryClientProvider client={queryClient}>
       <SessionProvider session={session}>
-        <ManagersTab tenant={tenant} isAdmin={false} onOpenPanel={onOpenPanel} />
+        <ToastProvider>
+          <ManagersTab tenant={tenant} isAdmin={false} onOpenPanel={onOpenPanel} />
+        </ToastProvider>
       </SessionProvider>
     </QueryClientProvider>,
   );
@@ -56,10 +63,39 @@ describe('ManagersTab', () => {
     expect(screen.getByText('g•••@exemplo.com')).toBeInTheDocument();
     expect(screen.getByText('•••.982.247-••')).toBeInTheDocument();
     expect(load).toHaveBeenCalledWith(tenant.id);
-    expect(screen.queryByRole('button', { name: /⋯|menu|editar/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /editar/i })).toBeNull();
 
     await userEvent.setup().click(screen.getByRole('button', { name: 'Abrir no painel' }));
     expect(onOpenPanel).toHaveBeenCalledWith('/equipes/gestores');
+  });
+
+  it('resends the invite from the row menu, admins included', async () => {
+    load.mockResolvedValue({
+      items: [
+        {
+          userId: '11111111-1111-4111-8111-111111111111',
+          name: 'Gestora de Obras',
+          cpfMasked: null,
+          emailMasked: 'g•••@exemplo.com',
+          role: 'tenant_admin',
+          status: 'active',
+          departments: [],
+        },
+      ],
+    });
+    resendInvite.mockResolvedValueOnce({ maskedEmail: 'g•••@exemplo.com' });
+    resendInvite.mockRejectedValueOnce(new ApiError(409, { code: 'email_missing' }));
+    renderTab();
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: 'Ações de Gestora de Obras' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Reenviar convite' }));
+    expect(resendInvite).toHaveBeenCalledWith(tenant.id, '11111111-1111-4111-8111-111111111111');
+    expect(await screen.findByText('Convite reenviado para g•••@exemplo.com.')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Ações de Gestora de Obras' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Reenviar convite' }));
+    expect(
+      await screen.findByText('Cadastre um e-mail para enviar o convite.'),
+    ).toBeInTheDocument();
   });
 
   it('shows an alert when loading fails', async () => {

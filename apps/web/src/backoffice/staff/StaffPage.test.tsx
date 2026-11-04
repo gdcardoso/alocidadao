@@ -18,6 +18,7 @@ vi.mock('../../api', () => ({
     backofficeAddStaff: vi.fn(),
     backofficeUpdateStaff: vi.fn(),
     backofficeRemoveStaff: vi.fn(),
+    backofficeResendStaffInvite: vi.fn(),
     backofficeFrozenAccountCode: vi.fn(),
     backofficeRecoverFrozenAccount: vi.fn(),
     backofficeReleaseFrozenCpf: vi.fn(),
@@ -29,6 +30,7 @@ const list = vi.mocked(api.backofficeStaff);
 const add = vi.mocked(api.backofficeAddStaff);
 const update = vi.mocked(api.backofficeUpdateStaff);
 const remove = vi.mocked(api.backofficeRemoveStaff);
+const resendInvite = vi.mocked(api.backofficeResendStaffInvite);
 const release = vi.mocked(api.backofficeReleaseFrozenCpf);
 
 const selfId = '5a4d3f2b-8c1e-4e6f-8a7b-9c0d1e2f3a4b';
@@ -197,6 +199,7 @@ describe('StaffPage', () => {
     await user.click(screen.getByRole('button', { name: 'Ações de Marina Dias' }));
     expect(screen.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
       'Editar',
+      'Reenviar convite',
       'Trocar papel',
       'Remover da equipe',
     ]);
@@ -207,6 +210,23 @@ describe('StaffPage', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Remover' }));
     expect(remove).toHaveBeenCalledWith(marinaId);
     await waitFor(() => expect(screen.queryByText('Marina Dias')).not.toBeInTheDocument());
+  });
+
+  it('resend invite toasts the masked email and shows the rate limit wait', async () => {
+    resendInvite.mockResolvedValueOnce({ maskedEmail: 'm•••@alocidadao.com.br' });
+    resendInvite.mockRejectedValueOnce(
+      new ApiError(429, { code: 'rate_limited', retryAfterSeconds: 42 }),
+    );
+    const user = renderPage();
+    await user.click(await screen.findByRole('button', { name: 'Ações de Marina Dias' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Reenviar convite' }));
+    expect(resendInvite).toHaveBeenCalledWith(marinaId);
+    expect(
+      await screen.findByText('Convite reenviado para m•••@alocidadao.com.br.'),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Ações de Marina Dias' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Reenviar convite' }));
+    expect(await screen.findByText('Aguarde 42 s para reenviar o convite.')).toBeInTheDocument();
   });
 
   it('change role confirms and sends the other role', async () => {

@@ -13,6 +13,7 @@ import { Button } from '../ui/Button';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { DataTable, type DataTableColumn } from '../ui/DataTable';
 import { RowMenu } from '../ui/RowMenu';
+import { inviteErrorMessage, inviteSentMessage } from '../ui/invite-errors';
 import { Tabs } from '../ui/Tabs';
 import { useToast } from '../ui/Toast';
 import { TopBar } from '../ui/TopBar';
@@ -93,6 +94,13 @@ export function ManagersPage() {
     },
   });
 
+  const resend = useMutation({
+    mutationFn: (manager: ManagerRow) =>
+      session.withAuth(() => api.panelResendManagerInvite(tenantId, manager.userId)),
+    onSuccess: (result) => toast.show(inviteSentMessage(result.maskedEmail)),
+    onError: (error) => setActionError(inviteErrorMessage(error)),
+  });
+
   const columns: DataTableColumn<ManagerRow>[] = [
     {
       key: 'name',
@@ -155,6 +163,17 @@ export function ManagersPage() {
             label={row.name}
             items={[
               { label: 'Editar', onSelect: () => setDialog({ kind: 'edit', manager: row }) },
+              ...(row.status === 'inactive'
+                ? []
+                : [
+                    {
+                      label: 'Reenviar convite',
+                      onSelect: () => {
+                        setActionError(null);
+                        resend.mutate(row);
+                      },
+                    },
+                  ]),
               row.status === 'inactive'
                 ? {
                     label: 'Reativar',

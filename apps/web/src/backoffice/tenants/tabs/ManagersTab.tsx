@@ -1,11 +1,17 @@
 import type { StaffManagerRow } from '@alocidadao/shared';
+import { useMutation } from '@tanstack/react-query';
+import { useState } from 'react';
 import { api } from '../../../api';
+import { useSession } from '../../../session/SessionProvider';
 import type { DataTableColumn } from '../../../ui/DataTable';
+import { inviteErrorMessage, inviteSentMessage } from '../../../ui/invite-errors';
+import { RowMenu } from '../../../ui/RowMenu';
+import { useToast } from '../../../ui/Toast';
 import type { ReadOnlyTabProps } from '../tenant-tabs';
 import { ReadOnlyTab } from './ReadOnlyTab';
 import styles from './ReadOnlyTab.module.css';
 
-const columns: DataTableColumn<StaffManagerRow>[] = [
+const baseColumns: DataTableColumn<StaffManagerRow>[] = [
   {
     key: 'name',
     header: 'Nome',
@@ -41,8 +47,42 @@ const columns: DataTableColumn<StaffManagerRow>[] = [
   },
 ];
 
-/** Aba Gestores da P3: só leitura; CPF e e-mail já chegam mascarados da API. */
+/** Aba Gestores da P3: lista com CPF e e-mail mascarados; o menu só reenvia o convite. */
 export function ManagersTab({ tenant, onOpenPanel }: ReadOnlyTabProps) {
+  const { session } = useSession();
+  const toast = useToast();
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const resend = useMutation({
+    mutationFn: (row: StaffManagerRow) =>
+      session.withAuth(() => api.backofficeResendTenantManagerInvite(tenant.id, row.userId)),
+    onSuccess: (result) => toast.show(inviteSentMessage(result.maskedEmail)),
+    onError: (error) => setActionError(inviteErrorMessage(error)),
+  });
+
+  const columns: DataTableColumn<StaffManagerRow>[] = [
+    ...baseColumns,
+    {
+      key: 'actions',
+      header: '',
+      width: 60,
+      render: (row) => (
+        <RowMenu
+          label={row.name}
+          items={[
+            {
+              label: 'Reenviar convite',
+              onSelect: () => {
+                setActionError(null);
+                resend.mutate(row);
+              },
+            },
+          ]}
+        />
+      ),
+    },
+  ];
+
   return (
     <ReadOnlyTab
       name="managers"
@@ -56,6 +96,8 @@ export function ManagersTab({ tenant, onOpenPanel }: ReadOnlyTabProps) {
       errorText="Não foi possível carregar os gestores."
       panelPath="/equipes/gestores"
       onOpenPanel={onOpenPanel}
-    />
+    >
+      {actionError ? <p role="alert">{actionError}</p> : null}
+    </ReadOnlyTab>
   );
 }

@@ -11,6 +11,7 @@ vi.mock('../api', () => ({
     panelManagers: vi.fn(),
     panelCreateManager: vi.fn(),
     panelUpdateManager: vi.fn(),
+    panelResendManagerInvite: vi.fn(),
     panelDepartments: vi.fn(),
     backofficeFrozenAccountCode: vi.fn(),
     backofficeRecoverFrozenAccount: vi.fn(),
@@ -21,6 +22,7 @@ vi.mock('../api', () => ({
 const managers = vi.mocked(api.panelManagers);
 const createManager = vi.mocked(api.panelCreateManager);
 const updateManager = vi.mocked(api.panelUpdateManager);
+const resendInvite = vi.mocked(api.panelResendManagerInvite);
 const departments = vi.mocked(api.panelDepartments);
 const releaseCpf = vi.mocked(api.backofficeReleaseFrozenCpf);
 
@@ -263,6 +265,28 @@ describe('ManagersPage', () => {
     expect(
       await screen.findByText('Esta pessoa é da equipe Alô Cidadão. Use outro CPF.'),
     ).toBeInTheDocument();
+  });
+
+  it('resend invite is offered to active managers only and toasts the masked email', async () => {
+    resendInvite.mockResolvedValueOnce({ maskedEmail: 'c•••@prefeitura.sp.gov.br' });
+    const user = renderAdminPage(<ManagersPage />, '/equipes/gestores');
+    await user.click(await screen.findByRole('button', { name: 'Ações de Paulo Nunes' }));
+    expect(screen.queryByRole('menuitem', { name: 'Reenviar convite' })).not.toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    await user.click(screen.getByRole('button', { name: 'Ações de Carlos Almeida' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Reenviar convite' }));
+    expect(resendInvite).toHaveBeenCalledWith(tenantId, carlos.userId);
+    expect(
+      await screen.findByText('Convite reenviado para c•••@prefeitura.sp.gov.br.'),
+    ).toBeInTheDocument();
+  });
+
+  it('resend invite refusal shows the account message', async () => {
+    resendInvite.mockRejectedValue(new ApiError(409, { code: 'invite_not_allowed' }));
+    const user = renderAdminPage(<ManagersPage />, '/equipes/gestores');
+    await user.click(await screen.findByRole('button', { name: 'Ações de Carlos Almeida' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Reenviar convite' }));
+    expect(await screen.findByText('Esta conta não está ativa.')).toBeInTheDocument();
   });
 
   it('deactivate asks for confirmation and reactivate does not', async () => {

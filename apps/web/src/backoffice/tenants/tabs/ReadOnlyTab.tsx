@@ -35,6 +35,7 @@ export function ReadOnlyTab<T>({
   errorText,
   panelPath,
   onOpenPanel,
+  children,
 }: ReadOnlyTabProps<T>) {
   const { session } = useSession();
   const query = useQuery({
@@ -59,6 +60,7 @@ export function ReadOnlyTab<T>({
           </Button>
         </div>
       ) : null}
+      {children}
       {query.isPending ? <p className={styles.state}>Carregando…</p> : null}
       {query.data && rows.length === 0 ? <p className={styles.state}>{emptyText}</p> : null}
       {rows.length > 0 ? (

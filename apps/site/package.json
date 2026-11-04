@@ -1,0 +1,23 @@
+{
+  "name": "@alocidadao/site",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsx src/build.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "preview": "vite preview --outDir dist"
+  },
+  "dependencies": {
+    "@alocidadao/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@alocidadao/config": "workspace:*",
+    "@types/node": "^22",
+    "tsx": "^4.23.15",
+    "typescript": "~6.0.3",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.5"
+  }
+}

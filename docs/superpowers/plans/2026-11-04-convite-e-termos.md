@@ -68,20 +68,30 @@
 ### Task 1: Textos-modelo de Termos e Privacidade (com revisão do usuário)
 
 **Files:**
+
 - Create: `packages/shared/src/legal/types.ts`, `packages/shared/src/legal/terms.ts`, `packages/shared/src/legal/privacy.ts`, `packages/shared/src/legal/index.ts`
 - Create: `packages/shared/src/legal/legal.test.ts`
 - Modify: `packages/shared/src/auth.ts:16` (`TERMS_VERSION = '2026-11-04'`), `packages/shared/src/index.ts` (exportar `legal`)
 
 **Interfaces:**
+
 - Produces:
+
   ```ts
   type LegalBlock = { kind: 'paragraph'; text: string } | { kind: 'list'; items: string[] };
   type LegalSection = { heading: string; blocks: LegalBlock[] };
-  type LegalDocument = { slug: 'termos' | 'privacidade'; title: string; version: string; notice: string; sections: LegalSection[] };
-  export const TERMS_OF_USE: LegalDocument;   // slug 'termos', title 'Termos de Uso'
+  type LegalDocument = {
+    slug: 'termos' | 'privacidade';
+    title: string;
+    version: string;
+    notice: string;
+    sections: LegalSection[];
+  };
+  export const TERMS_OF_USE: LegalDocument; // slug 'termos', title 'Termos de Uso'
   export const PRIVACY_POLICY: LegalDocument; // slug 'privacidade', title 'Política de Privacidade'
   export const LEGAL_DOCUMENTS: Record<LegalDocument['slug'], LegalDocument>;
   ```
+
   `version` é `TERMS_VERSION`. `notice` é "Versão de testes. Este texto é um modelo e será substituído pela versão revisada pelo jurídico antes do uso em produção."
 
 - [ ] **Step 1: Teste** `legal.test.ts`: os dois documentos têm `version === TERMS_VERSION`; nenhum texto contém `/senha/i`; a Política não contém `/concordo|consentimento para o tratamento/i`; a Política cita `art. 7º, III` e `art. 23` e `art. 18`; ambos contêm `[A DEFINIR]` ao menos uma vez; `LEGAL_DOCUMENTS.termos === TERMS_OF_USE`.
@@ -94,20 +104,48 @@
 ### Task 2: E-mail em HTML e modelos de convite
 
 **Files:**
+
 - Modify: `apps/api/src/messaging/email.ts` (tipos e Resend), `apps/api/src/env.ts` (+ `env.test.ts`)
 - Create: `apps/api/src/messaging/invites.ts`, `apps/api/src/messaging/invites.test.ts`
 - Modify: `packages/shared/src/` — onde estão `CODE_RESEND_SECONDS`: `INVITE_RESEND_SECONDS = 60`
 
 **Interfaces:**
+
 - Produces:
+
   ```ts
-  interface EmailMessage { to: string; subject: string; text: string; html?: string; fromName?: string }
+  interface EmailMessage {
+    to: string;
+    subject: string;
+    text: string;
+    html?: string;
+    fromName?: string;
+  }
   type InviteLinks = { panelUrl: string; playStoreUrl: string | null; appStoreUrl: string | null };
-  function panelInviteEmail(p: { to: string; name: string; tenantName: string; role: 'tenant_admin' | 'manager'; links: InviteLinks }): EmailMessage;
-  function agentInviteEmail(p: { to: string; name: string; tenantName: string; teamName: string; phone: string; links: InviteLinks }): EmailMessage;
-  function staffInviteEmail(p: { to: string; name: string; platformRole: PlatformRole; links: InviteLinks }): EmailMessage;
+  function panelInviteEmail(p: {
+    to: string;
+    name: string;
+    tenantName: string;
+    role: 'tenant_admin' | 'manager';
+    links: InviteLinks;
+  }): EmailMessage;
+  function agentInviteEmail(p: {
+    to: string;
+    name: string;
+    tenantName: string;
+    teamName: string;
+    phone: string;
+    links: InviteLinks;
+  }): EmailMessage;
+  function staffInviteEmail(p: {
+    to: string;
+    name: string;
+    platformRole: PlatformRole;
+    links: InviteLinks;
+  }): EmailMessage;
   // env: ApiEnv.invites: InviteLinks
   ```
+
   Perfil no texto: `tenant_admin` → "Administrador da prefeitura", `manager` → "Gestor"; papel da equipe pelo rótulo já usado na P6.
 
 - [ ] **Step 1: Testes** em `invites.test.ts`:
@@ -126,11 +164,13 @@
 ### Task 3: Banco — e-mail do agente, entregas de convite
 
 **Files:**
+
 - Modify: `packages/db/src/schema.ts` (enum `invite_kind`, tabela `inviteDeliveries`)
 - Create: migração estrutural `0042_*` (`drizzle-kit generate`) e SQL próprio `0043_invites.sql` (`--custom`)
 - Test: `packages/db/src/invites.test.ts`
 
 **Interfaces:**
+
 - Produces (SQL, todas `SECURITY DEFINER`):
   - `panel_find_or_create_agent_user(p_name text, p_phone text, p_email text) RETURNS TABLE (id uuid, email text)` — substitui a de dois parâmetros (fazer `DROP FUNCTION panel_find_or_create_agent_user(text, text)`). Mesmo comportamento de hoje; ao criar, grava o e-mail; achou sem e-mail → grava; achou com e-mail → devolve o existente (a API compara).
   - `panel_change_agent_email(p_user_id uuid, p_email text) RETURNS void` — espelho de `panel_change_manager_email` da 0026 (`panel_require_manager(..., false)`), recusando `email_change_not_allowed` quando a pessoa tem `platform_role`, ou (fora do modo suporte) tem vínculo `manager`/`tenant_admin` em qualquer prefeitura ou `field_agent` em outra prefeitura.
@@ -152,24 +192,53 @@
 ### Task 4: API — envio dos convites, reenvio e e-mail do agente
 
 **Files:**
+
 - Create: `apps/api/src/invites/send.ts`, `apps/api/src/invites/routes.ts` (+ `.test.ts` de cada)
 - Modify: `apps/api/src/app.ts` (passar `email` e `invites` a painel e backoffice), `apps/api/src/panel/routes.ts`, `apps/api/src/panel/teams.ts` (`addAgent`, `updateAgent`), `apps/api/src/panel/admin.ts` (`createManager`), `apps/api/src/backoffice/create-tenant.ts`, `apps/api/src/backoffice/staff-routes.ts`, `apps/api/src/backoffice/tenants.ts` (ativação), `apps/api/src/panel/audit.ts` (`PANEL_AUDIT_ACTIONS`)
 - Modify: `packages/shared/src/panel-admin.ts` (schemas do agente), `packages/shared/src/backoffice.ts` (`invite.resend`, `agent.email_change` + rótulos "Reenviou um convite", "Trocou o e-mail de um agente"; teste de tamanho → 40)
 - Modify: `packages/api-client/src/index.ts` (+ teste): `panelResendManagerInvite(tenantId, userId)`, `panelResendAgentInvite(tenantId, userId)`, `backofficeResendStaffInvite(userId)`, `backofficeResendTenantManagerInvite(tenantId, userId)`, todos `→ Promise<{ maskedEmail: string }>`
 
 **Interfaces:**
+
 - Consumes: Task 2 (`*InviteEmail`, `InviteLinks`, `INVITE_RESEND_SECONDS`), Task 3 (funções SQL).
 - Produces:
+
   ```ts
-  type InviteDeps = { db: Database; email: EmailSender; links: InviteLinks; log: FastifyBaseLogger };
+  type InviteDeps = {
+    db: Database;
+    email: EmailSender;
+    links: InviteLinks;
+    log: FastifyBaseLogger;
+  };
   // Grava a entrega (intervalo 0) e envia; nunca lança. Chamar depois do commit do cadastro.
   function sendInvite(deps: InviteDeps, ctx: DbContext, target: InviteTarget): Promise<void>;
   type InviteTarget =
-    | { kind: 'panel'; userId: string; tenantId: string; to: string; name: string; tenantName: string; role: 'tenant_admin' | 'manager' }
-    | { kind: 'agent'; userId: string; tenantId: string; to: string; name: string; tenantName: string; teamName: string; phone: string }
+    | {
+        kind: 'panel';
+        userId: string;
+        tenantId: string;
+        to: string;
+        name: string;
+        tenantName: string;
+        role: 'tenant_admin' | 'manager';
+      }
+    | {
+        kind: 'agent';
+        userId: string;
+        tenantId: string;
+        to: string;
+        name: string;
+        tenantName: string;
+        teamName: string;
+        phone: string;
+      }
     | { kind: 'staff'; userId: string; to: string; name: string; platformRole: PlatformRole };
   // Reenvio: confere conta/vínculo, aplica INVITE_RESEND_SECONDS, envia e devolve o e-mail mascarado.
-  function resendInvite(deps: InviteDeps, ctx: DbContext, target: InviteTarget): Promise<{ maskedEmail: string } | { retryAfterSeconds: number }>;
+  function resendInvite(
+    deps: InviteDeps,
+    ctx: DbContext,
+    target: InviteTarget,
+  ): Promise<{ maskedEmail: string } | { retryAfterSeconds: number }>;
   ```
 
 - [ ] **Step 1: Testes da API** (`buildApp` com `EmailSender` falso que guarda as mensagens):
@@ -192,20 +261,31 @@
 ### Task 5: API — aceite dos termos e bloqueio
 
 **Files:**
+
 - Modify: `apps/api/src/auth/plugin.ts` (`registerAuth`, `requireAuth`), `apps/api/src/app.ts` (`AuthOptions.termsGate?: boolean`, padrão `false`), `apps/api/src/server.ts` (`termsGate: true`), `apps/api/src/me/routes.ts` (`termsAccepted`, `POST /me/terms`), `apps/api/src/auth/app-routes.ts` (logout liberado)
 - Modify: `packages/shared/src/auth.ts` (`meResponseSchema.termsAccepted: z.boolean()`, `acceptTermsBodySchema`), `packages/api-client/src/index.ts` (`acceptTerms()`)
 - Test: `apps/api/src/auth/terms-gate.test.ts`, `apps/api/src/me/routes.test.ts`
 
 **Interfaces:**
+
 - Produces:
+
   ```ts
-  function registerAuth(app: FastifyInstance, secret: string | undefined, options?: { termsGateDb?: Database }): void;
-  function requireAuth(audiences: readonly SessionAudience[], options?: { allowWithoutTerms?: boolean }): preHandler;
+  function registerAuth(
+    app: FastifyInstance,
+    secret: string | undefined,
+    options?: { termsGateDb?: Database },
+  ): void;
+  function requireAuth(
+    audiences: readonly SessionAudience[],
+    options?: { allowWithoutTerms?: boolean },
+  ): preHandler;
   // 403 { code: 'terms_required' } quando o portão está ligado e users.terms_version é nulo
   const acceptTermsBodySchema = z.object({ acceptedTermsVersion: z.literal(TERMS_VERSION) });
   // MeResponse.termsAccepted: boolean
   // api-client: acceptTerms(): Promise<void>
   ```
+
   Liberadas (`allowWithoutTerms: true`): `GET /me`, `POST /me/terms`, `POST /auth/logout`, `PUT /me/devices/:installationId`. O cadastro do cidadão (`/auth/signup`) não usa `requireAuth` e já grava o aceite.
 
 - [ ] **Step 1: Testes:**
@@ -221,12 +301,14 @@
 ### Task 6: Painel e backoffice — e-mail do agente e "Reenviar convite"
 
 **Files:**
+
 - Modify: `apps/web/src/teams/AgentDialog.tsx` (campo E-mail no `AddAgentDialog`; novo `ChangeEmailDialog`), `apps/web/src/teams/AgentsTable.tsx` (coluna E-mail; itens "Trocar e-mail" e "Reenviar convite"), `apps/web/src/teams/TeamsPage.tsx`
 - Modify: `apps/web/src/managers/ManagersPage.tsx`, `apps/web/src/backoffice/staff/StaffPage.tsx`, `apps/web/src/backoffice/tenants/tabs/ManagersTab.tsx`
 - Create: `apps/web/src/ui/invite-errors.ts` (mensagens das Decisões por `code`)
 - Test: os `.test.tsx` vizinhos de cada arquivo
 
 **Interfaces:**
+
 - Consumes: Task 4 (métodos do `api-client`, schemas do agente).
 
 - [ ] **Step 1: Testes:**
@@ -243,10 +325,12 @@
 ### Task 7: Painel — aceite dos termos e leitura do texto
 
 **Files:**
+
 - Create: `apps/web/src/legal/LegalDocumentView.tsx` (renderiza `LegalDocument`), `apps/web/src/legal/LegalDialog.tsx` (texto + "Li e concordo" opcional), `apps/web/src/legal/TermsCheckbox.tsx`, `apps/web/src/legal/TermsGate.tsx` (+ testes)
 - Modify: `apps/web/src/App.tsx` (`<TermsGate>` dentro dos dois `RequireSession`), menu da conta do painel e do backoffice (links)
 
 **Interfaces:**
+
 - Consumes: Task 1 (`LEGAL_DOCUMENTS`), Task 5 (`termsAccepted`, `acceptTerms`).
 - Produces: `TermsCheckbox({ checked, onChange }: { checked: boolean; onChange(next: boolean): void })` — o rótulo com os dois links; cada link abre `LegalDialog` com "Li e concordo", que chama `onChange(true)` e fecha.
 
@@ -262,15 +346,18 @@
 ### Task 8: App — leitura do texto, cadastro e aceite no primeiro acesso
 
 **Files:**
+
 - Create: `apps/mobile/src/app/termos.tsx`, `apps/mobile/src/app/privacidade.tsx`, `apps/mobile/src/app/(app)/aceite.tsx`, `apps/mobile/src/legal/acceptance-store.ts`, `apps/mobile/src/legal/LegalDocumentView.tsx`, `apps/mobile/src/legal/TermsCheckbox.tsx`, `apps/mobile/src/legal/terms-route.ts` (+ testes Node)
 - Modify: `apps/mobile/src/app/(auth)/quase-la.tsx` (usar `TermsCheckbox`), `apps/mobile/src/app/(app)/_layout.tsx` (redirecionar para `aceite` quando `me.termsAccepted === false`), `apps/mobile/src/components/ProfileContent.tsx` (linhas abrem `/termos` e `/privacidade` no app em vez do navegador), `apps/mobile/src/auth/session-context.tsx` (403 `terms_required` atualiza `me`)
 
 **Interfaces:**
+
 - Consumes: Task 1, Task 5.
 - Produces:
+
   ```ts
   // acceptance-store.ts
-  function markLegalRead(): void;                    // chamada pelo "Li e concordo"
+  function markLegalRead(): void; // chamada pelo "Li e concordo"
   function useLegalReadSignal(onRead: () => void): void; // a tela da caixa marca ao voltar
   // terms-route.ts (Node, testável)
   function needsTermsAcceptance(me: MeResponse | null): boolean; // me?.termsAccepted === false
@@ -285,10 +372,12 @@
 ### Task 9: Site estático com /termos e /privacidade
 
 **Files:**
+
 - Create: `apps/site/package.json` (`@alocidadao/site`; scripts `build: tsx src/build.ts`, `test: vitest run`, `typecheck: tsc --noEmit`, `preview: vite preview --outDir dist`, com `vite` em devDependencies na mesma versão do `apps/web`), `apps/site/tsconfig.json`, `apps/site/src/render.ts`, `apps/site/src/build.ts`, `apps/site/src/styles.css`, `apps/site/src/render.test.ts`
 - Modify: `pnpm-workspace.yaml` se precisar; `turbo.json` se o pacote precisar de saída (`dist/**`)
 
 **Interfaces:**
+
 - Consumes: Task 1 (`LEGAL_DOCUMENTS`).
 - Produces: `renderLegalPage(doc: LegalDocument): string`, `renderHome(): string`; `build.ts` grava `dist/index.html`, `dist/termos/index.html`, `dist/privacidade/index.html`, `dist/styles.css`.
 

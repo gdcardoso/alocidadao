@@ -41,12 +41,12 @@ Hoje quem é cadastrado no painel (admin da prefeitura, gestor, equipe Alô Cida
 
 ### 3.1 Quem recebe e quando
 
-| Cadastro | Onde | Recebe |
-|---|---|---|
-| Admin da prefeitura | P2 (nova prefeitura, backoffice) | convite de gestão |
-| Gestor | painel, Gestores | convite de gestão |
-| Agente | painel, Equipes → adicionar agente | convite do agente |
-| Equipe Alô Cidadão | P6 (backoffice) | convite da equipe Alô Cidadão |
+| Cadastro            | Onde                               | Recebe                        |
+| ------------------- | ---------------------------------- | ----------------------------- |
+| Admin da prefeitura | P2 (nova prefeitura, backoffice)   | convite de gestão             |
+| Gestor              | painel, Gestores                   | convite de gestão             |
+| Agente              | painel, Equipes → adicionar agente | convite do agente             |
+| Equipe Alô Cidadão  | P6 (backoffice)                    | convite da equipe Alô Cidadão |
 
 **Agente só recebe convite com a prefeitura ativa** (decisão do usuário: o agente só usa o app se a prefeitura e ele estiverem cadastrados; o app só entra no modo agente com a prefeitura ativa). Agente cadastrado durante a implantação fica sem convite; quando a prefeitura é ativada, o sistema envia o convite a todos os agentes ativos dela que têm e-mail e ainda não receberam. Para isso, guardar quando o convite foi enviado (por vínculo). "Reenviar convite" do agente também só aparece com a prefeitura ativa. Gestores e admin recebem na hora, porque trabalham durante a implantação.
 
@@ -64,18 +64,21 @@ O convite sai depois que o cadastro é gravado, inclusive quando a pessoa já ti
 ### 3.3 Textos (rascunho aprovado; o builder pode polir sem mudar o sentido)
 
 **Convite de gestão** (admin da prefeitura e gestor)
+
 - Assunto: "Você foi convidado para o painel do Alô Cidadão"
 - "Olá, {primeiro nome}." / "A {Prefeitura de Goiânia} cadastrou você no Alô Cidadão, o sistema que recebe e acompanha as solicitações dos moradores, com o perfil **{Administrador da prefeitura | Gestor}**."
 - Botão "Entrar no painel" → URL do painel (`portal.alocidadao.com.br`, por configuração).
 - "Na tela de entrada, digite o seu CPF. Enviaremos um código para este e-mail. Não existe senha: a cada acesso você recebe um código novo."
 
 **Convite do agente**
+
 - Assunto: "Você foi convidado para o app do agente do Alô Cidadão"
 - "A {Prefeitura} cadastrou você como agente da equipe **{nome da equipe}** no Alô Cidadão. Pelo app, você recebe as solicitações dos moradores e registra o atendimento."
 - Botões "Baixar no Google Play" e "Baixar na App Store". Os links vêm da configuração; sem link configurado, no lugar dos botões vai "Procure **Alô Cidadão** na loja de aplicativos do seu celular."
 - "Depois de instalar, abra o app e digite o seu celular {celular mascarado}. Você recebe um código por SMS. Não existe senha. O app já abre na sua lista de atividades."
 
 **Convite da equipe Alô Cidadão** (minha decisão: texto próprio)
+
 - Assunto: "Você foi adicionado à equipe do Alô Cidadão"
 - "Você foi adicionado à equipe do Alô Cidadão com o papel **{papel}**." Botão "Entrar no backoffice" → mesma URL do painel. Mesmo parágrafo de CPF + código.
 

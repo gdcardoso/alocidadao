@@ -16,7 +16,25 @@ describe('parseEnv', () => {
       auth: undefined,
       email: { resendApiKey: undefined, from: 'Alô Cidadão <nao-responda@alocidadao.com.br>' },
       devRoutes: false,
+      invites: { panelUrl: 'http://localhost:5173', playStoreUrl: null, appStoreUrl: null },
     });
+  });
+
+  it('requires PANEL_URL in production and defaults it elsewhere', () => {
+    expect(() => parseEnv({ NODE_ENV: 'production', RESEND_API_KEY: 'k' })).toThrow(/PANEL_URL/);
+    expect(
+      parseEnv({
+        NODE_ENV: 'production',
+        RESEND_API_KEY: 'k',
+        PANEL_URL: 'https://portal.alocidadao.com.br',
+        AGENT_APP_PLAY_URL: 'https://play.google.com/x',
+      }).invites,
+    ).toEqual({
+      panelUrl: 'https://portal.alocidadao.com.br',
+      playStoreUrl: 'https://play.google.com/x',
+      appStoreUrl: null,
+    });
+    expect(parseEnv({}).invites.panelUrl).toBe('http://localhost:5173');
   });
 
   it('requires a long AUTH_SECRET with DATABASE_URL', () => {
@@ -41,7 +59,10 @@ describe('parseEnv', () => {
 
   it('requires RESEND_API_KEY in production', () => {
     expect(() => parseEnv({ NODE_ENV: 'production' })).toThrow(/RESEND_API_KEY/);
-    expect(parseEnv({ NODE_ENV: 'production', RESEND_API_KEY: 're_123' }).email).toEqual({
+    expect(
+      parseEnv({ NODE_ENV: 'production', RESEND_API_KEY: 're_123', PANEL_URL: 'https://p.test' })
+        .email,
+    ).toEqual({
       resendApiKey: 're_123',
       from: 'Alô Cidadão <nao-responda@alocidadao.com.br>',
     });
@@ -116,8 +137,12 @@ describe('parseEnv', () => {
 
   it('never enables dev routes in production', () => {
     expect(
-      parseEnv({ ENABLE_DEV_ROUTES: 'true', NODE_ENV: 'production', RESEND_API_KEY: 're_123' })
-        .devRoutes,
+      parseEnv({
+        ENABLE_DEV_ROUTES: 'true',
+        NODE_ENV: 'production',
+        RESEND_API_KEY: 're_123',
+        PANEL_URL: 'https://p.test',
+      }).devRoutes,
     ).toBe(false);
     expect(parseEnv({ ENABLE_DEV_ROUTES: 'true' }).devRoutes).toBe(true);
   });

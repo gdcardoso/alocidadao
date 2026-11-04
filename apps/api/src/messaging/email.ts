@@ -5,6 +5,10 @@ export interface EmailMessage {
   to: string;
   subject: string;
   text: string;
+  /** Versão em HTML; o texto continua indo junto, para quem não mostra HTML. */
+  html?: string;
+  /** Nome de exibição do remetente; o endereço continua o de `EMAIL_FROM`. */
+  fromName?: string;
 }
 
 export interface EmailSender {
@@ -31,11 +35,13 @@ export function createResendEmailSender({
   fetch?: typeof fetch;
 }): EmailSender {
   return {
-    send: async ({ to, subject, text }) => {
+    send: async ({ to, subject, text, html, fromName }) => {
+      const address = /<([^>]+)>/.exec(from)?.[1] ?? from;
+      const sender = fromName ? `${fromName} <${address}>` : from;
       const response = await fetchFn('https://api.resend.com/emails', {
         method: 'POST',
         headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
-        body: JSON.stringify({ from, to: [to], subject, text }),
+        body: JSON.stringify({ from: sender, to: [to], subject, text, ...(html ? { html } : {}) }),
       });
       if (!response.ok) {
         const detail = await response.text().catch(() => '');

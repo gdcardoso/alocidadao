@@ -17,6 +17,8 @@ export const TERMS_VERSION = '2026-11-04';
 export const CODE_LENGTH = 6;
 export const CODE_TTL_SECONDS = 600;
 export const CODE_RESEND_SECONDS = 60;
+/** Espera mínima entre dois reenvios do convite à mesma pessoa. */
+export const INVITE_RESEND_SECONDS = 60;
 export const CODE_MAX_ATTEMPTS = 5;
 export const CODES_PER_HOUR = 5;
 export const ACCESS_TOKEN_TTL_SECONDS = 900;

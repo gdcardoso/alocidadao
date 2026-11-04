@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { InviteLinks } from './messaging/invites.js';
 
 export interface ApiEnv {
   port: number;
@@ -26,6 +27,8 @@ export interface ApiEnv {
   auth?: { secret: string; devFixedCode?: string };
   /** Sem chave do Resend, o e-mail sai no log (só fora de produção). */
   email: { resendApiKey?: string; from: string };
+  /** Endereços que vão nos e-mails de convite. */
+  invites: InviteLinks;
   devRoutes: boolean;
 }
 
@@ -71,6 +74,9 @@ const schema = z.object({
   ),
   RESEND_API_KEY: optionalText,
   EMAIL_FROM: optionalText,
+  PANEL_URL: optionalText,
+  AGENT_APP_PLAY_URL: optionalText,
+  AGENT_APP_STORE_URL: optionalText,
   ENABLE_DEV_ROUTES: optionalText,
   NODE_ENV: optionalText,
 });
@@ -108,6 +114,7 @@ export function parseEnv(source: Record<string, string | undefined>): ApiEnv {
     problems.push('AUTH_DEV_FIXED_CODE: proibida em produção');
   }
   if (production) missing('RESEND_API_KEY', e.RESEND_API_KEY, 'obrigatória em produção');
+  if (production) missing('PANEL_URL', e.PANEL_URL, 'obrigatória em produção');
 
   const together = (group: Record<string, string | undefined>) => {
     const names = Object.keys(group);
@@ -165,6 +172,11 @@ export function parseEnv(source: Record<string, string | undefined>): ApiEnv {
     email: {
       resendApiKey: e.RESEND_API_KEY,
       from: e.EMAIL_FROM ?? 'Alô Cidadão <nao-responda@alocidadao.com.br>',
+    },
+    invites: {
+      panelUrl: e.PANEL_URL ?? 'http://localhost:5173',
+      playStoreUrl: e.AGENT_APP_PLAY_URL ?? null,
+      appStoreUrl: e.AGENT_APP_STORE_URL ?? null,
     },
     devRoutes: e.ENABLE_DEV_ROUTES === 'true' && !production,
   };

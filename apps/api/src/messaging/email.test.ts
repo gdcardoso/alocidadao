@@ -40,4 +40,31 @@ describe('createResendEmailSender', () => {
     });
     await expect(sender.send({ to: 'a@b.com', subject: 's', text: 't' })).rejects.toThrow(/422/);
   });
+
+  it('sends html and the display name when the message has them', async () => {
+    const bodies: Record<string, unknown>[] = [];
+    const fakeFetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+      bodies.push(JSON.parse(init!.body as string));
+      return new Response('{}', { status: 200 });
+    }) as typeof fetch;
+    const sender = createResendEmailSender({
+      apiKey: 're_test',
+      from: 'Alô Cidadão <nao-responda@alocidadao.com.br>',
+      fetch: fakeFetch,
+    });
+    await sender.send({
+      to: 'a@b.com',
+      subject: 's',
+      text: 't',
+      html: '<p>t</p>',
+      fromName: 'Alô Cidadão · Prefeitura de Goiânia',
+    });
+    await sender.send({ to: 'a@b.com', subject: 's', text: 't' });
+    expect(bodies[0]).toMatchObject({
+      from: 'Alô Cidadão · Prefeitura de Goiânia <nao-responda@alocidadao.com.br>',
+      html: '<p>t</p>',
+    });
+    expect(bodies[1]!.from).toBe('Alô Cidadão <nao-responda@alocidadao.com.br>');
+    expect(bodies[1]).not.toHaveProperty('html');
+  });
 });

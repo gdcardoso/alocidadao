@@ -15,6 +15,8 @@ REVOKE ALL ON invite_deliveries FROM PUBLIC;
 -- Mesmo comportamento de antes; a conta que já existe mantém nome e e-mail e, sem e-mail, recebe o
 -- digitado. Devolve o e-mail final: a API compara com o digitado (pessoa com outro e-mail). E-mail de
 -- outra conta cai em users_email_lower_idx (23505). p_email nulo acha ou cria sem mexer no e-mail.
+-- Gravar o e-mail em conta sem e-mail segue a trava de panel_change_agent_email
+-- (email_change_not_allowed).
 
 DROP FUNCTION panel_find_or_create_agent_user(text, text);
 --> statement-breakpoint
@@ -41,6 +43,20 @@ CREATE FUNCTION panel_find_or_create_agent_user(p_name text, p_phone text, p_ema
       INSERT INTO users (name, phone, email) VALUES (p_name, p_phone, p_email)
       RETURNING users.id, users.email INTO v_id, v_email;
     ELSIF v_email IS NULL AND p_email IS NOT NULL THEN
+      -- Mesma trava de panel_change_agent_email: o e-mail recupera a conta no app e é o segundo
+      -- fator do painel; fora do modo suporte, não grava em quem tem acesso de gestão em qualquer
+      -- prefeitura ou é agente em outra.
+      IF NOT app_is_platform_staff() AND EXISTS (
+        SELECT 1 FROM memberships m
+        WHERE m.user_id = v_id
+          AND (
+            m.role IN ('manager', 'tenant_admin')
+            OR (m.role = 'field_agent' AND m.tenant_id <> app_current_tenant())
+          )
+      ) THEN
+        RAISE EXCEPTION 'email_change_not_allowed'
+          USING ERRCODE = 'check_violation';
+      END IF;
       UPDATE users u SET email = p_email WHERE u.id = v_id
       RETURNING u.email INTO v_email;
     END IF;
@@ -130,6 +146,10 @@ CREATE FUNCTION invite_record(
     v_last timestamptz;
     v_wait int;
   BEGIN
+    IF p_min_interval_seconds IS NULL OR p_kind IS NULL OR p_user_id IS NULL THEN
+      RAISE EXCEPTION 'invite_record: pessoa, tipo e intervalo são obrigatórios'
+        USING ERRCODE = 'invalid_parameter_value';
+    END IF;
     IF (p_kind = 'staff') <> (p_tenant_id IS NULL) THEN
       RAISE EXCEPTION 'invite_record: só o convite da equipe interna vem sem prefeitura'
         USING ERRCODE = 'invalid_parameter_value';

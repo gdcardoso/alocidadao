@@ -121,7 +121,7 @@ function record(
   userId: string,
   tenantId: string | null,
   kind: 'panel' | 'agent' | 'staff',
-  minIntervalSeconds: number,
+  minIntervalSeconds: number | null,
 ) {
   return call<{ wait: number }>(
     context,
@@ -236,6 +236,52 @@ describe('cadastro do agente com e-mail', () => {
     expect(
       await pgError(findOrCreateAgent(asManagerA(), 'X', newPhone(), taken.toUpperCase())),
     ).toMatchObject({ code: '23505', constraint: 'users_email_lower_idx' });
+  });
+
+  it('pessoa achada sem e-mail, agente de outra prefeitura: recusa gravar o e-mail', async () => {
+    const phone = newPhone();
+    const person = await createUser({ phone });
+    await link(b.tenantId, person, 'field_agent');
+    expect(await pgError(findOrCreateAgent(asManagerA(), 'X', phone, newEmail()))).toMatchObject({
+      code: '23514',
+      message: 'email_change_not_allowed',
+    });
+    expect((await userRow(person)).email).toBeNull();
+  });
+
+  it('pessoa achada sem e-mail com acesso de gestão: recusa', async () => {
+    for (const tenantId of [a.tenantId, b.tenantId]) {
+      const phone = newPhone();
+      const person = await createUser({ phone, cpf: newCpf() });
+      await link(tenantId, person, 'manager');
+      expect(await pgError(findOrCreateAgent(asManagerA(), 'X', phone, newEmail()))).toMatchObject({
+        code: '23514',
+        message: 'email_change_not_allowed',
+      });
+      expect((await userRow(person)).email).toBeNull();
+    }
+  });
+
+  it('modo suporte grava', async () => {
+    const phone = newPhone();
+    const person = await createUser({ phone });
+    await link(b.tenantId, person, 'field_agent');
+    const email = newEmail();
+    expect(await findOrCreateAgent(asSupport(a.tenantId), 'X', phone, email)).toEqual({
+      id: person,
+      email,
+    });
+  });
+
+  it('pessoa achada com e-mail e travada devolve o e-mail sem recusar', async () => {
+    const phone = newPhone();
+    const existing = newEmail();
+    const person = await createUser({ phone, email: existing });
+    await link(b.tenantId, person, 'field_agent');
+    expect(await findOrCreateAgent(asManagerA(), 'X', phone, newEmail())).toEqual({
+      id: person,
+      email: existing,
+    });
   });
 
   it('recusa quem não é gestor da prefeitura', async () => {
@@ -397,6 +443,14 @@ describe('registro dos convites', () => {
       '22023',
     );
     expect((await pgError(record(asPlatformAdmin(), person, null, 'agent', 0))).code).toBe('22023');
+  });
+
+  it('recusa intervalo nulo', async () => {
+    const person = await createUser();
+    expect((await pgError(record(asManagerA(), person, a.tenantId, 'agent', null))).code).toBe(
+      '22023',
+    );
+    expect(await deliveries(person)).toHaveLength(0);
   });
 
   it('app_user não lê invite_deliveries diretamente', async () => {

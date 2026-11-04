@@ -327,7 +327,8 @@ export function registerMeRoutes(instance: FastifyInstance, deps: MeDeps) {
   app.delete(
     '/me',
     {
-      preHandler: anyAudience,
+      // Quem recusa os termos ainda pode excluir a própria conta (LGPD).
+      preHandler: anyAudienceWithoutTerms,
       schema: { response: { 204: z.null(), 401: apiErrorSchema, 409: apiErrorSchema } },
     },
     async (request, reply) => {

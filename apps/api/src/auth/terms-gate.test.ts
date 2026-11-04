@@ -113,6 +113,18 @@ describe('terms gate', () => {
     expect(logout.statusCode).toBe(204);
   });
 
+  it('lets an account without terms delete itself', async () => {
+    const { userId } = await newManager();
+    const headers = await appAuthHeader(appDb.db, userId);
+    const res = await gated.inject({ method: 'DELETE', url: '/me', headers });
+    expect(res.statusCode).toBe(204);
+    const [row] = await owner.db
+      .select({ accountStatus: users.accountStatus })
+      .from(users)
+      .where(eq(users.id, userId));
+    expect(row!.accountStatus).toBe('frozen');
+  });
+
   it('refuses an old terms version on accept', async () => {
     const { userId } = await newManager();
     const headers = await panelAuthHeader(appDb.db, userId);

@@ -18,8 +18,9 @@ export default function AppLayout() {
   const { mode, me } = useSession();
   // Conta que ainda não aceitou os Termos só enxerga a tela de aceite.
   const mustAccept = needsTermsAcceptance(me);
-  // A fila offline sai sozinha enquanto a pessoa está logada (rede, primeiro plano, espera).
-  useOutboxSync();
+  // A fila offline sai sozinha enquanto a pessoa está logada (rede, primeiro plano, espera),
+  // menos antes do aceite dos Termos: a API recusaria tudo.
+  useOutboxSync(!mustAccept);
   return (
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
       <Stack.Protected guard={mode === 'citizen' && !mustAccept}>

@@ -1,8 +1,7 @@
-import { ApiError } from '@alocidadao/api-client';
 import type { MeResponse } from '@alocidadao/shared';
 import { describe, expect, it, vi } from 'vitest';
 import { markLegalRead, subscribeLegalRead } from './acceptance-store';
-import { isTermsRequiredError, needsTermsAcceptance } from './terms-route';
+import { isTermsRequiredBody, needsTermsAcceptance } from './terms-route';
 
 const me: MeResponse = {
   id: '11111111-1111-4111-8111-111111111111',
@@ -26,12 +25,11 @@ describe('needsTermsAcceptance', () => {
   });
 });
 
-describe('isTermsRequiredError', () => {
-  it('recognises the 403 terms_required answer only', () => {
-    expect(isTermsRequiredError(new ApiError(403, { code: 'terms_required' }))).toBe(true);
-    expect(isTermsRequiredError(new ApiError(403, { code: 'forbidden' }))).toBe(false);
-    expect(isTermsRequiredError(new ApiError(401, { code: 'terms_required' }))).toBe(false);
-    expect(isTermsRequiredError(new Error('x'))).toBe(false);
+describe('isTermsRequiredBody', () => {
+  it('recognises the terms_required body only', () => {
+    expect(isTermsRequiredBody({ code: 'terms_required' })).toBe(true);
+    expect(isTermsRequiredBody({ code: 'forbidden' })).toBe(false);
+    expect(isTermsRequiredBody(null)).toBe(false);
   });
 });
 

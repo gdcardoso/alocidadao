@@ -10,6 +10,18 @@ import {
 /** Tempo esgotado no servidor (408) e limite de pedidos (429): tenta de novo com espera. */
 const RETRY_STATUSES = [408, 429];
 
+/**
+ * 403 `terms_required`: a conta ainda não aceitou os Termos. Passa quando a pessoa aceitar,
+ * então o item espera na fila como no 401 (nunca vira recusado).
+ */
+function throwIfTermsRequired(status: number, bodyText: string): void {
+  if (status !== 403) return;
+  const json = parseJson(bodyText);
+  if ((json as { code?: unknown } | undefined)?.code === 'terms_required') {
+    throw new NetworkError('terms_required');
+  }
+}
+
 function parseJson(bodyText: string): unknown {
   try {
     return JSON.parse(bodyText);
@@ -37,6 +49,7 @@ export function mapActionResponse(status: number, bodyText: string): SendActionR
   }
   // Token recusado (vencido ou sessão encerrada): o item espera um novo login na fila.
   if (status === 401) throw new NetworkError('unauthorized');
+  throwIfTermsRequired(status, bodyText);
   if (RETRY_STATUSES.includes(status)) throw new NetworkError(`http_${status}`);
   // Qualquer outro 4xx não melhora com nova tentativa: recusa e segue a fila. Inclui 404
   // `work_order_not_found` (a atividade pode ter sido concluída ou cancelada no meio do caminho),
@@ -59,6 +72,7 @@ export interface Presign {
 
 export function parsePresignResponse(status: number, bodyText: string): Presign {
   if (status === 401) throw new NetworkError('unauthorized');
+  throwIfTermsRequired(status, bodyText);
   if (RETRY_STATUSES.includes(status)) throw new NetworkError(`uploads_${status}`);
   if (status >= 400 && status < 500) {
     const json = parseJson(bodyText);
@@ -112,6 +126,7 @@ export function mapCreateRequestResponse(
     return { kind: 'ok', result: parsed.data };
   }
   if (status === 401) throw new NetworkError('unauthorized');
+  throwIfTermsRequired(status, bodyText);
   if (RETRY_STATUSES.includes(status)) throw new NetworkError(`http_${status}`);
   if (status === 409 && body.code === 'occurrence_unavailable') {
     return { kind: 'occurrence_unavailable' };

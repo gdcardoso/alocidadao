@@ -16,24 +16,14 @@ import { Fragment, useState, type ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { sessionApi } from '../auth/native-session';
 import { useSession } from '../auth/use-session';
-import { deleteAccountErrorMessage, pendingCount, signOutWarning } from '../citizen/profile-view';
-import { openOutboxStore } from '../offline/sqlite-outbox-store';
+import { countPendingUploads } from '../citizen/pending-uploads';
+import { deleteAccountErrorMessage, signOutWarning } from '../citizen/profile-view';
 import { SecondaryButton, TextButton } from '../ui/Button';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { FormError } from '../ui/FormLayout';
 import { formatPhoneBR, initials } from '../ui/format';
 import { Screen } from '../ui/Screen';
 import { colors, fonts, radius, space } from '../ui/theme';
-
-/** Envios na fila (de qualquer tipo) que a saída apagaria. Sem conseguir ler, conta zero. */
-async function countPendingUploads(): Promise<number> {
-  try {
-    const store = await openOutboxStore();
-    return pendingCount(await store.list());
-  } catch {
-    return 0;
-  }
-}
 
 /**
  * Conteúdo do Perfil (tela 8), usado pelas abas do cidadão e do agente: conta, links, troca de

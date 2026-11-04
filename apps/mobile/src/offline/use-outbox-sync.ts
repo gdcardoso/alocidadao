@@ -11,10 +11,12 @@ import {
 
 /**
  * Dispara a fila ao abrir, ao ganhar rede e ao voltar ao primeiro plano. Montado uma vez, no
- * layout das telas de quem está logado.
+ * layout das telas de quem está logado. Com `enabled: false` (aceite dos Termos pendente) a fila
+ * fica parada: o servidor recusaria tudo.
  */
-export function useOutboxSync(): void {
+export function useOutboxSync(enabled = true): void {
   useEffect(() => {
+    if (!enabled) return;
     void refreshOutbox().catch((error: unknown) => console.warn('Falha ao ler a fila', error));
     void syncOutbox();
     const unsubscribeNet = NetInfo.addEventListener((state) => {
@@ -27,7 +29,7 @@ export function useOutboxSync(): void {
       unsubscribeNet();
       sub.remove();
     };
-  }, []);
+  }, [enabled]);
 }
 
 /** A fila para as telas: itens, estado da passada e as ações. */

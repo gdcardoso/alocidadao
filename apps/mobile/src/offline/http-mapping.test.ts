@@ -149,3 +149,21 @@ describe('mapCreateRequestResponse', () => {
     }
   });
 });
+
+describe('terms_required', () => {
+  const body = '{"code":"terms_required"}';
+
+  it('keeps the item queued in the three mappers', () => {
+    expect(() => mapActionResponse(403, body)).toThrow(NetworkError);
+    expect(() => parsePresignResponse(403, body)).toThrow(NetworkError);
+    expect(() => mapCreateRequestResponse(403, body)).toThrow(NetworkError);
+  });
+
+  it('still rejects other 403 answers', () => {
+    expect(mapActionResponse(403, '{"code":"not_a_member"}')).toEqual({
+      kind: 'rejected',
+      code: 'not_a_member',
+    });
+    expect(() => parsePresignResponse(403, '{"code":"forbidden"}')).toThrow(UploadRejectedError);
+  });
+});

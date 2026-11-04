@@ -1,6 +1,7 @@
 import { createApiClient } from '@alocidadao/api-client';
 import { api, API_URL } from '../lib/api';
 import { secureStore } from '../lib/secure-store';
+import { isTermsRequiredBody } from '../legal/terms-route';
 import { HttpTransport } from '../offline/http-transport';
 import { clearOfflineData } from '../offline/sqlite-outbox-store';
 import { createSessionManager } from './session';
@@ -23,7 +24,7 @@ const fetchWatchingTerms: typeof fetch = async (input, init) => {
       .clone()
       .json()
       .catch(() => null);
-    if ((body as { code?: string } | null)?.code === 'terms_required') termsRequiredHandler?.();
+    if (isTermsRequiredBody(body)) termsRequiredHandler?.();
   }
   return response;
 };

@@ -192,4 +192,15 @@ describe('createPanelSession', () => {
     expect(session.getAccessToken()).toBeNull();
     expect(session.getState()).toEqual({ status: 'signed_out', expiredNotice: false });
   });
+
+  it('sign out for lack of use ends the server session and shows the notice', async () => {
+    const client = fakeClient();
+    const session = createPanelSession({ client });
+    session.signIn({ accessToken: 'old', accessExpiresInSeconds: 900 });
+
+    await session.signOut({ expired: true });
+
+    expect(client.panelLogout).toHaveBeenCalledTimes(1);
+    expect(session.getState()).toEqual({ status: 'signed_out', expiredNotice: true });
+  });
 });

@@ -6,8 +6,11 @@ import { newRefreshToken, signAccessToken, type SessionAudience } from './tokens
 
 const { sessions, devices, users } = schema;
 
-/** Sessão do painel: vence após 12 h sem renovação. */
-export const PANEL_IDLE_TIMEOUT_SECONDS = 12 * 60 * 60;
+/**
+ * Sessão do painel: vence após 1 h sem renovação (navegador fechado ou computador desligado).
+ * Com a aba aberta, quem encerra por falta de uso é o painel, que conta só a ação da pessoa.
+ */
+export const PANEL_IDLE_TIMEOUT_SECONDS = 60 * 60;
 
 /**
  * Cria a sessão da conta e devolve os tokens. Roda dentro de withContext com `userId`

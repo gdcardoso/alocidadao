@@ -330,7 +330,7 @@ describe('panel auth routes', () => {
       httpOnly: true,
       sameSite: 'Strict',
       path: '/auth/panel',
-      maxAge: 43200,
+      maxAge: 3600,
     });
     expect(cookie!.secure).toBeFalsy();
     expect(cookie!.value.length).toBeGreaterThan(20);
@@ -355,7 +355,7 @@ describe('panel auth routes', () => {
       httpOnly: true,
       sameSite: 'Strict',
       path: '/auth/panel',
-      maxAge: 43200,
+      maxAge: 3600,
     });
 
     const second = await panelPost('/auth/panel/refresh', { cookie });

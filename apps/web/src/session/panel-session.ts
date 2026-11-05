@@ -25,7 +25,8 @@ export interface PanelSession {
   /** Renovação inicial, ao abrir o painel: `true` se o cookie ainda vale. */
   restore(): Promise<boolean>;
   signIn(session: AccessSession): void;
-  signOut(): Promise<void>;
+  /** Encerra no servidor; `expired` mostra no login a faixa "Sua sessão expirou" (falta de uso). */
+  signOut(options?: { expired?: boolean }): Promise<void>;
   /** Faz a chamada; num 401, renova uma vez e repete. Renovações simultâneas viram uma só. */
   withAuth<T>(call: () => Promise<T>): Promise<T>;
   getState(): SessionState;
@@ -163,8 +164,8 @@ export function createPanelSession({ client, onExpired }: PanelSessionOptions): 
       apply(session);
     },
 
-    async signOut() {
-      clear(false);
+    async signOut(options) {
+      clear(options?.expired ?? false);
       try {
         await client.panelLogout();
       } catch {

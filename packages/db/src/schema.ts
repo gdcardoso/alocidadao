@@ -127,7 +127,7 @@ export const users = pgTable(
 // Políticas e funções na migração auth_functions.
 
 /**
- * Códigos enviados por SMS ou e-mail. Guarda só o hash; app_user não lê nem grava:
+ * Códigos enviados pelo WhatsApp ou e-mail. Guarda só o hash; app_user não lê nem grava:
  * tudo passa pelas funções auth_issue_code e auth_consume_code.
  */
 export const verificationCodes = pgTable(

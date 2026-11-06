@@ -70,7 +70,7 @@ export const PRIVACY_POLICY: LegalDocument = {
       blocks: [
         list(
           'Registrar, analisar, encaminhar e atender as solicitações.',
-          'Criar sua conta e confirmar que é você, com o código enviado por SMS ou e-mail.',
+          'Criar sua conta e confirmar que é você, com o código enviado pelo WhatsApp ou por e-mail.',
           'Avisar sobre cada mudança na solicitação, por notificação no app e, em alguns casos, por e-mail.',
           'Permitir que a prefeitura organize equipes, prazos e o trabalho de campo.',
           'Dar suporte, prevenir fraudes e abusos e manter o serviço seguro.',
@@ -94,7 +94,7 @@ export const PRIVACY_POLICY: LegalDocument = {
       blocks: [
         list(
           'Com a prefeitura escolhida: gestores, administradores e agentes de campo veem as solicitações e o que for necessário para atendê-las, como seu nome e o local do problema.',
-          'Com fornecedores que fazem o serviço funcionar: hospedagem e armazenamento de dados e fotos, envio de e-mail, envio de SMS e envio de notificações (Google, no Android, e Apple, no iPhone). [A DEFINIR: lista de fornecedores]',
+          'Com fornecedores que fazem o serviço funcionar: hospedagem e armazenamento de dados e fotos, envio de e-mail, envio de mensagens pelo WhatsApp (Meta) e envio de notificações (Google, no Android, e Apple, no iPhone). [A DEFINIR: lista de fornecedores]',
           'Com autoridades, quando a lei ou uma ordem judicial exigir.',
         ),
         paragraph(

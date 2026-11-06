@@ -83,7 +83,7 @@ export default function CodigoNovoCelular() {
       }
     >
       <FormTitle title="Digite o código">
-        <FormText>Enviado por SMS para {formatPhoneBR(params.phone)}.</FormText>
+        <FormText>Enviado pelo WhatsApp para {formatPhoneBR(params.phone)}.</FormText>
         <FormLink label="Alterar número" onPress={backToPhone} />
       </FormTitle>
       <View style={styles.codeBlock}>

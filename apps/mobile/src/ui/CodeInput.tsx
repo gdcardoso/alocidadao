@@ -13,7 +13,7 @@ export interface CodeInputProps {
 
 /**
  * Seis caixas de dígito (60 de altura, raio 14). Um único campo invisível recebe o texto,
- * para o teclado numérico e o preenchimento automático do SMS funcionarem.
+ * para o teclado numérico e o preenchimento automático do código funcionarem.
  */
 export function CodeInput({ value, onChange, autoFocus = false, invalid = false }: CodeInputProps) {
   const input = useRef<ComponentRef<typeof TextInput>>(null);

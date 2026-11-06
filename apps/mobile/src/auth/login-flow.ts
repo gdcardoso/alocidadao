@@ -6,7 +6,7 @@ import { parsePhoneInput } from '../ui/format';
 // Regras das telas de entrada, sem nada nativo (testável em Node).
 
 /**
- * Para onde o app segue depois que o código do SMS confere. `home`: a tela inicial do modo
+ * Para onde o app segue depois que o código confere. `home`: a tela inicial do modo
  * (`homeFor` em app-mode.ts), aberta pelo `index` da raiz quando a sessão entra.
  */
 export type LoginStep =
@@ -43,7 +43,8 @@ const MESSAGES: Record<string, string> = {
   code_locked: 'Muitas tentativas. Peça um novo código.',
   phone_in_use: 'Este número já tem uma conta. Volte e entre de novo.',
   email_in_use: 'Este e-mail já está em uso. Deixe em branco ou use outro.',
-  sms_not_configured: 'Não foi possível enviar o SMS agora. Tente mais tarde.',
+  phone_code_not_configured: 'Não foi possível enviar o código agora. Tente mais tarde.',
+  phone_code_not_sent: 'Não foi possível enviar o código agora. Tente de novo em instantes.',
   email_managed_by_admin: 'O e-mail da sua conta do painel é alterado pelo administrador.',
 };
 

@@ -10,7 +10,7 @@ import { maskPhoneInput } from '../../ui/format';
 import { TextField } from '../../ui/TextField';
 import { colors, fonts } from '../../ui/theme';
 
-/** Tela 1 · Entrar: celular com +55 fixo; o código vai por SMS. */
+/** Tela 1 · Entrar: celular com +55 fixo; o código vai pelo WhatsApp. */
 export default function Entrar() {
   const [phone, setPhone] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -88,7 +88,7 @@ export default function Entrar() {
         maxLength={15}
         returnKeyType="done"
         onSubmitEditing={() => void submit()}
-        help="Enviaremos um código por SMS para confirmar que o número é seu."
+        help="Enviaremos um código pelo WhatsApp para confirmar que o número é seu."
         error={error}
       />
     </FormLayout>

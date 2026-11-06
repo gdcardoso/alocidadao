@@ -215,7 +215,7 @@ export function AddAgentDialog({ team, onClose }: AddAgentDialogProps) {
           setPhoneError(null);
         }}
         error={phoneError}
-        help="Ele recebe o código de acesso por SMS neste número."
+        help="Ele recebe o código de acesso pelo WhatsApp neste número."
       />
       <EmailField
         value={email}

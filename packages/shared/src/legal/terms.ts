@@ -47,7 +47,7 @@ export const TERMS_OF_USE: LegalDocument = {
       heading: 'Sua conta e o acesso por código',
       blocks: [
         paragraph(
-          'A conta é pessoal. No app, você entra com o número do seu celular e um código de 6 dígitos enviado por SMS. No painel da prefeitura, o acesso é feito com CPF e um código enviado por e-mail.',
+          'A conta é pessoal. No app, você entra com o número do seu celular e um código de 6 dígitos enviado pelo WhatsApp. No painel da prefeitura, o acesso é feito com CPF e um código enviado por e-mail.',
         ),
         list(
           'O código vale por poucos minutos e só pode ser usado uma vez.',

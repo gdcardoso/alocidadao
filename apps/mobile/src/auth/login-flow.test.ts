@@ -68,8 +68,11 @@ describe('login flow', () => {
     expect(errorMessage('email_in_use')).toBe(
       'Este e-mail já está em uso. Deixe em branco ou use outro.',
     );
-    expect(errorMessage('sms_not_configured')).toBe(
-      'Não foi possível enviar o SMS agora. Tente mais tarde.',
+    expect(errorMessage('phone_code_not_configured')).toBe(
+      'Não foi possível enviar o código agora. Tente mais tarde.',
+    );
+    expect(errorMessage('phone_code_not_sent')).toBe(
+      'Não foi possível enviar o código agora. Tente de novo em instantes.',
     );
     expect(errorMessage('signup_token_invalid')).toBe('Algo deu errado. Tente de novo.');
     expect(errorMessage(undefined)).toBe('Algo deu errado. Tente de novo.');

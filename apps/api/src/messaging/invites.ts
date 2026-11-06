@@ -107,7 +107,7 @@ export function agentInviteEmail(p: {
   const phone = maskPhone(p.phone);
   const intro = (esc: (s: string) => string, bold: (s: string) => string) =>
     `A ${esc(p.tenantName)} cadastrou você como agente da equipe ${bold(esc(p.teamName))} no Alô Cidadão. Pelo app, você recebe as solicitações dos moradores e registra o atendimento.`;
-  const after = `Depois de instalar, abra o app e digite o seu celular ${phone}. Você recebe um código por SMS. Não existe senha. O app já abre na sua lista de atividades.`;
+  const after = `Depois de instalar, abra o app e digite o seu celular ${phone}. Você recebe um código pelo WhatsApp. Não existe senha. O app já abre na sua lista de atividades.`;
 
   const stores: { label: string; href: string }[] = [];
   if (p.links.playStoreUrl)

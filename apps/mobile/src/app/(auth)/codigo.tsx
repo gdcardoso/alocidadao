@@ -24,7 +24,7 @@ import { colors, fonts } from '../../ui/theme';
 
 type Params = { phone: string; challengeId: string; resendInSeconds?: string };
 
-/** Tela 2 · Código: os 6 dígitos do SMS. */
+/** Tela 2 · Código: os 6 dígitos enviados pelo WhatsApp. */
 export default function Codigo() {
   const params = useLocalSearchParams<Params>();
   const { signIn } = useSession();
@@ -106,7 +106,7 @@ export default function Codigo() {
       }
     >
       <FormTitle title="Digite o código">
-        <FormText>Enviado por SMS para {formatPhoneBR(params.phone)}.</FormText>
+        <FormText>Enviado pelo WhatsApp para {formatPhoneBR(params.phone)}.</FormText>
         <FormLink label="Alterar número" onPress={backToPhone} />
       </FormTitle>
       <View style={styles.codeBlock}>

@@ -51,7 +51,7 @@ export default function TrocarCelular() {
       }
     >
       <FormTitle title="Trocar número">
-        <FormText>Enviaremos um código por SMS para confirmar que o número é seu.</FormText>
+        <FormText>Enviaremos um código pelo WhatsApp para confirmar que o número é seu.</FormText>
       </FormTitle>
       <TextField
         label="Novo celular"

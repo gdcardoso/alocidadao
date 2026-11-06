@@ -109,7 +109,7 @@ export default function Kit() {
             value={phone}
             onChangeText={setPhone}
             keyboardType="phone-pad"
-            help="Enviaremos um código por SMS para confirmar que o número é seu."
+            help="Enviaremos um código pelo WhatsApp para confirmar que o número é seu."
           />
           <TextField
             label="E-mail"

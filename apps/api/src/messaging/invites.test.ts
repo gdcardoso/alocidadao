@@ -66,7 +66,7 @@ describe('agentInviteEmail', () => {
     expect(m.html).toContain('href="http://apple.test/app"');
     expect(m.html).toContain('Iluminação Pública');
     expect(m.html).toContain('(62) •••••-4321');
-    expect(m.text).toContain('código por SMS');
+    expect(m.text).toContain('código pelo WhatsApp');
     expect(m.text).toContain('Não existe senha');
   });
 

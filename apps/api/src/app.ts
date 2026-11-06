@@ -20,7 +20,7 @@ import { registerDevPush, type PushSenders } from './dev/push.js';
 import { registerDevWorkOrders } from './dev/work-orders.js';
 import type { EmailSender } from './messaging/email.js';
 import type { InviteLinks } from './messaging/invites.js';
-import { createLogSmsSender, type SmsSender } from './messaging/sms.js';
+import { createLogPhoneCodeSender, type PhoneCodeSender } from './messaging/phone-code.js';
 import { registerMeRoutes } from './me/routes.js';
 import { startScheduler, type Scheduler } from './notifications/scheduler.js';
 import { registerPanelAudit } from './panel/audit.js';
@@ -33,12 +33,12 @@ export interface AuthOptions {
   secret: string;
   /** Código fixo aceito no login (só desenvolvimento). */
   devFixedCode?: string;
-  /** Sem ele: fora de produção o SMS sai no log; em produção, 503 sms_not_configured. */
-  sms?: SmsSender;
+  /** Sem ele: fora de produção o código sai no log; em produção, 503 phone_code_not_configured. */
+  phoneCode?: PhoneCodeSender;
   email: EmailSender;
   /** Limite por IP em /auth/*. Padrão: 20 por minuto. */
   rateLimit?: { max: number; timeWindowMs: number };
-  /** Limite por conta em POST /me/phone/start (cada SMS custa). Padrão: 5 por hora. */
+  /** Limite por conta em POST /me/phone/start (cada envio custa). Padrão: 5 por hora. */
   phoneChangeRateLimit?: { max: number; timeWindowMs: number };
   /**
    * Portão dos termos: conta sem aceite recebe 403 terms_required nas rotas autenticadas (menos
@@ -161,13 +161,14 @@ export async function buildApp({
   }
 
   if (auth && database) {
-    const sms =
-      auth.sms ?? (process.env.NODE_ENV === 'production' ? undefined : createLogSmsSender(app.log));
+    const phoneCode =
+      auth.phoneCode ??
+      (process.env.NODE_ENV === 'production' ? undefined : createLogPhoneCodeSender(app.log));
     const deps = {
       db: database,
       secret: auth.secret,
       devFixedCode: auth.devFixedCode,
-      sms,
+      phoneCode,
       email: auth.email,
     };
     // Escopo próprio: o limite por IP vale só para /auth/*.

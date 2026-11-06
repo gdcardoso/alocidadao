@@ -7,6 +7,8 @@ import {
   createResendEmailSender,
   type EmailSender,
 } from './messaging/email.js';
+import { createLogPhoneCodeSender, type PhoneCodeSender } from './messaging/phone-code.js';
+import { createMetaPhoneCodeSender } from './messaging/phone-code-meta.js';
 import { buildPushSenders } from './push/senders.js';
 import { createStorage } from './storage/s3.js';
 
@@ -32,6 +34,15 @@ const email: EmailSender = env.email.resendApiKey
   ? createResendEmailSender({ apiKey: env.email.resendApiKey, from: env.email.from })
   : { send: (msg) => createLogEmailSender(app.log).send(msg) };
 
+// Código de entrada pelo celular: sem configuração fica undefined (buildApp usa o log fora
+// de produção e responde 503 em produção). O log também espera o logger da aplicação.
+const phoneCode: PhoneCodeSender | undefined =
+  env.phoneCode?.provider === 'meta'
+    ? createMetaPhoneCodeSender(env.phoneCode.meta)
+    : env.phoneCode?.provider === 'log'
+      ? { send: (phone, code) => createLogPhoneCodeSender(app.log).send(phone, code) }
+      : undefined;
+
 // O logger da aplicação nasce em buildApp: os avisos de antes dele ficam numa fila.
 const queuedLogs: { level: 'info' | 'warn'; obj: object; msg: string }[] = [];
 let appLog:
@@ -53,13 +64,15 @@ const app = await buildApp({
   devRoutes: env.devRoutes,
   // Envio dos avisos, confirmação automática e limpeza; para no preClose, antes do pool fechar.
   notifications: { scheduler: true },
-  // Não há provedor de SMS: fora de produção o código sai no log; em produção, 503.
   // Conta sem aceite dos termos é recusada (terms_required) até aceitar.
-  auth: env.auth && databaseHandle ? { ...env.auth, email, termsGate: true } : undefined,
+  auth: env.auth && databaseHandle ? { ...env.auth, email, phoneCode, termsGate: true } : undefined,
   invites: env.invites,
 });
 
 appLog = app.log;
+if (env.phoneCode?.provider === 'log' && process.env.NODE_ENV === 'production') {
+  app.log.warn('PHONE_CODE_PROVIDER=log em produção: o código de entrada sai no log');
+}
 for (const { level, obj, msg } of queuedLogs) app.log[level](obj, msg);
 
 // Fecha o pool do banco junto com o servidor.

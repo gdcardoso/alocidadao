@@ -30,8 +30,8 @@ import { and, eq, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { codeEmail, type EmailSender } from '../messaging/email.js';
-import { smsCodeText, type SmsSender } from '../messaging/sms.js';
-import { hashCode, issueChallenge } from './codes.js';
+import type { PhoneCodeSender } from '../messaging/phone-code.js';
+import { deliverPhoneCode, hashCode, issueChallenge } from './codes.js';
 import { requireAuth } from './plugin.js';
 import { startSession } from './session.js';
 import { hashRefreshToken, signAccessToken, signSignupToken, verifySignupToken } from './tokens.js';
@@ -42,8 +42,8 @@ export interface AuthDeps {
   db: Database;
   secret: string;
   devFixedCode?: string;
-  /** Sem envio de SMS (produção sem provedor), /auth/phone/start responde 503. */
-  sms?: SmsSender;
+  /** Sem envio do código pelo celular (produção sem provedor), /auth/phone/start responde 503. */
+  phoneCode?: PhoneCodeSender;
   email: EmailSender;
 }
 
@@ -78,7 +78,7 @@ function uniqueConflict(error: unknown): SignupConflict | undefined {
 /** Rotas de login do app: celular e código, cadastro, número reaproveitado e sessões. */
 export function registerAppAuthRoutes(instance: FastifyInstance, deps: AuthDeps) {
   const app = instance.withTypeProvider<ZodTypeProvider>();
-  const { db, secret, devFixedCode, sms, email } = deps;
+  const { db, secret, devFixedCode, phoneCode, email } = deps;
 
   app.post(
     '/auth/phone/start',
@@ -89,7 +89,7 @@ export function registerAppAuthRoutes(instance: FastifyInstance, deps: AuthDeps)
       },
     },
     async (request, reply) => {
-      if (!sms) return reply.code(503).send({ code: 'sms_not_configured' });
+      if (!phoneCode) return reply.code(503).send({ code: 'phone_code_not_configured' });
       const { phone } = request.body;
       // Não procura a conta aqui: a resposta é a mesma para número com e sem conta.
       const challenge = await issueChallenge(db, {
@@ -104,7 +104,9 @@ export function registerAppAuthRoutes(instance: FastifyInstance, deps: AuthDeps)
           .code(429)
           .send({ code: 'code_rate_limited', retryAfterSeconds: challenge.retryAfterSeconds });
       }
-      await sms.send(phone, smsCodeText(challenge.code));
+      if (!(await deliverPhoneCode(db, phoneCode, request.log, phone, challenge))) {
+        return reply.code(503).send({ code: 'phone_code_not_sent' });
+      }
       return {
         challengeId: challenge.challengeId,
         expiresInSeconds: CODE_TTL_SECONDS,
@@ -142,7 +144,7 @@ export function registerAppAuthRoutes(instance: FastifyInstance, deps: AuthDeps)
         return { status: 'signed_in' as const, session };
       }
 
-      // Número possivelmente reaproveitado: nunca entra na conta antiga só com o SMS.
+      // Número possivelmente reaproveitado: nunca entra na conta antiga só com o código pelo celular.
       const signupToken = await signSignupToken(secret, { phone, device, freezeUserId: user.id });
       if (!user.email) return { status: 'needs_profile' as const, signupToken };
 

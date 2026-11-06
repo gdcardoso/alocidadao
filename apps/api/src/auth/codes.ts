@@ -1,6 +1,8 @@
 import { createHmac, randomInt, randomUUID } from 'node:crypto';
-import { issueCode, type CodePurpose, type Database } from '@alocidadao/db';
+import type { FastifyBaseLogger } from 'fastify';
+import { discardCode, issueCode, type CodePurpose, type Database } from '@alocidadao/db';
 import { CODE_LENGTH } from '@alocidadao/shared';
+import { maskPhone, type PhoneCodeSender } from '../messaging/phone-code.js';
 
 /** Código de 6 dígitos; no desenvolvimento, o código fixo da variável de ambiente. */
 export function generateCode(devFixedCode?: string): string {
@@ -49,4 +51,26 @@ export async function issueChallenge(
   });
   if (!result.issued) return { issued: false, retryAfterSeconds: result.retryAfterSeconds };
   return { issued: true, challengeId, code };
+}
+
+/**
+ * Manda o código para o celular. Se o envio falhar, descarta o código (o cidadão pode pedir
+ * outro na hora, sem esperar os 60 s nem gastar o limite por hora), registra no log com o
+ * número mascarado e devolve `false`.
+ */
+export async function deliverPhoneCode(
+  db: Database,
+  sender: PhoneCodeSender,
+  log: FastifyBaseLogger,
+  phone: string,
+  challenge: { challengeId: string; code: string },
+): Promise<boolean> {
+  try {
+    await sender.send(phone, challenge.code);
+    return true;
+  } catch (err) {
+    await discardCode(db, challenge.challengeId);
+    log.warn({ err, phone: maskPhone(phone) }, 'Código pelo celular não enviado');
+    return false;
+  }
 }

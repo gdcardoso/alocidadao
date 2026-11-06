@@ -11,7 +11,7 @@ import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp } from '../app.js';
 import type { EmailSender } from '../messaging/email.js';
-import type { SmsSender } from '../messaging/sms.js';
+import type { PhoneCodeSender } from '../messaging/phone-code.js';
 import { panelFixtures } from '../test/panel-fixtures.js';
 import { API_TEST_APP_URL, API_TEST_OWNER_URL } from '../test/urls.js';
 
@@ -22,10 +22,10 @@ const fx = panelFixtures(owner.db);
 const appDb = createDatabase(API_TEST_APP_URL);
 const secret = 'segredo-de-teste-da-api-com-mais-de-32-caracteres';
 
-const smsSent: { phone: string; text: string }[] = [];
-const sms: SmsSender = {
-  send: async (phone, text) => {
-    smsSent.push({ phone, text });
+const codesSent: { phone: string; code: string }[] = [];
+const phoneCode: PhoneCodeSender = {
+  send: async (phone, code) => {
+    codesSent.push({ phone, code });
   },
 };
 const email: EmailSender = { send: async () => {} };
@@ -89,7 +89,7 @@ beforeAll(async () => {
     auth: {
       secret,
       devFixedCode: '123456',
-      sms,
+      phoneCode,
       email,
       rateLimit: { max: 1000, timeWindowMs: 60_000 },
     },
@@ -336,10 +336,7 @@ describe('me routes', () => {
     });
     expect(start.statusCode).toBe(200);
     const { challengeId } = start.json<ChallengeResponse>();
-    expect(smsSent).toContainEqual({
-      phone: next,
-      text: 'Alô Cidadão: seu código é 123456. Não compartilhe com ninguém.',
-    });
+    expect(codesSent).toContainEqual({ phone: next, code: '123456' });
 
     const wrong = await app.inject({
       method: 'POST',
@@ -440,7 +437,7 @@ describe('me routes', () => {
       auth: {
         secret,
         devFixedCode: '123456',
-        sms,
+        phoneCode,
         email,
         rateLimit: { max: 1000, timeWindowMs: 60_000 },
         phoneChangeRateLimit: { max: 1, timeWindowMs: 60_000 },
@@ -462,6 +459,37 @@ describe('me routes', () => {
       expect(second.json()).toMatchObject({ code: 'rate_limited' });
     } finally {
       await limited.close();
+    }
+  });
+
+  it('phone change provider failure answers 503 phone_code_not_sent', async () => {
+    const failing = await buildApp({
+      database: appDb.db,
+      auth: {
+        secret,
+        devFixedCode: '123456',
+        phoneCode: {
+          send: async () => {
+            throw new Error('provedor fora do ar');
+          },
+        },
+        email,
+        rateLimit: { max: 1000, timeWindowMs: 60_000 },
+      },
+    });
+    try {
+      const user = await createUser();
+      const session = await signIn(user.phone);
+      const res = await failing.inject({
+        method: 'POST',
+        url: '/me/phone/start',
+        headers: bearer(session),
+        payload: { phone: newPhone() },
+      });
+      expect(res.statusCode).toBe(503);
+      expect(res.json()).toMatchObject({ code: 'phone_code_not_sent' });
+    } finally {
+      await failing.close();
     }
   });
 

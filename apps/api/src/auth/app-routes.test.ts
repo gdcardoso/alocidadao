@@ -9,10 +9,10 @@ import {
   type SessionResponse,
 } from '@alocidadao/shared';
 import { and, eq, sql } from 'drizzle-orm';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { buildApp, type AppOptions } from '../app.js';
 import type { EmailSender } from '../messaging/email.js';
-import type { SmsSender } from '../messaging/sms.js';
+import type { PhoneCodeSender } from '../messaging/phone-code.js';
 import { API_TEST_APP_URL, API_TEST_OWNER_URL } from '../test/urls.js';
 import { verifyAccessToken } from './tokens.js';
 
@@ -22,11 +22,11 @@ const owner = createDatabase(API_TEST_OWNER_URL);
 const appDb = createDatabase(API_TEST_APP_URL);
 const secret = 'segredo-de-teste-da-api-com-mais-de-32-caracteres';
 
-const smsSent: { phone: string; text: string }[] = [];
+const codesSent: { phone: string; code: string }[] = [];
 const emailsSent: { to: string; subject: string; text: string }[] = [];
-const sms: SmsSender = {
-  send: async (phone, text) => {
-    smsSent.push({ phone, text });
+const phoneCode: PhoneCodeSender = {
+  send: async (phone, code) => {
+    codesSent.push({ phone, code });
   },
 };
 const email: EmailSender = {
@@ -38,7 +38,7 @@ const email: EmailSender = {
 async function build(rateLimit = { max: 1000, timeWindowMs: 60_000 }) {
   const options: AppOptions = {
     database: appDb.db,
-    auth: { secret, devFixedCode: '123456', sms, email, rateLimit },
+    auth: { secret, devFixedCode: '123456', phoneCode, email, rateLimit },
   };
   return buildApp(options);
 }
@@ -128,12 +128,58 @@ describe('app auth routes', () => {
     expect(a.resendInSeconds).toBe(b.resendInSeconds);
     expect(a.challengeId).not.toBe(b.challengeId);
 
-    // O SMS sai nos dois casos, com o texto combinado.
-    expect(smsSent).toContainEqual({
-      phone: known,
-      text: 'Alô Cidadão: seu código é 123456. Não compartilhe com ninguém.',
+    // O código sai nos dois casos.
+    expect(codesSent).toContainEqual({ phone: known, code: '123456' });
+    expect(codesSent.some((m) => m.phone === unknown)).toBe(true);
+  });
+
+  it('provider failure answers 503 phone_code_not_sent and allows retry right away', async () => {
+    let calls = 0;
+    const flaky: PhoneCodeSender = {
+      send: async () => {
+        calls += 1;
+        if (calls === 1) throw new Error('provedor fora do ar');
+      },
+    };
+    const flakyApp = await buildApp({
+      database: appDb.db,
+      auth: { secret, devFixedCode: '123456', phoneCode: flaky, email },
     });
-    expect(smsSent.some((m) => m.phone === unknown)).toBe(true);
+    try {
+      const phone = newPhone();
+      const start = () =>
+        flakyApp.inject({ method: 'POST', url: '/auth/phone/start', payload: { phone } });
+      const first = await start();
+      expect(first.statusCode).toBe(503);
+      expect(first.json()).toMatchObject({ code: 'phone_code_not_sent' });
+      // O código descartado não segura os 60 s de espera.
+      expect((await start()).statusCode).toBe(200);
+    } finally {
+      await flakyApp.close();
+    }
+  });
+
+  it('production without provider answers 503 phone_code_not_configured', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    try {
+      const prodApp = await buildApp({
+        database: appDb.db,
+        auth: { secret, email },
+      });
+      try {
+        const res = await prodApp.inject({
+          method: 'POST',
+          url: '/auth/phone/start',
+          payload: { phone: newPhone() },
+        });
+        expect(res.statusCode).toBe(503);
+        expect(res.json()).toMatchObject({ code: 'phone_code_not_configured' });
+      } finally {
+        await prodApp.close();
+      }
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it('phone start refuses a number outside E.164', async () => {

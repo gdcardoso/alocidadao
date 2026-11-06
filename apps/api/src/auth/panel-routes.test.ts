@@ -10,7 +10,7 @@ import { asc, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp } from '../app.js';
 import type { EmailSender } from '../messaging/email.js';
-import type { SmsSender } from '../messaging/sms.js';
+import type { PhoneCodeSender } from '../messaging/phone-code.js';
 import { API_TEST_APP_URL, API_TEST_OWNER_URL } from '../test/urls.js';
 import { PANEL_REFRESH_COOKIE } from './panel-routes.js';
 import { startSession } from './session.js';
@@ -25,7 +25,7 @@ const appDb = createDatabase(API_TEST_APP_URL);
 const secret = 'segredo-de-teste-da-api-com-mais-de-32-caracteres';
 
 const emailsSent: { to: string; subject: string; text: string }[] = [];
-const sms: SmsSender = { send: async () => {} };
+const phoneCode: PhoneCodeSender = { send: async () => {} };
 const email: EmailSender = {
   send: async (msg) => {
     emailsSent.push(msg);
@@ -135,7 +135,7 @@ beforeAll(async () => {
     auth: {
       secret,
       devFixedCode: '123456',
-      sms,
+      phoneCode,
       email,
       rateLimit: { max: 1000, timeWindowMs: 60_000 },
     },
@@ -429,7 +429,7 @@ describe('panel auth routes', () => {
       auth: {
         secret,
         devFixedCode: '123456',
-        sms,
+        phoneCode,
         email,
         rateLimit: { max: 2, timeWindowMs: 60_000 },
       },

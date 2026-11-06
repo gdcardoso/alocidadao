@@ -27,10 +27,9 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { asActiveUser, INACTIVE } from '../auth/active-user.js';
 import { codeError, usersUniqueConflict, type AuthDeps } from '../auth/app-routes.js';
-import { hashCode, issueChallenge } from '../auth/codes.js';
+import { deliverPhoneCode, hashCode, issueChallenge } from '../auth/codes.js';
 import { requireAuth } from '../auth/plugin.js';
 import { isPgError } from '../db-errors.js';
-import { smsCodeText } from '../messaging/sms.js';
 
 const { users, memberships, tenants, devices } = schema;
 
@@ -40,7 +39,7 @@ const { users, memberships, tenants, devices } = schema;
  */
 const NO_DEVICE = '00000000-0000-0000-0000-000000000000';
 
-export type MeDeps = Pick<AuthDeps, 'db' | 'secret' | 'devFixedCode' | 'sms'> & {
+export type MeDeps = Pick<AuthDeps, 'db' | 'secret' | 'devFixedCode' | 'phoneCode'> & {
   /**
    * Limite por conta de POST /me/phone/start. Exige o @fastify/rate-limit registrado no
    * escopo (com `global: false`).
@@ -106,7 +105,7 @@ async function hasPanelAccess(tx: Transaction, userId: string): Promise<boolean>
 /** Perfil e conta: dados, aparelhos, troca de número e exclusão. Cada um só a própria. */
 export function registerMeRoutes(instance: FastifyInstance, deps: MeDeps) {
   const app = instance.withTypeProvider<ZodTypeProvider>();
-  const { db, secret, devFixedCode, sms, phoneChangeRateLimit } = deps;
+  const { db, secret, devFixedCode, phoneCode, phoneChangeRateLimit } = deps;
   const anyAudience = requireAuth(['app', 'panel']);
   // Rotas liberadas pelo portão dos termos: a conta sem aceite precisa delas para aceitar.
   const anyAudienceWithoutTerms = requireAuth(['app', 'panel'], { allowWithoutTerms: true });
@@ -232,7 +231,7 @@ export function registerMeRoutes(instance: FastifyInstance, deps: MeDeps) {
     {
       preHandler: anyAudience,
       config: {
-        // Cada SMS custa: limite por conta, além do limite por número. Roda no preHandler,
+        // Cada envio custa: limite por conta, além do limite por número. Roda no preHandler,
         // depois do requireAuth, para já ter request.auth.
         rateLimit: {
           hook: 'preHandler',
@@ -252,7 +251,7 @@ export function registerMeRoutes(instance: FastifyInstance, deps: MeDeps) {
       },
     },
     async (request, reply) => {
-      if (!sms) return reply.code(503).send({ code: 'sms_not_configured' });
+      if (!phoneCode) return reply.code(503).send({ code: 'phone_code_not_configured' });
       const { userId } = request.auth!;
       const { phone } = request.body;
       const active = await asActiveUser(db, userId, async () => true);
@@ -271,7 +270,9 @@ export function registerMeRoutes(instance: FastifyInstance, deps: MeDeps) {
           .code(429)
           .send({ code: 'code_rate_limited', retryAfterSeconds: challenge.retryAfterSeconds });
       }
-      await sms.send(phone, smsCodeText(challenge.code));
+      if (!(await deliverPhoneCode(db, phoneCode, request.log, phone, challenge))) {
+        return reply.code(503).send({ code: 'phone_code_not_sent' });
+      }
       return {
         challengeId: challenge.challengeId,
         expiresInSeconds: CODE_TTL_SECONDS,

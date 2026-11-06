@@ -27,6 +27,8 @@ export function createMetaPhoneCodeSender(
           authorization: `Bearer ${config.accessToken}`,
           'content-type': 'application/json',
         },
+        // Se o tempo esgotar depois de a Meta já ter entregue, o código entregue é descartado e
+        // a pessoa pede outro (custo aceito na especificação).
         signal: AbortSignal.timeout(opts.timeoutMs ?? 10_000),
         body: JSON.stringify({
           messaging_product: 'whatsapp',
@@ -55,6 +57,8 @@ export function createMetaPhoneCodeSender(
         const detail = typeof errorCode === 'number' ? ` (${errorCode})` : '';
         throw new Error(`WhatsApp (Meta) recusou o envio: ${response.status}${detail}`);
       }
+      // Libera o corpo para a conexão poder ser reaproveitada.
+      await response.body?.cancel();
     },
   };
 }

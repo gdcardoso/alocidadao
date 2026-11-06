@@ -222,7 +222,9 @@ Um de cada vez, depois dos testes de risco.
     - Trocar o contato de teste pelo contato real, na tela "Site" do backoffice.
     - Trocar as fotos de banco por fotos reais.
     - Trocar as capturas do painel e incluir capturas do app no simulador.
-    - Código de entrada pelo WhatsApp (independente de provedor; primeiro, a API da Meta). **Feito** (plano `docs/superpowers/plans/2026-11-06-codigo-por-whatsapp.md`).
+
+10b. **Código de entrada pelo WhatsApp:** envio do código de login do app por um provedor de mensagens, independente de provedor (primeiro, a API da Meta). **Feito** (plano `docs/superpowers/plans/2026-11-06-codigo-por-whatsapp.md`).
+
 11. **Infraestrutura:** Droplet e Spaces na DigitalOcean, backups, observabilidade e publicação nas lojas.
 
 ## Perguntas em aberto

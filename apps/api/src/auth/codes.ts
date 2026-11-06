@@ -69,8 +69,13 @@ export async function deliverPhoneCode(
     await sender.send(phone, challenge.code);
     return true;
   } catch (err) {
-    await discardCode(db, challenge.challengeId);
     log.warn({ err, phone: maskPhone(phone) }, 'Código pelo celular não enviado');
+    try {
+      await discardCode(db, challenge.challengeId);
+    } catch (discardErr) {
+      // Mesmo sem descartar, a resposta é "não enviado": o limite de envio segura o código.
+      log.warn({ err: discardErr }, 'Código não enviado e não descartado');
+    }
     return false;
   }
 }

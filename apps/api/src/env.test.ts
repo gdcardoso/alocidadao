@@ -146,4 +146,57 @@ describe('parseEnv', () => {
     ).toBe(false);
     expect(parseEnv({ ENABLE_DEV_ROUTES: 'true' }).devRoutes).toBe(true);
   });
+
+  describe('phone code provider', () => {
+    const meta = {
+      PHONE_CODE_PROVIDER: 'meta',
+      META_WA_PHONE_NUMBER_ID: 'PNID',
+      META_WA_ACCESS_TOKEN: 'TOKEN',
+      META_WA_TEMPLATE_NAME: 'codigo_entrada',
+    };
+
+    it('is absent without PHONE_CODE_PROVIDER', () => {
+      expect(parseEnv({}).phoneCode).toBeUndefined();
+      expect(parseEnv({ PHONE_CODE_PROVIDER: '' }).phoneCode).toBeUndefined();
+    });
+
+    it('accepts the log provider', () => {
+      expect(parseEnv({ PHONE_CODE_PROVIDER: 'log' }).phoneCode).toEqual({ provider: 'log' });
+    });
+
+    it('reads the meta provider with defaults', () => {
+      expect(parseEnv(meta).phoneCode).toEqual({
+        provider: 'meta',
+        meta: {
+          phoneNumberId: 'PNID',
+          accessToken: 'TOKEN',
+          templateName: 'codigo_entrada',
+          templateLanguage: 'pt_BR',
+          graphApiVersion: 'v23.0',
+        },
+      });
+    });
+
+    it('lets the language and the graph version be overridden', () => {
+      const phoneCode = parseEnv({
+        ...meta,
+        META_WA_TEMPLATE_LANGUAGE: 'en_US',
+        META_WA_GRAPH_VERSION: 'v24.0',
+      }).phoneCode;
+      expect(phoneCode).toMatchObject({
+        meta: { templateLanguage: 'en_US', graphApiVersion: 'v24.0' },
+      });
+    });
+
+    it('requires the meta variables with the meta provider', () => {
+      const { META_WA_ACCESS_TOKEN: _omit, ...withoutToken } = meta;
+      expect(() => parseEnv(withoutToken)).toThrow(
+        'META_WA_ACCESS_TOKEN: obrigatória quando PHONE_CODE_PROVIDER=meta',
+      );
+    });
+
+    it('rejects an unknown provider', () => {
+      expect(() => parseEnv({ PHONE_CODE_PROVIDER: 'sms' })).toThrow(/PHONE_CODE_PROVIDER/);
+    });
+  });
 });

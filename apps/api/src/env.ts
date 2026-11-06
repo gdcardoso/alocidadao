@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { InviteLinks } from './messaging/invites.js';
+import type { MetaWhatsAppConfig } from './messaging/phone-code-meta.js';
 
 export interface ApiEnv {
   port: number;
@@ -25,6 +26,8 @@ export interface ApiEnv {
   };
   /** Login sem senha. Presente quando AUTH_SECRET está definida. */
   auth?: { secret: string; devFixedCode?: string };
+  /** Como o código de entrada chega ao celular. Ausente: o server.ts decide o padrão. */
+  phoneCode?: { provider: 'log' } | { provider: 'meta'; meta: MetaWhatsAppConfig };
   /** Sem chave do Resend, o e-mail sai no log (só fora de produção). */
   email: { resendApiKey?: string; from: string };
   /** Endereços que vão nos e-mails de convite. */
@@ -72,6 +75,15 @@ const schema = z.object({
       .regex(/^[0-9]{6}$/, 'deve ter 6 dígitos')
       .optional(),
   ),
+  PHONE_CODE_PROVIDER: z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z.enum(['log', 'meta']).optional(),
+  ),
+  META_WA_PHONE_NUMBER_ID: optionalText,
+  META_WA_ACCESS_TOKEN: optionalText,
+  META_WA_TEMPLATE_NAME: optionalText,
+  META_WA_TEMPLATE_LANGUAGE: optionalText,
+  META_WA_GRAPH_VERSION: optionalText,
   RESEND_API_KEY: optionalText,
   EMAIL_FROM: optionalText,
   PANEL_URL: optionalText,
@@ -115,6 +127,13 @@ export function parseEnv(source: Record<string, string | undefined>): ApiEnv {
   }
   if (production) missing('RESEND_API_KEY', e.RESEND_API_KEY, 'obrigatória em produção');
   if (production) missing('PANEL_URL', e.PANEL_URL, 'obrigatória em produção');
+
+  if (e.PHONE_CODE_PROVIDER === 'meta') {
+    const reason = 'obrigatória quando PHONE_CODE_PROVIDER=meta';
+    missing('META_WA_PHONE_NUMBER_ID', e.META_WA_PHONE_NUMBER_ID, reason);
+    missing('META_WA_ACCESS_TOKEN', e.META_WA_ACCESS_TOKEN, reason);
+    missing('META_WA_TEMPLATE_NAME', e.META_WA_TEMPLATE_NAME, reason);
+  }
 
   const together = (group: Record<string, string | undefined>) => {
     const names = Object.keys(group);
@@ -169,6 +188,21 @@ export function parseEnv(source: Record<string, string | undefined>): ApiEnv {
     auth: e.AUTH_SECRET
       ? { secret: e.AUTH_SECRET, devFixedCode: e.AUTH_DEV_FIXED_CODE }
       : undefined,
+    phoneCode:
+      e.PHONE_CODE_PROVIDER === 'meta'
+        ? {
+            provider: 'meta',
+            meta: {
+              phoneNumberId: e.META_WA_PHONE_NUMBER_ID!,
+              accessToken: e.META_WA_ACCESS_TOKEN!,
+              templateName: e.META_WA_TEMPLATE_NAME!,
+              templateLanguage: e.META_WA_TEMPLATE_LANGUAGE ?? 'pt_BR',
+              graphApiVersion: e.META_WA_GRAPH_VERSION ?? 'v23.0',
+            },
+          }
+        : e.PHONE_CODE_PROVIDER === 'log'
+          ? { provider: 'log' }
+          : undefined,
     email: {
       resendApiKey: e.RESEND_API_KEY,
       from: e.EMAIL_FROM ?? 'Alô Cidadão <nao-responda@alocidadao.com.br>',

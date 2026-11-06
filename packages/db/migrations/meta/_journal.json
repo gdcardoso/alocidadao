@@ -330,6 +330,13 @@
       "when": 1793883235683,
       "tag": "0046_panel_idle_1h",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1793969635683,
+      "tag": "0047_discard_code",
+      "breakpoints": true
     }
   ]
 }

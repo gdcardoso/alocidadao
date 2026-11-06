@@ -60,6 +60,14 @@ export async function issueCode(
   return { issued: row.issued, retryAfterSeconds: row.retry_after_seconds };
 }
 
+/**
+ * Apaga um código que não chegou a ser enviado, para não contar no reenvio nem no limite
+ * da hora. Id desconhecido ou código já consumido não faz nada.
+ */
+export async function discardCode(db: Executor, id: string): Promise<void> {
+  await db.execute(sql`select auth_discard_code(${id}::uuid)`);
+}
+
 /** Confere o código. Só `ok` traz finalidade, destino e conta. */
 export async function consumeCode(
   db: Executor,

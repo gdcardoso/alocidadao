@@ -4,6 +4,7 @@ import type { PgInsertValue } from 'drizzle-orm/pg-core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   consumeCode,
+  discardCode,
   findUserByCpf,
   findUserByPhone,
   issueCode,
@@ -109,6 +110,40 @@ describe('códigos de verificação', () => {
     expect(second.issued).toBe(false);
     expect(second.retryAfterSeconds).toBeGreaterThanOrEqual(1);
     expect(second.retryAfterSeconds).toBeLessThanOrEqual(60);
+  });
+
+  it('código descartado libera novo envio na hora', async () => {
+    const target = '+5511950000111';
+    const id = await issueFresh(target);
+    await discardCode(app.db, id);
+    await issueFresh(target);
+  });
+
+  it('código descartado não conta no limite da hora', async () => {
+    const target = '+5511950000112';
+    for (let i = 0; i < 5; i++) {
+      await discardCode(app.db, await issueFresh(target));
+    }
+    await issueFresh(target);
+  });
+
+  it('descartar id desconhecido não faz nada', async () => {
+    await expect(discardCode(app.db, randomUUID())).resolves.toBeUndefined();
+  });
+
+  it('não descarta código já consumido', async () => {
+    const target = '+5511950000113';
+    const id = await issueFresh(target);
+    expect((await consumeCode(app.db, id, 'hash-certo')).result).toBe('ok');
+    await discardCode(app.db, id);
+    const again = await issueCode(app.db, {
+      id: randomUUID(),
+      purpose: 'phone_login',
+      target,
+      userId: null,
+      codeHash: 'outro',
+    });
+    expect(again.issued).toBe(false);
   });
 
   it('recusa o sexto código na mesma hora', async () => {

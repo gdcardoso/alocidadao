@@ -7,3 +7,4 @@ export * from './citizen.js';
 export * from './municipalities.js';
 export * from './neighborhoods.js';
 export * from './notifications.js';
+export * from './platform-admin.js';

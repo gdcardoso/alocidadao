@@ -30,6 +30,7 @@
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/migrate.ts",
+    "db:create-admin": "tsx src/create-admin.ts",
     "db:seed:dev": "tsx src/seed-dev.ts",
     "db:import:municipalities": "tsx src/import-municipalities.ts",
     "import:neighborhoods": "tsx src/import-neighborhoods.ts"

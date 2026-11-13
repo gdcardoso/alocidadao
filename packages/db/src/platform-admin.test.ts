@@ -1,0 +1,71 @@
+import { eq } from 'drizzle-orm';
+import { afterAll, describe, expect, it } from 'vitest';
+import { createDatabase } from './client.js';
+import { ensurePlatformAdmin } from './platform-admin.js';
+import { users } from './schema.js';
+import { TEST_OWNER_URL } from './test/urls.js';
+
+// CPFs válidos usados só aqui; o dono do banco cria e limpa as contas.
+const CPF = '11144477735';
+const OTHER_CPF = '52998224725';
+
+const { db: owner, pool } = createDatabase(TEST_OWNER_URL);
+
+async function clean() {
+  await owner.delete(users).where(eq(users.cpf, CPF));
+  await owner.delete(users).where(eq(users.cpf, OTHER_CPF));
+}
+
+afterAll(async () => {
+  await clean();
+  await pool.end();
+});
+
+describe('ensurePlatformAdmin', () => {
+  it('cria a conta com platform_role admin', async () => {
+    await clean();
+    const result = await ensurePlatformAdmin(owner, {
+      cpf: CPF,
+      email: 'Admin.Real@Example.COM',
+      name: 'Admin Real',
+    });
+    expect(result.created).toBe(true);
+    const [row] = await owner.select().from(users).where(eq(users.id, result.id));
+    expect(row?.platformRole).toBe('admin');
+    expect(row?.email).toBe('admin.real@example.com');
+    expect(row?.cpf).toBe(CPF);
+  });
+
+  it('repetir com o mesmo CPF não duplica e promove a admin', async () => {
+    await clean();
+    const [citizen] = await owner
+      .insert(users)
+      .values({ cpf: CPF, email: 'antigo@example.com', name: 'Antigo' })
+      .returning();
+    const result = await ensurePlatformAdmin(owner, {
+      cpf: CPF,
+      email: 'novo@example.com',
+      name: 'Novo Nome',
+    });
+    expect(result).toEqual({ id: citizen!.id, created: false });
+    const again = await ensurePlatformAdmin(owner, {
+      cpf: CPF,
+      email: 'novo@example.com',
+      name: 'Novo Nome',
+    });
+    expect(again).toEqual({ id: citizen!.id, created: false });
+    const rows = await owner.select().from(users).where(eq(users.cpf, CPF));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.platformRole).toBe('admin');
+  });
+
+  it('recusa CPF com pontuação ou inválido antes de gravar', async () => {
+    await clean();
+    for (const cpf of ['111.444.777-35', '11144477736', '123']) {
+      await expect(
+        ensurePlatformAdmin(owner, { cpf, email: 'x@example.com', name: 'X' }),
+      ).rejects.toThrow(/CPF/);
+    }
+    expect(await owner.select().from(users).where(eq(users.cpf, CPF))).toHaveLength(0);
+  });
+});

@@ -50,6 +50,8 @@ require_env() {
 compose() {
   local args=(-p "$PROJECT" --project-directory "$STACK_DIR" -f "$STACK_DIR/compose.yml"
     --env-file "$STACK_DIR/.env")
+  # Só o smoke-local.sh define (ex.: NODE_ENV=development para o código do painel sair no log).
+  [[ -n "${SMOKE_COMPOSE_OVERRIDE:-}" ]] && args+=(-f "$SMOKE_COMPOSE_OVERRIDE")
   [[ -f "$CURRENT_STATE" ]] && args+=(--env-file "$CURRENT_STATE")
   [[ -f "$SITE_STATE" ]] && args+=(--env-file "$SITE_STATE")
   if [[ -f "$CURRENT_STATE" ]]; then

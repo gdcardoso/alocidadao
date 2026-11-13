@@ -32,7 +32,8 @@ services:
       db:
         condition: service_healthy
     environment:
-      NODE_ENV: ${NODE_ENV:-production}
+      # Fixo: é o que proíbe AUTH_DEV_FIXED_CODE e as rotas /dev. Não vem do .env.
+      NODE_ENV: production
       APP_ENV: homolog
       TRUST_PROXY: 'true'
       PORT: '3333'

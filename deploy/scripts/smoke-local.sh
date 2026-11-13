@@ -130,8 +130,6 @@ ACME_EMAIL=smoke@alocidadao.dev
 CADDY_LOCAL_CERTS=local_certs
 HTTP_PORT=18080
 HTTPS_PORT=$HTTPS_PORT
-# Só no teste: sem Resend, o código do painel sai no log da API.
-NODE_ENV=development
 POSTGRES_USER=alocidadao
 POSTGRES_DB=alocidadao
 POSTGRES_PASSWORD=$(openssl rand -hex 16)
@@ -148,9 +146,28 @@ BACKUP_S3_ACCESS_KEY_ID=alocidadao
 BACKUP_S3_SECRET_ACCESS_KEY=alocidadao-dev
 ENV
 cp "$SMOKE_DIR/.env" "$SMOKE_DIR/env.ok"
+# Só no teste: sem Resend, o código do painel sai no log da API (fora de production).
+cat >"$SMOKE_DIR/smoke.override.yml" <<'YML'
+services:
+  api:
+    environment:
+      NODE_ENV: development
+YML
 
 # shellcheck source=lib.sh
 source "$SMOKE_DIR/lib.sh"
+
+step "NODE_ENV da API"
+cfg="$(API_IMAGE=x DB_IMAGE=x compose config api 2>/dev/null)"
+check "compose.yml sozinho: NODE_ENV production" grep -q 'NODE_ENV: production' <<<"$cfg"
+echo 'NODE_ENV=development' >>"$SMOKE_DIR/.env"
+if "$SMOKE_DIR/deploy.sh" "$SHA1" 2>/dev/null; then
+  fail "deploy.sh devia recusar NODE_ENV=development no .env"
+else
+  pass "deploy.sh recusa NODE_ENV=development no .env"
+fi
+cp "$SMOKE_DIR/env.ok" "$SMOKE_DIR/.env"
+export SMOKE_COMPOSE_OVERRIDE="$SMOKE_DIR/smoke.override.yml"
 
 cleanup() {
   local status=$?
@@ -279,6 +296,22 @@ check "API no ar continua $SHA2" test "$(running_api_image)" = "$REG/alocidadao-
 check "state/current.env continua $SHA2" test "$(state current SHA)" = "$SHA2"
 cp "$SMOKE_DIR/env.ok" "$SMOKE_DIR/.env"
 
+step "rollback.sh cuja API anterior não responde ao /health"
+cp "$STATE_DIR/previous.env" "$SMOKE_DIR/previous.ok"
+sed -i.bak "s|^API_IMAGE=.*|API_IMAGE=$REG/alocidadao-api:$SHA5|" "$STATE_DIR/previous.env"
+if HEALTH_TIMEOUT=20 "$SMOKE_DIR/rollback.sh"; then
+  fail "rollback.sh devia sair ≠ 0"
+else
+  pass "rollback.sh sai ≠ 0"
+fi
+check "/api/health -> 200" test "$(health_status)" = 200
+check "API no ar voltou para $SHA2" test "$(running_api_image)" = "$REG/alocidadao-api:$SHA2"
+check "state/current.env continua $SHA2 (bate com o que roda)" test "$(state current SHA)-$(state current API_IMAGE)" = "$SHA2-$REG/alocidadao-api:$SHA2"
+check "state/previous.env não mudou" test "$(state previous SHA)" = "$SHA1"
+curl_h -o "$SMOKE_DIR/b" "$(url "$HOST_HOMOLOG" /painel/qualquer)"
+check "painel continua no ar" grep -q '<div id="root">' "$SMOKE_DIR/b"
+cp "$SMOKE_DIR/previous.ok" "$STATE_DIR/previous.env"
+
 step "rollback.sh --restore-db"
 check "rollback.sh --restore-db sai 0" "$SMOKE_DIR/rollback.sh" --restore-db
 check "current=$SHA1, previous=$SHA2" test "$(state current SHA)-$(state previous SHA)" = "$SHA1-$SHA2"
@@ -293,6 +326,15 @@ step "deploy.sh $SHA1 de novo (idempotente)"
 check "deploy.sh $SHA1 sai 0" "$SMOKE_DIR/deploy.sh" "$SHA1"
 check "current=$SHA1, previous continua $SHA2" test "$(state current SHA)-$(state previous SHA)" = "$SHA1-$SHA2"
 check "/api/health -> 200" test "$(health_status)" = 200
+
+step "rollback.sh --restore-db cuja API anterior não sobe (banco já restaurado)"
+sed -i.bak "s|^API_IMAGE=.*|API_IMAGE=$REG/alocidadao-api:$SHA5|" "$STATE_DIR/previous.env"
+HEALTH_TIMEOUT=20 "$SMOKE_DIR/rollback.sh" --restore-db 2>"$SMOKE_DIR/rb.log" && rb=0 || rb=$?
+cat "$SMOKE_DIR/rb.log" >&2
+check "rollback.sh sai ≠ 0" test "$rb" != 0
+check "informa que o banco foi restaurado" grep -q 'banco: restaurado de' "$SMOKE_DIR/rb.log"
+check "/api/health -> 200 (último recurso: API no ar antes)" test "$(health_status)" = 200
+check "API no ar é $SHA1 e state/current.env bate" test "$(running_api_image)|$(state current API_IMAGE)" = "$REG/alocidadao-api:$SHA1|$REG/alocidadao-api:$SHA1"
 
 step "retenção dos backups (5 de publicação)"
 for i in 1 2 3 4 5 6; do "$SMOKE_DIR/backup.sh" "pre-deploy-retencao$i" >/dev/null; done

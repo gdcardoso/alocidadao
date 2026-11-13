@@ -17,6 +17,10 @@ db_sha="${2:-}"
 valid_sha "$sha" || die "uso: deploy.sh <sha> [<sha-do-db>] (SHA do commit, 7 a 40 hexadecimais)"
 [[ -z "$db_sha" ]] || valid_sha "$db_sha" || die "SHA do db inválido: $db_sha"
 
+node_env="$(env_get NODE_ENV)"
+[[ -z "$node_env" || "$node_env" == production ]] ||
+  die "NODE_ENV=$node_env no .env: a homologação roda sempre em production (apague a linha)"
+
 acquire_lock
 
 cur_sha="$(file_get "$CURRENT_STATE" SHA)"

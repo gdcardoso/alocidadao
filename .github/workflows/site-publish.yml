@@ -50,6 +50,8 @@ jobs:
           file: deploy/docker/site.Dockerfile
           platforms: linux/amd64
           push: true
+          provenance: false
+          sbom: false
           tags: ghcr.io/gdcardoso/alocidadao-site:${{ github.sha }}
           build-args: |
             SITE_API_URL=https://homolog.alocidadao.com.br/api
@@ -88,17 +90,42 @@ jobs:
           SHA: ${{ github.sha }}
         run: ssh -o HostName="$DEPLOY_HOST" homolog "/srv/alocidadao/publish-static.sh site $SHA"
 
-  # Mantém só as 2 versões mais recentes da imagem do site.
+  # Mantém no ghcr só a imagem do site no ar e a anterior (state/site.env). Sem state, não apaga.
   prune:
     needs: publish
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    environment: homolog
     permissions:
+      contents: read
       packages: write
     steps:
-      - uses: actions/delete-package-versions@v5
-        with:
-          owner: ${{ github.repository_owner }}
-          package-name: alocidadao-site
-          package-type: container
-          min-versions-to-keep: 2
+      - uses: actions/checkout@v7
+
+      - name: Configurar SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          umask 077
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" >~/.ssh/id_deploy
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" >~/.ssh/known_hosts
+          {
+            echo "Host homolog"
+            echo "  User deploy"
+            echo "  IdentityFile ~/.ssh/id_deploy"
+            echo "  IdentitiesOnly yes"
+            echo "  StrictHostKeyChecking yes"
+          } >~/.ssh/config
+
+      - name: Apagar versões antigas
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          state="$(ssh -o HostName="$DEPLOY_HOST" homolog "cat /srv/alocidadao/state/site.env")" ||
+            { echo "Sem acesso ao state: nada será apagado."; exit 0; }
+          mapfile -t tags < <(sed -n 's/^SITE_\(PREVIOUS_\)\?IMAGE=//p' <<<"$state" | sed 's/.*://')
+          .github/scripts/prune-ghcr.sh "$OWNER" alocidadao-site "${tags[@]}"

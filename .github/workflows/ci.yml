@@ -2,8 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main]
   pull_request:
+  # A develop roda o CI pelo homolog-publish (sem rodar duas vezes por push).
   # Reuso pela publicação da homologação (publicar só com o CI verde no mesmo commit).
   workflow_call:
 

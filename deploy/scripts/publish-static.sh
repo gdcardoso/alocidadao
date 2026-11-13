@@ -22,8 +22,13 @@ case "$kind" in
     ensure_image "$ref"
     log "publicando o site $ref"
     publish_static_image site "$ref"
-    printf 'SITE_SHA=%s\nSITE_IMAGE=%s\nPUBLISHED_AT=%s\n' "$arg" "$ref" "$(date -u +%FT%TZ)" \
-      >"$SITE_STATE.tmp"
+    # Guarda a imagem anterior (a limpeza do ghcr mantém a atual e a anterior).
+    prev_image="$(file_get "$SITE_STATE" SITE_IMAGE)"
+    if [[ "$prev_image" == "$ref" ]]; then
+      prev_image="$(file_get "$SITE_STATE" SITE_PREVIOUS_IMAGE)"
+    fi
+    printf 'SITE_SHA=%s\nSITE_IMAGE=%s\nSITE_PREVIOUS_IMAGE=%s\nPUBLISHED_AT=%s\n' \
+      "$arg" "$ref" "$prev_image" "$(date -u +%FT%TZ)" >"$SITE_STATE.tmp"
     mv "$SITE_STATE.tmp" "$SITE_STATE"
     ;;
   apk)

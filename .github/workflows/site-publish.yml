@@ -1,0 +1,104 @@
+name: Publicar site
+
+# Site de apresentação (alocidadao.com.br). Disparo manual, só a partir da main.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: site-publish
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Exigir a main
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          if [[ "$REF" != refs/heads/main ]]; then
+            echo "::error::O site só é publicado a partir da main (ref atual: $REF)."
+            exit 1
+          fi
+
+  image:
+    needs: guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Imagem do site
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/docker/site.Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ghcr.io/gdcardoso/alocidadao-site:${{ github.sha }}
+          build-args: |
+            SITE_API_URL=https://homolog.alocidadao.com.br/api
+          cache-from: type=gha,scope=site
+          cache-to: type=gha,scope=site,mode=max
+
+  publish:
+    needs: image
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: homolog
+    permissions:
+      contents: read
+    steps:
+      - name: Configurar SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          umask 077
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" >~/.ssh/id_deploy
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" >~/.ssh/known_hosts
+          {
+            echo "Host homolog"
+            echo "  User deploy"
+            echo "  IdentityFile ~/.ssh/id_deploy"
+            echo "  IdentitiesOnly yes"
+            echo "  StrictHostKeyChecking yes"
+          } >~/.ssh/config
+
+      # Usa o publish-static.sh que já está no servidor (enviado pela última publicação da develop).
+      - name: Publicar
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          SHA: ${{ github.sha }}
+        run: ssh -o HostName="$DEPLOY_HOST" homolog "/srv/alocidadao/publish-static.sh site $SHA"
+
+  # Mantém só as 2 versões mais recentes da imagem do site.
+  prune:
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      packages: write
+    steps:
+      - uses: actions/delete-package-versions@v5
+        with:
+          owner: ${{ github.repository_owner }}
+          package-name: alocidadao-site
+          package-type: container
+          min-versions-to-keep: 2

@@ -1,0 +1,119 @@
+name: APK de homologação
+
+# Gera o APK assinado do app (Expo com prebuild). Disparo manual.
+# develop: aponta para a homologação e publica em /app/alocidadao-homolog.apk.
+# main: falha, porque a produção ainda não existe.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: apk-build
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: homolog
+    steps:
+      - name: Escolher o ambiente pela branch
+        id: env
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          case "$REF" in
+            refs/heads/develop)
+              echo "api_url=https://homolog.alocidadao.com.br/api" >>"$GITHUB_OUTPUT"
+              ;;
+            refs/heads/main)
+              echo "::error::Produção ainda não existe: gere o APK a partir da develop."
+              exit 1
+              ;;
+            *)
+              echo "::error::Branch não suportada ($REF): use a develop."
+              exit 1
+              ;;
+          esac
+
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - run: pnpm install --frozen-lockfile
+
+      # A pasta android não é versionada: o prebuild gera tudo a partir do app.config.ts.
+      # O Android SDK já vem no runner ubuntu-latest (ANDROID_HOME).
+      - name: Prebuild
+        working-directory: apps/mobile
+        env:
+          EXPO_PUBLIC_API_URL: ${{ steps.env.outputs.api_url }}
+          ANDROID_VERSION_CODE: ${{ github.run_number }}
+        run: npx expo prebuild --platform android --clean
+
+      - name: Assinar e compilar
+        working-directory: apps/mobile/android
+        env:
+          EXPO_PUBLIC_API_URL: ${{ steps.env.outputs.api_url }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          umask 077
+          keystore="$RUNNER_TEMP/release.keystore"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode >"$keystore"
+          ./gradlew assembleRelease --no-daemon \
+            -Pandroid.injected.signing.store.file="$keystore" \
+            -Pandroid.injected.signing.store.password="$ANDROID_KEYSTORE_PASSWORD" \
+            -Pandroid.injected.signing.key.alias="$ANDROID_KEY_ALIAS" \
+            -Pandroid.injected.signing.key.password="$ANDROID_KEY_PASSWORD"
+          rm -f "$keystore"
+
+      - name: Separar o APK
+        run: cp apps/mobile/android/app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/alocidadao-homolog.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: alocidadao-homolog-apk
+          path: ${{ runner.temp }}/alocidadao-homolog.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Configurar SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          umask 077
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" >~/.ssh/id_deploy
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" >~/.ssh/known_hosts
+          {
+            echo "Host homolog"
+            echo "  User deploy"
+            echo "  IdentityFile ~/.ssh/id_deploy"
+            echo "  IdentitiesOnly yes"
+            echo "  StrictHostKeyChecking yes"
+          } >~/.ssh/config
+
+      # Usa o publish-static.sh que já está no servidor (enviado pela última publicação da develop).
+      - name: Publicar o APK
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          scp -o HostName="$DEPLOY_HOST" "$RUNNER_TEMP/alocidadao-homolog.apk" homolog:alocidadao-homolog.apk
+          ssh -o HostName="$DEPLOY_HOST" homolog \
+            '/srv/alocidadao/publish-static.sh apk "$HOME/alocidadao-homolog.apk"; rc=$?; rm -f "$HOME/alocidadao-homolog.apk"; exit $rc'

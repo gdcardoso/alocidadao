@@ -14,6 +14,10 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     slug: config.slug ?? 'alocidadao',
     android: {
       ...config.android,
+      // O workflow apk-build.yml define o versionCode (número da execução); fora dele, o padrão do Expo.
+      ...(process.env.ANDROID_VERSION_CODE
+        ? { versionCode: Number(process.env.ANDROID_VERSION_CODE) }
+        : {}),
       ...(hasGoogleServices ? { googleServicesFile } : {}),
     },
     plugins: [

@@ -1,0 +1,168 @@
+name: Publicar homologação
+
+# Push na develop: CI -> imagens (api, web e, se mudou, db) -> deploy no Droplet -> limpeza do ghcr.
+on:
+  push:
+    branches: [develop]
+
+# Uma publicação por vez; a seguinte espera, sem cancelar a que está rodando.
+concurrency:
+  group: homolog-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  images:
+    needs: ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      db_changed: ${{ steps.db.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Histórico completo para comparar com o commit anterior do push (github.event.before).
+          fetch-depth: 0
+
+      # A imagem do banco só é gerada quando docker/postgres/** mudou no push. Sem um "before"
+      # válido (primeiro push, force-push ou commit fora do histórico), gera sempre.
+      - name: Conferir se a imagem do banco mudou
+        id: db
+        env:
+          BEFORE: ${{ github.event.before }}
+          SHA: ${{ github.sha }}
+        run: |
+          changed=true
+          if [[ "$BEFORE" =~ ^[0-9a-f]{40}$ && ! "$BEFORE" =~ ^0+$ ]] &&
+            git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            if git diff --quiet "$BEFORE" "$SHA" -- docker/postgres; then
+              changed=false
+            fi
+          fi
+          echo "changed=$changed" >>"$GITHUB_OUTPUT"
+          echo "Imagem do banco mudou: $changed"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Imagem da API
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/docker/api.Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ghcr.io/gdcardoso/alocidadao-api:${{ github.sha }}
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,scope=api,mode=max
+
+      - name: Imagem do painel
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/docker/web.Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ghcr.io/gdcardoso/alocidadao-web:${{ github.sha }}
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,scope=web,mode=max
+
+      - name: Imagem do banco
+        if: steps.db.outputs.changed == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: docker/postgres
+          platforms: linux/amd64
+          push: true
+          tags: ghcr.io/gdcardoso/alocidadao-db:${{ github.sha }}
+          cache-from: type=gha,scope=db
+          cache-to: type=gha,scope=db,mode=max
+
+  deploy:
+    needs: images
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: homolog
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      # SSH direto como o usuário deploy, com verificação estrita da chave do servidor.
+      - name: Configurar SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          umask 077
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" >~/.ssh/id_deploy
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" >~/.ssh/known_hosts
+          {
+            echo "Host homolog"
+            echo "  User deploy"
+            echo "  IdentityFile ~/.ssh/id_deploy"
+            echo "  IdentitiesOnly yes"
+            echo "  StrictHostKeyChecking yes"
+          } >~/.ssh/config
+
+      # compose.yml, Caddyfile e scripts vão para /srv/alocidadao antes do deploy.
+      # Nunca sobrescreve .env nem state/ (sem --delete, e só esses arquivos são enviados).
+      - name: Sincronizar arquivos do servidor
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          stage="$RUNNER_TEMP/stage"
+          mkdir -p "$stage"
+          cp deploy/homolog/compose.yml deploy/homolog/Caddyfile "$stage/"
+          for f in deploy/scripts/*.sh; do
+            [[ "$(basename "$f")" == smoke-local.sh ]] || cp "$f" "$stage/"
+          done
+          chmod 644 "$stage/compose.yml" "$stage/Caddyfile"
+          chmod 755 "$stage"/*.sh
+          rsync -rt --chmod=D755 -e "ssh -o HostName=$DEPLOY_HOST" \
+            "$stage"/ homolog:/srv/alocidadao/
+
+      - name: Publicar
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          SHA: ${{ github.sha }}
+          DB_CHANGED: ${{ needs.images.outputs.db_changed }}
+        run: |
+          args="$SHA"
+          if [[ "$DB_CHANGED" == true ]]; then
+            args="$SHA $SHA"
+          fi
+          ssh -o HostName="$DEPLOY_HOST" homolog "/srv/alocidadao/deploy.sh $args"
+
+  # Mantém só as 2 versões mais recentes de cada imagem (a no ar e a anterior).
+  prune:
+    needs: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [alocidadao-api, alocidadao-web, alocidadao-db]
+    steps:
+      - uses: actions/delete-package-versions@v5
+        with:
+          owner: ${{ github.repository_owner }}
+          package-name: ${{ matrix.package }}
+          package-type: container
+          min-versions-to-keep: 2

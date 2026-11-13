@@ -2,11 +2,15 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
+  # Reuso pela publicação da homologação (publicar só com o CI verde no mesmo commit).
+  workflow_call:
 
+# github.workflow entra no grupo: numa chamada via workflow_call vale o nome do workflow que
+# chamou, então o CI do push e o CI chamado pela publicação não cancelam um ao outro.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:

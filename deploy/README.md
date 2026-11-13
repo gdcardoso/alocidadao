@@ -5,13 +5,13 @@ GitHub Actions e publicadas em `ghcr.io/gdcardoso/alocidadao-{api,web,site,db}:<
 
 ## O que roda onde
 
-| Endereço | O quê | De onde vem |
-|---|---|---|
-| `https://alocidadao.com.br` | Site de apresentação | volume `site-root` (imagem `alocidadao-site`) |
-| `https://www.alocidadao.com.br` | Redireciona (308) para `alocidadao.com.br` | Caddyfile |
-| `https://homolog.alocidadao.com.br` | Painel e backoffice | volume `web-root` (imagem `alocidadao-web`) |
-| `https://homolog.alocidadao.com.br/api/*` | API (o Caddy retira o `/api`) | container `api` |
-| `https://homolog.alocidadao.com.br/app/alocidadao-homolog.apk` | APK de homologação | volume `apk` |
+| Endereço                                                       | O quê                                      | De onde vem                                   |
+| -------------------------------------------------------------- | ------------------------------------------ | --------------------------------------------- |
+| `https://alocidadao.com.br`                                    | Site de apresentação                       | volume `site-root` (imagem `alocidadao-site`) |
+| `https://www.alocidadao.com.br`                                | Redireciona (308) para `alocidadao.com.br` | Caddyfile                                     |
+| `https://homolog.alocidadao.com.br`                            | Painel e backoffice                        | volume `web-root` (imagem `alocidadao-web`)   |
+| `https://homolog.alocidadao.com.br/api/*`                      | API (o Caddy retira o `/api`)              | container `api`                               |
+| `https://homolog.alocidadao.com.br/app/alocidadao-homolog.apk` | APK de homologação                         | volume `apk`                                  |
 
 No servidor, tudo fica em `/srv/alocidadao` (o GitHub Actions sincroniza `deploy/homolog/*` e
 `deploy/scripts/*.sh` para lá antes de cada publicação):
@@ -124,6 +124,7 @@ roda sobre o banco já migrado. Depois do rollback, `current` e `previous` troca
   ```
 
   (ou pelo painel da DigitalOcean, em Spaces).
+
 - Restaurar: `restore.sh <chave>` (a chave como o `backup.sh` imprime, ex.:
   `daily/20261113T061500Z-daily.dump`). Baixa o arquivo, para a API, restaura num banco novo
   (`pg_restore --clean --if-exists`), troca pelo atual (o anterior fica como
@@ -145,13 +146,13 @@ roda sobre o banco já migrado. Depois do rollback, `current` e `previous` troca
 
 ## Onde está cada segredo
 
-| Segredo | Onde |
-|---|---|
-| Senhas do banco (`POSTGRES_PASSWORD`, `APP_DB_PASSWORD`), `AUTH_SECRET`, `AUTH_APP_FIXED_CODE`, `RESEND_API_KEY`, chaves do Spaces (fotos e backups) | `/srv/alocidadao/.env` (modelo: `deploy/homolog/.env.example`) |
-| Token só de leitura do ghcr.io (`read:packages`) | `~/.docker/config.json` do usuário de deploy (`docker login ghcr.io`) |
-| Chave SSH de publicação e endereço do servidor | GitHub, ambiente `homolog` |
-| Chave de assinatura do Android e senhas | GitHub, ambiente `homolog` (cópia guardada fora do Mac) |
-| Certificados HTTPS | volume `caddy-data` (o Caddy renova sozinho) |
+| Segredo                                                                                                                                              | Onde                                                                  |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| Senhas do banco (`POSTGRES_PASSWORD`, `APP_DB_PASSWORD`), `AUTH_SECRET`, `AUTH_APP_FIXED_CODE`, `RESEND_API_KEY`, chaves do Spaces (fotos e backups) | `/srv/alocidadao/.env` (modelo: `deploy/homolog/.env.example`)        |
+| Token só de leitura do ghcr.io (`read:packages`)                                                                                                     | `~/.docker/config.json` do usuário de deploy (`docker login ghcr.io`) |
+| Chave SSH de publicação e endereço do servidor                                                                                                       | GitHub, ambiente `homolog`                                            |
+| Chave de assinatura do Android e senhas                                                                                                              | GitHub, ambiente `homolog` (cópia guardada fora do Mac)               |
+| Certificados HTTPS                                                                                                                                   | volume `caddy-data` (o Caddy renova sozinho)                          |
 
 Senhas do banco: só letras e números (`openssl rand -hex 32`), porque entram numa URL. Para
 trocar `APP_DB_PASSWORD`, edite o `.env` e rode `deploy.sh` com o SHA no ar: o banco é recriado
@@ -170,3 +171,18 @@ portas 18080/18443 e `curl --resolve` (sem sudo e sem `/etc/hosts`). Confere as 
 proxy, o login do painel e o cookie, o site, o APK, publicação, migração que falha, API que não
 sobe, backup com credencial errada, rollback com restauração e retenção. No fim, apaga
 containers, volumes e os backups do teste.
+
+## Workflows do GitHub
+
+| Workflow               | Quando                  | O que faz                                                                                                                                                                                                                           |
+| ---------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `homolog-publish.yml`  | push na `develop`       | CI -> imagens `api`/`web` (e `db`, só se `docker/postgres/**` mudou) -> sincroniza `deploy/homolog/*` e `deploy/scripts/*.sh` (menos `smoke-local.sh`) para `/srv/alocidadao` -> `deploy.sh` -> limpa o ghcr (2 versões por imagem) |
+| `homolog-rollback.yml` | manual                  | `rollback.sh`; digite `VOLTAR` em `confirmar`; `restaurar_banco` liga o `--restore-db`                                                                                                                                              |
+| `site-publish.yml`     | manual, só na `main`    | imagem do site (`SITE_API_URL` da homologação) -> `publish-static.sh site <sha>`                                                                                                                                                    |
+| `apk-build.yml`        | manual, só na `develop` | APK assinado (`versionCode` = número da execução), artefato do GitHub e `publish-static.sh apk`                                                                                                                                     |
+
+Segredos do ambiente `homolog` (Settings > Environments): `DEPLOY_HOST`, `DEPLOY_SSH_KEY` (chave
+do usuário `deploy`), `DEPLOY_KNOWN_HOSTS` (saída de `ssh-keyscan <host>`, conferida),
+`ANDROID_KEYSTORE_BASE64` (`base64 -i release.keystore`), `ANDROID_KEYSTORE_PASSWORD`,
+`ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`. O `site-publish` e o `apk-build` usam o
+`publish-static.sh` que já está no servidor (enviado pela última publicação da `develop`).

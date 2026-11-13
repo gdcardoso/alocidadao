@@ -1,0 +1,64 @@
+name: Voltar homologação
+
+# Volta para a versão anterior (state/previous.env). Disparo manual.
+on:
+  workflow_dispatch:
+    inputs:
+      restaurar_banco:
+        description: Apaga o que foi gravado depois da versão desfeita
+        type: boolean
+        default: false
+      confirmar:
+        description: Digite VOLTAR para confirmar
+        type: string
+        required: true
+
+concurrency:
+  group: homolog-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: homolog
+    steps:
+      - name: Conferir a confirmação
+        env:
+          CONFIRMAR: ${{ inputs.confirmar }}
+        run: |
+          if [[ "$CONFIRMAR" != VOLTAR ]]; then
+            echo "::error::Digite VOLTAR no campo de confirmação."
+            exit 1
+          fi
+
+      - name: Configurar SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          umask 077
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" >~/.ssh/id_deploy
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" >~/.ssh/known_hosts
+          {
+            echo "Host homolog"
+            echo "  User deploy"
+            echo "  IdentityFile ~/.ssh/id_deploy"
+            echo "  IdentitiesOnly yes"
+            echo "  StrictHostKeyChecking yes"
+          } >~/.ssh/config
+
+      - name: Voltar versão
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          RESTAURAR_BANCO: ${{ inputs.restaurar_banco }}
+        run: |
+          flag=""
+          if [[ "$RESTAURAR_BANCO" == true ]]; then
+            flag="--restore-db"
+          fi
+          ssh -o HostName="$DEPLOY_HOST" homolog "/srv/alocidadao/rollback.sh $flag"

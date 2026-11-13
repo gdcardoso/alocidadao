@@ -1,0 +1,59 @@
+# Proxy da homologação (no servidor fica em /srv/alocidadao/Caddyfile).
+# HTTPS automático pelo Let's Encrypt; os certificados ficam no volume caddy-data.
+{
+	email {$ACME_EMAIL}
+	# Vazio na homologação; `local_certs` no teste local (smoke-local.sh).
+	{$CADDY_LOCAL_CERTS}
+}
+
+(security_headers) {
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+}
+
+# Site de apresentação (estáticos do apps/site, publicados pelo publish-static.sh site).
+alocidadao.com.br {
+	import security_headers
+	encode zstd gzip
+	root * /srv/site
+	file_server
+}
+
+www.alocidadao.com.br {
+	redir https://alocidadao.com.br{uri} 308
+}
+
+# Painel e backoffice (apps/web), API em /api e o APK de homologação em /app.
+homolog.alocidadao.com.br {
+	import security_headers
+	encode zstd gzip
+
+	# A API não conhece o prefixo /api: handle_path o retira. Ela grava o cookie de renovação
+	# com Path=/auth/panel; o navegador chama /api/auth/panel/*, então o Path acompanha o prefixo.
+	handle_path /api/* {
+		reverse_proxy api:3333 {
+			header_down Set-Cookie "Path=/auth/panel" "Path=/api/auth/panel"
+		}
+	}
+
+	handle /app/* {
+		root * /srv
+		header /app/*.apk Content-Type "application/vnd.android.package-archive"
+		file_server
+	}
+
+	# Rotas do React Router: o que não for arquivo cai no index.html.
+	handle {
+		root * /srv/web
+		@assets path /assets/*
+		header @assets Cache-Control "public, max-age=31536000, immutable"
+		@index not path /assets/*
+		header @index Cache-Control "no-cache"
+		try_files {path} /index.html
+		file_server
+	}
+}

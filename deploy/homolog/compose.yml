@@ -1,0 +1,125 @@
+# Pilha da homologação (no servidor fica em /srv/alocidadao/compose.yml).
+# Não rode `docker compose` direto: os scripts (deploy.sh, rollback.sh...) passam o .env e o
+# state/current.env, que diz qual imagem (SHA) está no ar. Para comandos avulsos, veja o README.
+name: alocidadao-homolog
+
+services:
+  # Único serviço com portas publicadas. HTTPS automático (Let's Encrypt).
+  proxy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - '${HTTP_PORT:-80}:80'
+      - '${HTTPS_PORT:-443}:443'
+      - '${HTTPS_PORT:-443}:443/udp'
+    environment:
+      ACME_EMAIL: ${ACME_EMAIL:?defina ACME_EMAIL no .env}
+      # Vazio na homologação. O teste local usa `local_certs` (certificados da CA interna do Caddy).
+      CADDY_LOCAL_CERTS: ${CADDY_LOCAL_CERTS:-}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+      - web-root:/srv/web:ro
+      - site-root:/srv/site:ro
+      - apk:/srv/app:ro
+    networks: [internal]
+
+  api:
+    image: '${API_IMAGE:?API_IMAGE ausente: use os scripts, que leem state/current.env}'
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      APP_ENV: homolog
+      TRUST_PROXY: 'true'
+      PORT: '3333'
+      HOST: 0.0.0.0
+      # app_user: sem superusuário e sem BYPASSRLS (as políticas de RLS valem para a API).
+      DATABASE_URL: postgres://app_user:${APP_DB_PASSWORD:?defina APP_DB_PASSWORD no .env}@db:5432/${POSTGRES_DB:-alocidadao}
+      AUTH_SECRET: ${AUTH_SECRET:?defina AUTH_SECRET no .env}
+      AUTH_APP_FIXED_CODE: ${AUTH_APP_FIXED_CODE:-}
+      PHONE_CODE_PROVIDER: log
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      EMAIL_FROM: ${EMAIL_FROM:-}
+      PANEL_URL: ${PANEL_URL:-https://homolog.alocidadao.com.br}
+      CORS_ORIGIN: ${PANEL_URL:-https://homolog.alocidadao.com.br}
+      AGENT_APP_PLAY_URL: ${AGENT_APP_PLAY_URL:-https://homolog.alocidadao.com.br/app/alocidadao-homolog.apk}
+      AGENT_APP_STORE_URL: ${AGENT_APP_STORE_URL:-}
+      S3_ENDPOINT: ${S3_ENDPOINT:-}
+      S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-}
+      S3_REGION: ${S3_REGION:-}
+      S3_BUCKET: ${S3_BUCKET:-}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
+      ENABLE_DEV_ROUTES: 'false'
+    networks: [internal]
+
+  db:
+    image: '${DB_IMAGE:?DB_IMAGE ausente: use os scripts, que leem state/current.env}'
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-alocidadao}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
+      POSTGRES_DB: ${POSTGRES_DB:-alocidadao}
+      # Lida pelo deploy.sh para dar LOGIN e senha ao papel app_user (criado pela migração).
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?defina APP_DB_PASSWORD no .env}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    networks: [internal]
+
+  # Ferramentas (só com `docker compose run`; não sobem no `up`).
+  # Scripts de banco com o dono do banco: migrate, create-admin, seed-dev, import-municipalities.
+  dbtools:
+    image: '${API_IMAGE:?API_IMAGE ausente: use os scripts, que leem state/current.env}'
+    profiles: [tools]
+    depends_on:
+      db:
+        condition: service_healthy
+    working_dir: /app/packages/db
+    environment:
+      DATABASE_OWNER_URL: postgres://${POSTGRES_USER:-alocidadao}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-alocidadao}
+    networks: [internal]
+
+  # Copiam os estáticos da imagem para o volume (o CMD da imagem copia para /out e sai).
+  web-publish:
+    image: ${WEB_IMAGE:-busybox:1.37}
+    profiles: [tools]
+    network_mode: none
+    volumes:
+      - web-root:/out
+
+  site-publish:
+    image: ${SITE_IMAGE:-busybox:1.37}
+    profiles: [tools]
+    network_mode: none
+    volumes:
+      - site-root:/out
+
+  # Limpa os volumes de estáticos e grava o APK.
+  files:
+    image: busybox:1.37
+    profiles: [tools]
+    network_mode: none
+    volumes:
+      - web-root:/web
+      - site-root:/site
+      - apk:/apk
+
+networks:
+  internal:
+
+volumes:
+  db-data:
+  caddy-data:
+  caddy-config:
+  web-root:
+  site-root:
+  apk:

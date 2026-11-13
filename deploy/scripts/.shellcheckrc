@@ -1,0 +1,3 @@
+# Os scripts carregam o lib.sh do próprio diretório.
+external-sources=true
+source-path=SCRIPTDIR

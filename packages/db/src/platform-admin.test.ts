@@ -57,6 +57,30 @@ describe('ensurePlatformAdmin', () => {
     const rows = await owner.select().from(users).where(eq(users.cpf, CPF));
     expect(rows).toHaveLength(1);
     expect(rows[0]?.platformRole).toBe('admin');
+    expect(rows[0]?.email).toBe('novo@example.com');
+  });
+
+  it('recusa e-mail que já é de outra conta, sem alterar nada', async () => {
+    await clean();
+    await owner
+      .insert(users)
+      .values({ cpf: OTHER_CPF, email: 'ocupado@example.com', name: 'Outra' });
+    const [mine] = await owner
+      .insert(users)
+      .values({ cpf: CPF, email: 'meu@example.com', name: 'Minha' })
+      .returning();
+    await expect(
+      ensurePlatformAdmin(owner, { cpf: CPF, email: 'Ocupado@example.com', name: 'X' }),
+    ).rejects.toThrow(/já pertence a outra conta/);
+    const [after] = await owner.select().from(users).where(eq(users.id, mine!.id));
+    expect(after?.email).toBe('meu@example.com');
+    expect(after?.platformRole).not.toBe('admin');
+    // CPF novo com e-mail de outra conta também é recusado, sem criar a conta.
+    await owner.delete(users).where(eq(users.cpf, CPF));
+    await expect(
+      ensurePlatformAdmin(owner, { cpf: CPF, email: 'ocupado@example.com', name: 'X' }),
+    ).rejects.toThrow(/já pertence a outra conta/);
+    expect(await owner.select().from(users).where(eq(users.cpf, CPF))).toHaveLength(0);
   });
 
   it('recusa CPF com pontuação ou inválido antes de gravar', async () => {

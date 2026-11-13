@@ -179,7 +179,8 @@ export async function buildApp({
       phoneCode,
       email: auth.email,
     };
-    // Rotas do app pelo celular: o código fixo da homologação vale só aqui.
+    // Rotas do app pelo celular: o código fixo da homologação vale só aqui (e, em /me/phone/*,
+    // só para sessão do app).
     const appDeps = { ...deps, devFixedCode: auth.appFixedCode ?? auth.devFixedCode };
     // Escopo próprio: o limite por IP vale só para /auth/*.
     await app.register(async (scope) => {
@@ -196,7 +197,8 @@ export async function buildApp({
     await app.register(async (scope) => {
       await registerRateLimit(scope, { global: false });
       registerMeRoutes(scope, {
-        ...appDeps,
+        ...deps,
+        appFixedCode: auth.appFixedCode,
         phoneChangeRateLimit: {
           max: auth.phoneChangeRateLimit?.max ?? 5,
           timeWindowMs: auth.phoneChangeRateLimit?.timeWindowMs ?? 60 * 60_000,

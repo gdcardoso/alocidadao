@@ -4,9 +4,7 @@ name: Publicar site
 on:
   workflow_dispatch:
 
-concurrency:
-  group: site-publish
-  cancel-in-progress: false
+# Só os jobs que tocam o servidor (publish, prune) usam o grupo homolog-deploy.
 
 permissions:
   contents: read
@@ -53,6 +51,7 @@ jobs:
           provenance: false
           sbom: false
           tags: ghcr.io/gdcardoso/alocidadao-site:${{ github.sha }}
+          labels: org.opencontainers.image.source=https://github.com/gdcardoso/alocidadao
           build-args: |
             SITE_API_URL=https://homolog.alocidadao.com.br/api
           cache-from: type=gha,scope=site
@@ -62,6 +61,9 @@ jobs:
     needs: image
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    concurrency:
+      group: homolog-deploy
+      cancel-in-progress: false
     environment: homolog
     permissions:
       contents: read
@@ -95,6 +97,9 @@ jobs:
     needs: publish
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    concurrency:
+      group: homolog-deploy
+      cancel-in-progress: false
     environment: homolog
     permissions:
       contents: read

@@ -389,6 +389,62 @@ describe('me routes', () => {
     }
   });
 
+  it('phone change refuses the app fixed code in a panel session', async () => {
+    const fixedApp = await buildApp({
+      database: appDb.db,
+      auth: { secret, appFixedCode: '246810', phoneCode, email },
+    });
+    try {
+      const base = String(randomInt(100_000_000, 999_999_999));
+      const checkDigit = (digits: string, length: number) => {
+        let sum = 0;
+        for (let i = 0; i < length; i++) sum += Number(digits[i]) * (length + 1 - i);
+        const rest = (sum * 10) % 11;
+        return rest === 10 ? 0 : rest;
+      };
+      const first = base + checkDigit(base, 9);
+      const cpf = first + checkDigit(first, 10);
+      const manager = await createUser({ cpf, email: `gestor.${cpf}@exemplo.com` });
+      const tenantId = await createTenant('Prefeitura do Código Fixo', 'active');
+      await owner.db
+        .insert(memberships)
+        .values({ tenantId, userId: manager.id, role: 'manager', status: 'active' });
+      // Login do painel no app comum (código 123456 por e-mail); a sessão vale no outro app.
+      const panelStart = await app.inject({
+        method: 'POST',
+        url: '/auth/panel/start',
+        payload: { cpf },
+      });
+      expect(panelStart.statusCode).toBe(200);
+      const panelVerify = await app.inject({
+        method: 'POST',
+        url: '/auth/panel/verify',
+        payload: { challengeId: panelStart.json<ChallengeResponse>().challengeId, code: '123456' },
+      });
+      expect(panelVerify.statusCode).toBe(200);
+      const panelSession = panelVerify.json<{ session: SessionTokens }>().session;
+
+      const next = newPhone();
+      const start = await fixedApp.inject({
+        method: 'POST',
+        url: '/me/phone/start',
+        headers: bearer(panelSession),
+        payload: { phone: next },
+      });
+      expect(start.statusCode).toBe(200);
+      const wrong = await fixedApp.inject({
+        method: 'POST',
+        url: '/me/phone/verify',
+        headers: bearer(panelSession),
+        payload: { challengeId: start.json<ChallengeResponse>().challengeId, code: '246810' },
+      });
+      expect(wrong.statusCode).toBe(400);
+      expect(wrong.json()).toEqual({ code: 'code_invalid' });
+    } finally {
+      await fixedApp.close();
+    }
+  });
+
   it('phone change code only works for the account that asked for it', async () => {
     const asker = await createUser();
     const other = await createUser();

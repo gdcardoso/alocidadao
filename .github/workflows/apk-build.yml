@@ -92,6 +92,21 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  # Só este job toca o servidor: entra no mesmo grupo das publicações da homologação.
+  publish:
+    needs: apk
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: homolog
+    concurrency:
+      group: homolog-deploy
+      cancel-in-progress: false
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: alocidadao-homolog-apk
+          path: ${{ runner.temp }}/apk
+
       - name: Configurar SSH
         env:
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
@@ -114,6 +129,6 @@ jobs:
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
         run: |
-          scp -o HostName="$DEPLOY_HOST" "$RUNNER_TEMP/alocidadao-homolog.apk" homolog:alocidadao-homolog.apk
+          scp -o HostName="$DEPLOY_HOST" "$RUNNER_TEMP/apk/alocidadao-homolog.apk" homolog:alocidadao-homolog.apk
           ssh -o HostName="$DEPLOY_HOST" homolog \
             '/srv/alocidadao/publish-static.sh apk "$HOME/alocidadao-homolog.apk"; rc=$?; rm -f "$HOME/alocidadao-homolog.apk"; exit $rc'

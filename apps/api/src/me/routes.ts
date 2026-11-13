@@ -40,6 +40,8 @@ const { users, memberships, tenants, devices } = schema;
 const NO_DEVICE = '00000000-0000-0000-0000-000000000000';
 
 export type MeDeps = Pick<AuthDeps, 'db' | 'secret' | 'devFixedCode' | 'phoneCode'> & {
+  /** Código fixo da homologação: vale só em sessão do app, nunca em sessão do painel. */
+  appFixedCode?: string;
   /**
    * Limite por conta de POST /me/phone/start. Exige o @fastify/rate-limit registrado no
    * escopo (com `global: false`).
@@ -105,7 +107,7 @@ async function hasPanelAccess(tx: Transaction, userId: string): Promise<boolean>
 /** Perfil e conta: dados, aparelhos, troca de número e exclusão. Cada um só a própria. */
 export function registerMeRoutes(instance: FastifyInstance, deps: MeDeps) {
   const app = instance.withTypeProvider<ZodTypeProvider>();
-  const { db, secret, devFixedCode, phoneCode, phoneChangeRateLimit } = deps;
+  const { db, secret, devFixedCode, appFixedCode, phoneCode, phoneChangeRateLimit } = deps;
   const anyAudience = requireAuth(['app', 'panel']);
   // Rotas liberadas pelo portão dos termos: a conta sem aceite precisa delas para aceitar.
   const anyAudienceWithoutTerms = requireAuth(['app', 'panel'], { allowWithoutTerms: true });
@@ -252,7 +254,7 @@ export function registerMeRoutes(instance: FastifyInstance, deps: MeDeps) {
     },
     async (request, reply) => {
       if (!phoneCode) return reply.code(503).send({ code: 'phone_code_not_configured' });
-      const { userId } = request.auth!;
+      const { userId, audience } = request.auth!;
       const { phone } = request.body;
       const active = await asActiveUser(db, userId, async () => true);
       if (active === INACTIVE) return reply.code(401).send(unauthorized);
@@ -260,7 +262,7 @@ export function registerMeRoutes(instance: FastifyInstance, deps: MeDeps) {
       // Número de outra conta só é recusado no verify (409), depois de provada a posse.
       const challenge = await issueChallenge(db, {
         secret,
-        devFixedCode,
+        devFixedCode: audience === 'app' ? (appFixedCode ?? devFixedCode) : devFixedCode,
         purpose: 'phone_change',
         target: phone,
         userId,

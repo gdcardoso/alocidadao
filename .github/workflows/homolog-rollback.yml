@@ -13,10 +13,6 @@ on:
         type: string
         required: true
 
-concurrency:
-  group: homolog-deploy
-  cancel-in-progress: false
-
 permissions:
   contents: read
 
@@ -24,6 +20,9 @@ jobs:
   rollback:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    concurrency:
+      group: homolog-deploy
+      cancel-in-progress: false
     environment: homolog
     steps:
       - name: Conferir a confirmação

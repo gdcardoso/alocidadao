@@ -5,10 +5,8 @@ on:
   push:
     branches: [develop]
 
-# Uma publicação por vez; a seguinte espera, sem cancelar a que está rodando.
-concurrency:
-  group: homolog-deploy
-  cancel-in-progress: false
+# Os jobs que tocam o servidor (plan, deploy, prune) usam o grupo homolog-deploy: uma publicação
+# ou rollback por vez, sem cancelar o que está rodando. O CI e as imagens ficam fora do grupo.
 
 permissions:
   contents: read
@@ -23,6 +21,9 @@ jobs:
     needs: ci
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    concurrency:
+      group: homolog-deploy
+      cancel-in-progress: false
     environment: homolog
     permissions:
       contents: read
@@ -96,6 +97,7 @@ jobs:
           provenance: false
           sbom: false
           tags: ghcr.io/gdcardoso/alocidadao-api:${{ github.sha }}
+          labels: org.opencontainers.image.source=https://github.com/gdcardoso/alocidadao
           cache-from: type=gha,scope=api
           cache-to: type=gha,scope=api,mode=max
 
@@ -109,6 +111,7 @@ jobs:
           provenance: false
           sbom: false
           tags: ghcr.io/gdcardoso/alocidadao-web:${{ github.sha }}
+          labels: org.opencontainers.image.source=https://github.com/gdcardoso/alocidadao
           cache-from: type=gha,scope=web
           cache-to: type=gha,scope=web,mode=max
 
@@ -122,6 +125,7 @@ jobs:
           provenance: false
           sbom: false
           tags: ghcr.io/gdcardoso/alocidadao-db:${{ github.sha }}
+          labels: org.opencontainers.image.source=https://github.com/gdcardoso/alocidadao
           cache-from: type=gha,scope=db
           cache-to: type=gha,scope=db,mode=max
 
@@ -129,6 +133,9 @@ jobs:
     needs: [plan, images]
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    concurrency:
+      group: homolog-deploy
+      cancel-in-progress: false
     environment: homolog
     permissions:
       contents: read
@@ -188,6 +195,9 @@ jobs:
     needs: deploy
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    concurrency:
+      group: homolog-deploy
+      cancel-in-progress: false
     environment: homolog
     permissions:
       contents: read

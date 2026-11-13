@@ -198,6 +198,33 @@ describe('panel auth routes', () => {
     expect(again.json()).toMatchObject({ code: 'code_rate_limited' });
   });
 
+  it('panel refuses the app fixed code', async () => {
+    const fixedApp = await buildApp({
+      database: appDb.db,
+      auth: { secret, appFixedCode: '246810', phoneCode, email },
+    });
+    try {
+      const cpf = newCpf();
+      const userId = await createUser({ cpf, email: `gestor.${cpf}@exemplo.com` });
+      await addMembership(userId, 'manager');
+      const start = await fixedApp.inject({
+        method: 'POST',
+        url: '/auth/panel/start',
+        payload: { cpf },
+      });
+      expect(start.statusCode).toBe(200);
+      const verify = await fixedApp.inject({
+        method: 'POST',
+        url: '/auth/panel/verify',
+        payload: { challengeId: start.json<PanelChallengeResponse>().challengeId, code: '246810' },
+      });
+      expect(verify.statusCode).toBe(400);
+      expect(verify.json()).toEqual({ code: 'code_invalid' });
+    } finally {
+      await fixedApp.close();
+    }
+  });
+
   it('CPF with invalid check digits is 400', async () => {
     const cpf = newCpf();
     const wrongDigit = (Number(cpf[10]) + 1) % 10;

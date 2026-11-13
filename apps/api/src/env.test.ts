@@ -16,7 +16,42 @@ describe('parseEnv', () => {
       auth: undefined,
       email: { resendApiKey: undefined, from: 'Alô Cidadão <nao-responda@alocidadao.com.br>' },
       devRoutes: false,
+      trustProxy: false,
       invites: { panelUrl: 'http://localhost:5173', playStoreUrl: null, appStoreUrl: null },
+    });
+  });
+
+  describe('app fixed code and proxy', () => {
+    const production = {
+      NODE_ENV: 'production',
+      RESEND_API_KEY: 'k',
+      PANEL_URL: 'https://portal.alocidadao.com.br',
+      AUTH_SECRET: 'x'.repeat(32),
+    };
+
+    it('accepts AUTH_APP_FIXED_CODE in production only with APP_ENV=homolog', () => {
+      const env = parseEnv({ ...production, APP_ENV: 'homolog', AUTH_APP_FIXED_CODE: '246810' });
+      expect(env.auth?.appFixedCode).toBe('246810');
+      expect(() => parseEnv({ ...production, AUTH_APP_FIXED_CODE: '246810' })).toThrow(
+        /AUTH_APP_FIXED_CODE/,
+      );
+    });
+
+    it('AUTH_APP_FIXED_CODE needs 6 digits', () => {
+      expect(() =>
+        parseEnv({ ...production, APP_ENV: 'homolog', AUTH_APP_FIXED_CODE: '12345' }),
+      ).toThrow(/AUTH_APP_FIXED_CODE/);
+    });
+
+    it('AUTH_DEV_FIXED_CODE stays forbidden in production even with APP_ENV=homolog', () => {
+      expect(() =>
+        parseEnv({ ...production, APP_ENV: 'homolog', AUTH_DEV_FIXED_CODE: '123456' }),
+      ).toThrow(/AUTH_DEV_FIXED_CODE/);
+    });
+
+    it('TRUST_PROXY=true becomes trustProxy true; absent becomes false', () => {
+      expect(parseEnv({ TRUST_PROXY: 'true' }).trustProxy).toBe(true);
+      expect(parseEnv({}).trustProxy).toBe(false);
     });
   });
 

@@ -360,6 +360,35 @@ describe('me routes', () => {
     expect(me.json<MeResponse>().phone).toBe(next);
   });
 
+  it('phone change accepts the app fixed code', async () => {
+    const fixedApp = await buildApp({
+      database: appDb.db,
+      auth: { secret, appFixedCode: '246810', phoneCode, email },
+    });
+    try {
+      const user = await createUser();
+      const session = await signIn(user.phone);
+      const next = newPhone();
+      const start = await fixedApp.inject({
+        method: 'POST',
+        url: '/me/phone/start',
+        headers: bearer(session),
+        payload: { phone: next },
+      });
+      expect(start.statusCode).toBe(200);
+      const right = await fixedApp.inject({
+        method: 'POST',
+        url: '/me/phone/verify',
+        headers: bearer(session),
+        payload: { challengeId: start.json<ChallengeResponse>().challengeId, code: '246810' },
+      });
+      expect(right.statusCode).toBe(200);
+      expect(right.json<MeResponse>().phone).toBe(next);
+    } finally {
+      await fixedApp.close();
+    }
+  });
+
   it('phone change code only works for the account that asked for it', async () => {
     const asker = await createUser();
     const other = await createUser();

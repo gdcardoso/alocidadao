@@ -216,6 +216,33 @@ describe('app auth routes', () => {
     expect(body.retryAfterSeconds).toBeGreaterThan(0);
   });
 
+  it('accepts the app fixed code on the phone sign in', async () => {
+    const fixedApp = await buildApp({
+      database: appDb.db,
+      auth: { secret, appFixedCode: '246810', phoneCode, email },
+    });
+    try {
+      const start = await fixedApp.inject({
+        method: 'POST',
+        url: '/auth/phone/start',
+        payload: { phone: newPhone() },
+      });
+      expect(start.statusCode).toBe(200);
+      const res = await fixedApp.inject({
+        method: 'POST',
+        url: '/auth/phone/verify',
+        payload: {
+          challengeId: start.json<ChallengeResponse>().challengeId,
+          code: '246810',
+          device: newDevice(),
+        },
+      });
+      expect(res.statusCode).toBe(200);
+    } finally {
+      await fixedApp.close();
+    }
+  });
+
   it('new number goes to profile then signs in', async () => {
     const phone = newPhone();
     const device = newDevice();

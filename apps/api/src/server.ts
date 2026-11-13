@@ -57,6 +57,7 @@ const push = buildPushSenders(env, pushLog);
 
 const app = await buildApp({
   logger: true,
+  trustProxy: env.trustProxy,
   corsOrigin: env.corsOrigin,
   storage,
   database: databaseHandle?.db,
@@ -73,6 +74,7 @@ appLog = app.log;
 if (env.phoneCode?.provider === 'log' && process.env.NODE_ENV === 'production') {
   app.log.warn('PHONE_CODE_PROVIDER=log em produção: o código de entrada sai no log');
 }
+if (env.auth?.appFixedCode) app.log.warn('AUTH_APP_FIXED_CODE ligado (homologação)');
 for (const { level, obj, msg } of queuedLogs) app.log[level](obj, msg);
 
 // Fecha o pool do banco junto com o servidor.

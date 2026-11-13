@@ -25,7 +25,7 @@ export interface ApiEnv {
     bundleId: string;
   };
   /** Login sem senha. Presente quando AUTH_SECRET está definida. */
-  auth?: { secret: string; devFixedCode?: string };
+  auth?: { secret: string; devFixedCode?: string; appFixedCode?: string };
   /** Como o código de entrada chega ao celular. Ausente: o server.ts decide o padrão. */
   phoneCode?: { provider: 'log' } | { provider: 'meta'; meta: MetaWhatsAppConfig };
   /** Sem chave do Resend, o e-mail sai no log (só fora de produção). */
@@ -33,6 +33,8 @@ export interface ApiEnv {
   /** Endereços que vão nos e-mails de convite. */
   invites: InviteLinks;
   devRoutes: boolean;
+  /** Atrás do proxy (Caddy): o IP do cliente vem do x-forwarded-for. */
+  trustProxy: boolean;
 }
 
 // Variável vazia (como no .env.example) vale como ausente.
@@ -75,6 +77,14 @@ const schema = z.object({
       .regex(/^[0-9]{6}$/, 'deve ter 6 dígitos')
       .optional(),
   ),
+  // Código fixo só do app pelo celular (nunca do painel nem do backoffice); só na homologação.
+  AUTH_APP_FIXED_CODE: z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z
+      .string()
+      .regex(/^[0-9]{6}$/, 'deve ter 6 dígitos')
+      .optional(),
+  ),
   PHONE_CODE_PROVIDER: z.preprocess(
     (v) => (v === '' ? undefined : v),
     z.enum(['log', 'meta']).optional(),
@@ -90,6 +100,8 @@ const schema = z.object({
   AGENT_APP_PLAY_URL: optionalText,
   AGENT_APP_STORE_URL: optionalText,
   ENABLE_DEV_ROUTES: optionalText,
+  APP_ENV: optionalText,
+  TRUST_PROXY: optionalText,
   NODE_ENV: optionalText,
 });
 
@@ -124,6 +136,9 @@ export function parseEnv(source: Record<string, string | undefined>): ApiEnv {
   }
   if (production && e.AUTH_DEV_FIXED_CODE) {
     problems.push('AUTH_DEV_FIXED_CODE: proibida em produção');
+  }
+  if (production && e.AUTH_APP_FIXED_CODE && e.APP_ENV !== 'homolog') {
+    problems.push('AUTH_APP_FIXED_CODE: em produção só com APP_ENV=homolog');
   }
   if (production) missing('RESEND_API_KEY', e.RESEND_API_KEY, 'obrigatória em produção');
   if (production) missing('PANEL_URL', e.PANEL_URL, 'obrigatória em produção');
@@ -186,7 +201,11 @@ export function parseEnv(source: Record<string, string | undefined>): ApiEnv {
           }
         : undefined,
     auth: e.AUTH_SECRET
-      ? { secret: e.AUTH_SECRET, devFixedCode: e.AUTH_DEV_FIXED_CODE }
+      ? {
+          secret: e.AUTH_SECRET,
+          devFixedCode: e.AUTH_DEV_FIXED_CODE,
+          appFixedCode: e.AUTH_APP_FIXED_CODE,
+        }
       : undefined,
     phoneCode:
       e.PHONE_CODE_PROVIDER === 'meta'
@@ -213,5 +232,6 @@ export function parseEnv(source: Record<string, string | undefined>): ApiEnv {
       appStoreUrl: e.AGENT_APP_STORE_URL ?? null,
     },
     devRoutes: e.ENABLE_DEV_ROUTES === 'true' && !production,
+    trustProxy: e.TRUST_PROXY === 'true',
   };
 }

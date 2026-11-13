@@ -33,6 +33,11 @@ export interface AuthOptions {
   secret: string;
   /** Código fixo aceito no login (só desenvolvimento). */
   devFixedCode?: string;
+  /**
+   * Código fixo aceito só nos fluxos do app pelo celular (entrada e troca de número), nunca no
+   * painel nem no backoffice. Só na homologação.
+   */
+  appFixedCode?: string;
   /** Sem ele: fora de produção o código sai no log; em produção, 503 phone_code_not_configured. */
   phoneCode?: PhoneCodeSender;
   email: EmailSender;
@@ -49,6 +54,8 @@ export interface AuthOptions {
 
 export interface AppOptions {
   logger?: boolean;
+  /** Atrás de proxy reverso: o IP do cliente (limite por IP) vem do x-forwarded-for. */
+  trustProxy?: boolean;
   corsOrigin?: string;
   storage?: Storage;
   /** Banco como app_user (RLS). Opcional: as rotas que dependem dele respondem 503 sem ele. */
@@ -121,6 +128,7 @@ function handleError(
 
 export async function buildApp({
   logger = false,
+  trustProxy = false,
   corsOrigin,
   storage,
   database,
@@ -131,7 +139,7 @@ export async function buildApp({
   invites = LOCAL_INVITE_LINKS,
   siteContactRateLimit,
 }: AppOptions = {}) {
-  const app = Fastify({ logger }).withTypeProvider<ZodTypeProvider>();
+  const app = Fastify({ logger, trustProxy }).withTypeProvider<ZodTypeProvider>();
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
   app.setErrorHandler(handleError);
@@ -171,6 +179,8 @@ export async function buildApp({
       phoneCode,
       email: auth.email,
     };
+    // Rotas do app pelo celular: o código fixo da homologação vale só aqui.
+    const appDeps = { ...deps, devFixedCode: auth.appFixedCode ?? auth.devFixedCode };
     // Escopo próprio: o limite por IP vale só para /auth/*.
     await app.register(async (scope) => {
       await registerRateLimit(scope, {
@@ -179,14 +189,14 @@ export async function buildApp({
       });
       // Cookie do token de renovação do painel.
       await scope.register(cookie);
-      registerAppAuthRoutes(scope, deps);
+      registerAppAuthRoutes(scope, appDeps);
       registerPanelAuthRoutes(scope, deps);
     });
     // Perfil: sem limite por IP; só a troca de número tem limite próprio, por conta.
     await app.register(async (scope) => {
       await registerRateLimit(scope, { global: false });
       registerMeRoutes(scope, {
-        ...deps,
+        ...appDeps,
         phoneChangeRateLimit: {
           max: auth.phoneChangeRateLimit?.max ?? 5,
           timeWindowMs: auth.phoneChangeRateLimit?.timeWindowMs ?? 60 * 60_000,

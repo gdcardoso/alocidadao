@@ -42,3 +42,25 @@ describe('error handler', () => {
     await app.close();
   });
 });
+
+describe('trustProxy', () => {
+  async function ipBehindProxy(trustProxy: boolean) {
+    const app = await buildApp({ trustProxy });
+    app.get('/ip', (request) => ({ ip: request.ip }));
+    const response = await app.inject({
+      method: 'GET',
+      url: '/ip',
+      headers: { 'x-forwarded-for': '203.0.113.9' },
+    });
+    await app.close();
+    return response.json<{ ip: string }>().ip;
+  }
+
+  it('takes the client IP from x-forwarded-for when on', async () => {
+    expect(await ipBehindProxy(true)).toBe('203.0.113.9');
+  });
+
+  it('ignores x-forwarded-for by default', async () => {
+    expect(await ipBehindProxy(false)).not.toBe('203.0.113.9');
+  });
+});

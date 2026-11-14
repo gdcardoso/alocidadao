@@ -71,12 +71,12 @@ Descartados: App Platform e banco gerenciado da DigitalOcean (mais caros, fogem 
 
 ### Endereços
 
-| Endereço | O quê |
-|---|---|
-| `alocidadao.com.br` | Site estático |
-| `www.alocidadao.com.br` | Redireciona para `alocidadao.com.br` |
-| `homolog.alocidadao.com.br` | Painel e backoffice (estáticos do `apps/web`) |
-| `homolog.alocidadao.com.br/api/*` | API (prefixo retirado antes de chegar à API) |
+| Endereço                          | O quê                                         |
+| --------------------------------- | --------------------------------------------- |
+| `alocidadao.com.br`               | Site estático                                 |
+| `www.alocidadao.com.br`           | Redireciona para `alocidadao.com.br`          |
+| `homolog.alocidadao.com.br`       | Painel e backoffice (estáticos do `apps/web`) |
+| `homolog.alocidadao.com.br/api/*` | API (prefixo retirado antes de chegar à API)  |
 
 `painel`, `api` e `www` (como site próprio) ficam reservados para a produção.
 

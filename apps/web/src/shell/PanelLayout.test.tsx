@@ -1,7 +1,7 @@
 import { ApiError } from '@alocidadao/api-client';
 import type { PanelContext } from '@alocidadao/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, render, screen, within } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { MemoryRouter } from 'react-router';
@@ -169,9 +169,9 @@ describe('menu by role', () => {
     const nav = await screen.findByRole('navigation');
     expect(within(nav).getByRole('link', { name: 'Equipes e agentes' })).toBeInTheDocument();
     expect(within(nav).queryByRole('link', { name: 'Categorias' })).not.toBeInTheDocument();
-    expect(await screen.findByRole('link', { name: /Mapa/ })).toHaveAttribute(
-      'aria-current',
-      'page',
+    // O link aparece antes de o redirecionamento terminar; espera ele virar a página atual.
+    await waitFor(() =>
+      expect(screen.getByRole('link', { name: /Mapa/ })).toHaveAttribute('aria-current', 'page'),
     );
   });
 

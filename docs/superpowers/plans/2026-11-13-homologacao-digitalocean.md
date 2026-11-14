@@ -38,10 +38,12 @@
 ### Task 1: API pronta para rodar atrás do proxy e com código fixo do app na homologação
 
 **Files:**
+
 - Modify: `apps/api/src/env.ts`, `apps/api/src/app.ts`, `apps/api/src/server.ts`, `apps/api/.env.example`
 - Test: `apps/api/src/env.test.ts`, `apps/api/src/auth/app-routes.test.ts`, `apps/api/src/auth/panel-routes.test.ts` (ou o arquivo onde estiverem os testes de login do painel)
 
 **Interfaces:**
+
 - Produces: `ApiEnv.trustProxy: boolean`; `ApiEnv.auth.appFixedCode?: string`; `AuthOptions.appFixedCode?: string`; `AppOptions.trustProxy?: boolean`. Variáveis novas: `APP_ENV` (`homolog` é o único valor com efeito), `AUTH_APP_FIXED_CODE` (6 dígitos), `TRUST_PROXY` (`true`).
 
 - [ ] **Step 1: Testes de ambiente que falham** em `env.test.ts`:
@@ -65,10 +67,12 @@
 ### Task 2: Script para criar o admin da plataforma
 
 **Files:**
+
 - Create: `packages/db/src/platform-admin.ts`, `packages/db/src/create-admin.ts`, `packages/db/src/platform-admin.test.ts`
 - Modify: `packages/db/package.json` (script `db:create-admin`), `packages/db/src/index.ts` se o padrão do pacote exportar
 
 **Interfaces:**
+
 - Produces: `ensurePlatformAdmin(db: Database, values: { cpf: string; email: string; name: string }): Promise<{ id: string; created: boolean }>`; CLI `node dist/create-admin.js --cpf 11144477735 --email x@y --name "Nome"` (usa `DATABASE_OWNER_URL`).
 
 - [ ] **Step 1: Testes que falham** (`platform-admin.test.ts`, mesmo padrão de `platform.test.ts` com `TEST_OWNER_URL`):
@@ -84,9 +88,11 @@
 ### Task 3: Imagens Docker
 
 **Files:**
+
 - Create: `deploy/docker/api.Dockerfile`, `deploy/docker/web.Dockerfile`, `deploy/docker/site.Dockerfile`, `.dockerignore`
 
 **Interfaces:**
+
 - Produces:
   - `api`: Node 22 slim, usuário não-root, `WORKDIR /app/apps/api`, `CMD ["node","dist/server.js"]`, porta 3333. Contém também `packages/db/dist`, `packages/db/migrations` e `packages/db/data`, para rodar `node /app/packages/db/dist/{migrate,seed-dev,create-admin,import-municipalities}.js` com `docker compose run --rm api ...`.
   - `web`: estáticos do painel em `/srv/web` (build com `VITE_API_URL=/api`), imagem mínima (`busybox`), `CMD` que copia `/srv/web` para o volume `/out` e sai.
@@ -102,9 +108,11 @@
 ### Task 4: Pilha do servidor (Compose, Caddy, publicação, backup, rollback)
 
 **Files:**
+
 - Create: `deploy/homolog/compose.yml`, `deploy/homolog/Caddyfile`, `deploy/homolog/.env.example`, `deploy/scripts/deploy.sh`, `deploy/scripts/backup.sh`, `deploy/scripts/restore.sh`, `deploy/scripts/rollback.sh`, `deploy/scripts/publish-static.sh`, `deploy/scripts/smoke-local.sh`, `deploy/README.md`
 
 **Interfaces:**
+
 - Consumes: imagens da Task 3; variáveis da Task 1.
 - Produces (no servidor, em `/srv/alocidadao`):
   - `compose.yml` com `proxy` (caddy:2), `api`, `db`; volumes `db-data`, `caddy-data`, `web-root`, `site-root`, `apk`; rede interna; só o `proxy` publica 80/443. `API_IMAGE`, `DB_IMAGE` vêm de `state/current.env`.
@@ -132,10 +140,12 @@
 ### Task 5: Workflows do GitHub
 
 **Files:**
+
 - Modify: `.github/workflows/ci.yml` (push em `main` e `develop`; `workflow_call` para reuso)
 - Create: `.github/workflows/homolog-publish.yml`, `.github/workflows/homolog-rollback.yml`, `.github/workflows/site-publish.yml`, `.github/workflows/apk-build.yml`
 
 **Interfaces:**
+
 - Consumes: Dockerfiles (Task 3), scripts no servidor (Task 4).
 - Produces: segredos esperados no ambiente `homolog` do GitHub: `DEPLOY_HOST`, `DEPLOY_SSH_KEY`, `DEPLOY_KNOWN_HOSTS`, `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`.
 

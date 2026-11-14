@@ -242,7 +242,10 @@ describe('ReviewPage', () => {
     await user.click(publishButton());
 
     await screen.findByRole('heading', { name: 'Poda de árvore' });
-    expect(screen.getByTestId('location')).toHaveTextContent(`atividade=${treeId}`);
+    // A URL muda logo depois do título; em máquina lenta (CI) a checagem imediata falhava.
+    await waitFor(() =>
+      expect(screen.getByTestId('location')).toHaveTextContent(`atividade=${treeId}`),
+    );
     expect(invalidate).toHaveBeenCalledWith({ queryKey: panelCountsKey(tenantId) });
     expect(panelReviews).toHaveBeenCalledTimes(2);
   });

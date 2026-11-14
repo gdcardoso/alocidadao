@@ -5,9 +5,10 @@ import { ensurePlatformAdmin } from './platform-admin.js';
 import { users } from './schema.js';
 import { TEST_OWNER_URL } from './test/urls.js';
 
-// CPFs válidos usados só aqui; o dono do banco cria e limpa as contas.
-const CPF = '11144477735';
-const OTHER_CPF = '52998224725';
+// CPFs válidos usados só aqui (não use os do seed: no CI o banco de teste tem as contas demo,
+// e apagar um gestor do seed esbarra em department_managers). O dono do banco cria e limpa.
+const CPF = '73194826573';
+const OTHER_CPF = '84620517380';
 
 const { db: owner, pool } = createDatabase(TEST_OWNER_URL);
 

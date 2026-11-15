@@ -54,6 +54,10 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # O Metro resolve @alocidadao/shared e api-client pelo dist/ (exports do package.json).
+      - name: Pacotes do monorepo
+        run: pnpm turbo run build --filter='@alocidadao/mobile^...'
+
       # A pasta android não é versionada: o prebuild gera tudo a partir do app.config.ts.
       # O Android SDK já vem no runner ubuntu-latest (ANDROID_HOME).
       - name: Prebuild

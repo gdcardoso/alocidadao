@@ -52,6 +52,19 @@ describe('createRequestInputSchema', () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it('accepts the device of the submission, and its absence (old app)', () => {
+    const device = {
+      platform: 'ios',
+      appVersion: '1.0.0',
+      osVersion: '18.1',
+      manufacturer: 'Apple',
+      model: 'iPhone 15',
+    };
+    const withDevice = createRequestInputSchema.parse({ ...base, location: gps, device });
+    expect(withDevice.device).toEqual(device);
+    expect(createRequestInputSchema.parse({ ...base, location: gps }).device).toBeUndefined();
+  });
 });
 
 describe('workOrderActionInputSchema', () => {

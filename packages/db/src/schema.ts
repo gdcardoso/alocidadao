@@ -13,6 +13,7 @@ import {
   TENANT_STATUSES,
   WORK_ORDER_STATUSES,
 } from '@alocidadao/shared';
+import type { AppDevice, SessionDevice } from '@alocidadao/shared';
 import { sql } from 'drizzle-orm';
 import {
   boolean,
@@ -167,6 +168,8 @@ export const sessions = pgTable(
     audience: text('audience', { enum: ['app', 'panel'] }).notNull(),
     refreshTokenHash: text('refresh_token_hash').notNull().unique(),
     installationId: uuid('installation_id'),
+    /** Aparelho (app) ou navegador (painel) no momento da entrada. Nulo nas sessões antigas. */
+    device: jsonb('device').$type<SessionDevice>(),
     /** Painel: a sessão vence após esse tempo sem renovação. Nulo no app (não expira). */
     idleTimeoutSeconds: integer('idle_timeout_seconds'),
     expiresAt: timestamp('expires_at', { withTimezone: true }),
@@ -191,6 +194,10 @@ export const devices = pgTable(
     installationId: uuid('installation_id').notNull(),
     platform: text('platform', { enum: ['android', 'ios'] }).notNull(),
     appVersion: text('app_version').notNull(),
+    /** Versão do sistema, fabricante e modelo; nulos até o primeiro acesso com o app que manda. */
+    osVersion: text('os_version'),
+    manufacturer: text('manufacturer'),
+    model: text('model'),
     pushToken: text('push_token'),
     lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull().defaultNow(),
     createdAt: createdAt(),
@@ -551,6 +558,8 @@ export const requests = pgTable(
     /** Posição do GPS do aparelho no momento do relato. */
     gpsLocation: geometry('gps_location', { type: 'point', mode: 'xy', srid: 4326 }).notNull(),
     address: text('address'),
+    /** Aparelho que enviou a solicitação; nunca muda depois. Nulo no app antigo. */
+    device: jsonb('device').$type<AppDevice>(),
     extra: jsonb('extra').notNull().default({}),
     dueAt: timestamp('due_at', { withTimezone: true }),
     statusChangedAt: timestamp('status_changed_at', { withTimezone: true }).notNull().defaultNow(),

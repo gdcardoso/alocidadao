@@ -2,6 +2,7 @@ import {
   MAX_PHOTOS_PER_COMPLETION,
   MAX_PHOTOS_PER_IMPEDIMENT,
   type ConnectionContext,
+  type AppDevice,
   type CreateRequestInput,
   type CreateRequestResponse,
   type DeviceLocation,
@@ -183,6 +184,8 @@ export interface ProcessOutboxDeps {
     uploadDurationMs: number | null;
     sentOffline: boolean;
   }) => Promise<ConnectionContext>;
+  /** Aparelho que envia (sistema, versão, fabricante, modelo), lido na hora do envio. */
+  device: () => AppDevice;
   now?: () => number;
   /**
    * Dono da fila guardado no aparelho (`OUTBOX_OWNER_KEY`). Com ele, itens de outra pessoa
@@ -286,7 +289,13 @@ async function sendCreateRequest(deps: ProcessOutboxDeps, item: OutboxItem): Pro
   const { photoKeys, uploadDurationMs } = await uploadMissingPhotos(deps, item);
   const context = await deps.connection({ uploadDurationMs, sentOffline: item.createdOffline });
   const { display: _display, ...payload } = item.payload as CreateRequestPayload;
-  let input: CreateRequestInput = { ...payload, photoKeys, connection: context };
+  // O aparelho é lido no envio, não guardado na fila: o item antigo também sai com ele.
+  let input: CreateRequestInput = {
+    ...payload,
+    photoKeys,
+    connection: context,
+    device: deps.device(),
+  };
   let outcome = await deps.transport.sendCreateRequest(input);
 
   if (outcome.kind === 'occurrence_unavailable' && input.occurrenceId) {

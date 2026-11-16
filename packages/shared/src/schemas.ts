@@ -4,6 +4,7 @@ import {
   deviceLocationSchema,
   impedimentReasonSchema,
 } from './agent.js';
+import { appDeviceSchema } from './auth.js';
 import { MAX_LOCATION_ADJUST_M, distanceMeters, geoPointSchema } from './geo.js';
 import { workOrderStatusSchema } from './work-order-status.js';
 
@@ -45,6 +46,8 @@ export const createRequestInputSchema = z
     occurrenceId: z.uuid().optional(),
     photoKeys: z.array(z.string().min(1)).min(1).max(MAX_PHOTOS_PER_REQUEST),
     connection: connectionContextSchema,
+    /** Aparelho que enviou; falta no app antigo. */
+    device: appDeviceSchema.optional(),
   })
   .superRefine((value, ctx) => {
     if (distanceMeters(value.gpsLocation, value.location) > MAX_LOCATION_ADJUST_M) {

@@ -1,16 +1,9 @@
-import Constants from 'expo-constants';
-import { Platform } from 'react-native';
 import { sessionApi } from '../auth/native-session';
 import { getDeviceInstallationId } from './device-installation-id';
+import { deviceInfo } from './device-info';
 import { registerForPush } from './push';
 
-/** Plataforma e versão do app, como a API espera em `device`. */
-export function deviceInfo() {
-  return {
-    platform: Platform.OS === 'ios' ? ('ios' as const) : ('android' as const),
-    appVersion: Constants.expoConfig?.version ?? 'dev',
-  };
-}
+export { deviceInfo } from './device-info';
 
 /**
  * Grava este aparelho na conta (`PUT /me/devices/:installationId`), com o token de push quando

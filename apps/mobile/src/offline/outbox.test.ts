@@ -27,10 +27,13 @@ let transport: FakeTransport;
 let clock: { now: number; advance(ms: number): void };
 let calls: { uploadDurationMs: number | null; sentOffline: boolean }[];
 
+const DEVICE = { platform: 'android' as const, appVersion: '1.0.0', model: 'SM-S908E' };
+
 const deps = () => ({
   store,
   transport,
   connection: fakeConnection(calls),
+  device: () => DEVICE,
   now: () => clock.now,
 });
 
@@ -350,7 +353,7 @@ describe('enqueueWorkOrderAction', () => {
       display: { categoryName: 'Buraco na via', address: 'Rua das Flores, 120' },
     });
     const sender = new FakeTransport();
-    await processOutbox({ store, transport: sender, connection: fakeConnection() });
+    await processOutbox({ ...deps(), transport: sender });
     expect(sender.sent[0]?.input).not.toHaveProperty('display');
   });
 
@@ -463,6 +466,15 @@ describe('create_request', () => {
     // O que só serve para a tela da fila não vai para a API.
     expect(sent).not.toHaveProperty('display');
     expect(await store.get(item.id)).toMatchObject({ status: 'done', lastError: null });
+  });
+
+  it('create request sends the device of the phone, also for an item queued before', async () => {
+    // O payload guardado na fila nunca tem device (item antigo ou novo): ele é lido no envio.
+    const item = makeRequestItem();
+    expect(item.payload).not.toHaveProperty('device');
+    await store.add(item);
+    await processOutbox(deps());
+    expect(transport.created[0]).toMatchObject({ device: DEVICE });
   });
 
   it('enqueueCreateRequest stores a pending item that the queue sends', async () => {

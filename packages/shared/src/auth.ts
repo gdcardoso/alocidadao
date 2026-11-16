@@ -47,12 +47,40 @@ export function maskCpfForStaff(digits: string): string {
   return `•••.${digits.slice(3, 6)}.${digits.slice(6, 9)}-••`;
 }
 
-export const deviceInfoSchema = z.object({
-  installationId: z.uuid(),
+/** Dado do aparelho lido do sistema; opcional porque o app antigo não manda. */
+const deviceDetail = z.string().trim().min(1).max(64).optional();
+
+/**
+ * O aparelho que usa o app: sistema e versão do app, mais versão do sistema, fabricante e
+ * modelo. Nada que identifique o aparelho ou o chip (IMEI, série, operadora).
+ */
+export const appDeviceSchema = z.object({
   platform: z.enum(['android', 'ios']),
   appVersion: z.string().min(1).max(32),
+  osVersion: deviceDetail,
+  manufacturer: deviceDetail,
+  model: deviceDetail,
 });
+export type AppDevice = z.infer<typeof appDeviceSchema>;
+
+export const deviceInfoSchema = appDeviceSchema.extend({ installationId: z.uuid() });
 export type DeviceInfo = z.infer<typeof deviceInfoSchema>;
+
+/** Navegador e sistema do painel, interpretados do User-Agent (nulo o que não deu para saber). */
+export const browserClientSchema = z.object({
+  browser: z.string().max(64).nullable(),
+  browserVersion: z.string().max(64).nullable(),
+  os: z.string().max(64).nullable(),
+  osVersion: z.string().max(64).nullable(),
+});
+export type BrowserClient = z.infer<typeof browserClientSchema>;
+
+/** Retrato do aparelho guardado na sessão: o app ou o navegador do painel. */
+export const sessionDeviceSchema = z.discriminatedUnion('kind', [
+  appDeviceSchema.extend({ kind: z.literal('app') }),
+  browserClientSchema.extend({ kind: z.literal('browser') }),
+]);
+export type SessionDevice = z.infer<typeof sessionDeviceSchema>;
 
 export const challengeResponseSchema = z.object({
   challengeId: z.uuid(),
@@ -176,9 +204,7 @@ export const updateMeBodySchema = z
   });
 export type UpdateMeBody = z.infer<typeof updateMeBodySchema>;
 
-export const deviceUpdateBodySchema = z.object({
-  platform: z.enum(['android', 'ios']),
-  appVersion: z.string().min(1).max(32),
+export const deviceUpdateBodySchema = appDeviceSchema.extend({
   pushToken: z.string().nullable().optional(),
 });
 export type DeviceUpdateBody = z.infer<typeof deviceUpdateBodySchema>;

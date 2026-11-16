@@ -178,6 +178,7 @@ async function createRequest(
       location: geoPoint(input.location),
       gpsLocation: geoPoint(input.gpsLocation),
       address: input.address ?? null,
+      device: input.device ?? null,
       statusChangedAt: occurredAt,
       createdAt: occurredAt,
     })

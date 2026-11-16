@@ -304,6 +304,40 @@ describe('app auth routes', () => {
     expect(verified.session.accessExpiresInSeconds).toBe(900);
   });
 
+  it('sign in stores device details on the device and the session', async () => {
+    const phone = newPhone();
+    const userId = await createUser({ phone });
+    const device = { ...newDevice(), osVersion: '16', manufacturer: 'samsung', model: 'SM-S908E' };
+    const verified = await signInByPhone(phone, device);
+    if (verified.status !== 'signed_in') throw new Error(verified.status);
+
+    const [saved] = await owner.db.select().from(devices).where(eq(devices.userId, userId));
+    expect(saved).toMatchObject({ osVersion: '16', manufacturer: 'samsung', model: 'SM-S908E' });
+    const { sessionId } = (await verifyAccessToken(secret, verified.session.accessToken))!;
+    const [session] = await owner.db.select().from(sessions).where(eq(sessions.id, sessionId));
+    expect(session!.device).toEqual({
+      kind: 'app',
+      platform: 'android',
+      appVersion: '1.0.0',
+      osVersion: '16',
+      manufacturer: 'samsung',
+      model: 'SM-S908E',
+    });
+  });
+
+  it('sign in from an old app without device details still works', async () => {
+    const phone = newPhone();
+    const userId = await createUser({ phone });
+    const verified = await signInByPhone(phone, newDevice());
+    if (verified.status !== 'signed_in') throw new Error(verified.status);
+
+    const [saved] = await owner.db.select().from(devices).where(eq(devices.userId, userId));
+    expect(saved!.model).toBeNull();
+    const { sessionId } = (await verifyAccessToken(secret, verified.session.accessToken))!;
+    const [session] = await owner.db.select().from(sessions).where(eq(sessions.id, sessionId));
+    expect(session!.device).toEqual({ kind: 'app', platform: 'android', appVersion: '1.0.0' });
+  });
+
   it('stale account on unknown device never signs in', async () => {
     const phone = newPhone();
     const oldId = await createUser({

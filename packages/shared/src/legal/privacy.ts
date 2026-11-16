@@ -57,7 +57,7 @@ export const PRIVACY_POLICY: LegalDocument = {
         list(
           'registros de acesso: data e hora de cada entrada e do último uso, e o aparelho usado;',
           'registros de auditoria: quem fez cada ação nas solicitações e nas contas, e quando a equipe do Alô Cidadão consultou dados pessoais;',
-          'dados do aparelho: sistema (Android ou iOS), versão do app, um identificador da instalação e o código usado para enviar notificações;',
+          'dados do aparelho: sistema (Android ou iOS), versão do sistema, fabricante e modelo do celular, versão do app, um identificador da instalação e o código usado para enviar notificações. No painel, o navegador e o sistema do computador;',
           'dados da conexão em cada envio: tipo de rede, tempo de resposta e se o envio foi feito sem internet.',
         ),
         paragraph(
@@ -75,6 +75,7 @@ export const PRIVACY_POLICY: LegalDocument = {
           'Permitir que a prefeitura organize equipes, prazos e o trabalho de campo.',
           'Dar suporte, prevenir fraudes e abusos e manter o serviço seguro.',
           'Medir a qualidade da conexão para que o app funcione bem também com internet fraca.',
+          'Saber em quais aparelhos e navegadores o serviço é usado, para testar e dar suporte a eles.',
           'Cumprir obrigações legais, como guardar os registros de acesso.',
         ),
         paragraph('Não vendemos seus dados e não os usamos para publicidade.'),

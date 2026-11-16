@@ -75,7 +75,7 @@ O Chrome e o Edge congelam a versão do sistema no `User-Agent`: o Windows 11 ap
 
 **Exclusão de conta:** ao excluir a conta, a cópia do aparelho na solicitação **fica**. Modelo e sistema não identificam a pessoa, e a solicitação já fica sem nome e sem contato. A cópia nas sessões segue o que já acontece com as sessões.
 
-**Política de privacidade:** decisão do usuário. O texto de `packages/shared/src/legal/privacy.ts` é atualizado, e a data no topo também, mas `TERMS_VERSION` não muda. Hoje só os sócios da Accemble usam o sistema.
+**Política de privacidade:** decisão do usuário. O texto de `packages/shared/src/legal/privacy.ts` é atualizado, mas `TERMS_VERSION` não muda (a "Versão" mostrada no topo é esse valor, então a data também fica). Hoje só os sócios da Accemble usam o sistema.
 
 Dois efeitos dessa escolha:
 

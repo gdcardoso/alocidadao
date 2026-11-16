@@ -22,8 +22,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -77,6 +75,7 @@ import { Screen } from '../../ui/Screen';
 import { StatusBadge } from '../../ui/StatusBadge';
 import { TextField } from '../../ui/TextField';
 import { colors, fonts, radius, space } from '../../ui/theme';
+import { useKeyboardHeight } from '../../ui/use-keyboard-height';
 
 const PERMISSION_ROUTE = '/(app)/permissao-local';
 const NOT_SERVED_ROUTE = '/(app)/nao-atende';
@@ -132,6 +131,10 @@ export default function NovaSolicitacao() {
   const [exit, setExit] = useState<(() => void) | null>(null);
   const pendingRemoval = useRef<Parameters<typeof navigation.dispatch>[0] | null>(null);
   const photoScroll = useRef<ScrollViewInstance>(null);
+  const formScroll = useRef<ScrollViewInstance>(null);
+  // No lugar do KeyboardAvoidingView: no Android com edge-to-edge a janela não encolhe com o
+  // teclado, e o formulário ficava atrás dele (mesmo padrão do FormLayout).
+  const keyboardHeight = useKeyboardHeight();
 
   const dirty = hasDraftData(draft);
 
@@ -263,6 +266,11 @@ export default function NovaSolicitacao() {
     clearDraftPhotos();
     return clearDraftPhotos;
   }, []);
+
+  // A observação é o último campo: com o teclado aberto, rola até ela para não ficar escondida.
+  useEffect(() => {
+    if (noteOpen && keyboardHeight > 0) formScroll.current?.scrollToEnd({ animated: true });
+  }, [noteOpen, keyboardHeight]);
 
   // Mostra a foto nova (ou a anterior, depois de remover).
   useEffect(() => {
@@ -420,11 +428,13 @@ export default function NovaSolicitacao() {
   return (
     <Screen>
       <Header nav="close" onNavPress={close} title="Nova solicitação" align="center" />
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <View style={[styles.flex, { paddingBottom: keyboardHeight }]}>
+        <ScrollView
+          ref={formScroll}
+          style={styles.flex}
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+        >
           {/* 1. Foto, com as fotos, o contador e o local por cima. */}
           <View style={[styles.photo, { width: photoWidth }]}>
             {draft.photos.length > 0 ? (
@@ -605,7 +615,7 @@ export default function NovaSolicitacao() {
             <Text style={styles.offlineText}>Sem internet? Enviamos assim que conectar.</Text>
           </View>
         </Footer>
-      </KeyboardAvoidingView>
+      </View>
 
       <PhotoCapture
         visible={cameraOpen}

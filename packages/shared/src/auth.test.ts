@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   TERMS_VERSION,
   acceptTermsBodySchema,
+  deviceInfoSchema,
+  sessionDeviceSchema,
   maskCpfForStaff,
   maskEmail,
   maskPhone,
@@ -188,5 +190,50 @@ describe('maskPhone', () => {
 describe('maskCpfForStaff', () => {
   it('shows only the middle digits', () => {
     expect(maskCpfForStaff('12345678909')).toBe('•••.456.789-••');
+  });
+});
+
+describe('deviceInfoSchema', () => {
+  const old = {
+    installationId: '7c9e6679-7425-40de-944b-e07fc1f90ae7',
+    platform: 'android',
+    appVersion: '1.0.0',
+  };
+
+  it('accepts an old app without device details', () => {
+    expect(deviceInfoSchema.safeParse(old).success).toBe(true);
+  });
+
+  it('accepts system version, manufacturer and model', () => {
+    const parsed = deviceInfoSchema.parse({
+      ...old,
+      osVersion: '16',
+      manufacturer: 'samsung',
+      model: 'SM-S908E',
+    });
+    expect(parsed).toMatchObject({ osVersion: '16', manufacturer: 'samsung', model: 'SM-S908E' });
+  });
+
+  it('refuses an empty or too long model', () => {
+    expect(deviceInfoSchema.safeParse({ ...old, model: '' }).success).toBe(false);
+    expect(deviceInfoSchema.safeParse({ ...old, model: 'x'.repeat(65) }).success).toBe(false);
+  });
+});
+
+describe('sessionDeviceSchema', () => {
+  it('accepts a browser with unknown system version', () => {
+    const browser = {
+      kind: 'browser',
+      browser: 'Chrome',
+      browserVersion: '142.0',
+      os: 'Windows',
+      osVersion: null,
+    };
+    expect(sessionDeviceSchema.parse(browser)).toEqual(browser);
+  });
+
+  it('accepts an app device', () => {
+    const app = { kind: 'app', platform: 'ios', appVersion: '1.0.0', model: 'iPhone 15' };
+    expect(sessionDeviceSchema.parse(app)).toEqual(app);
   });
 });

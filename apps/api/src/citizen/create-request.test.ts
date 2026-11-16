@@ -200,6 +200,39 @@ describe('POST /citizen/requests', () => {
     });
   });
 
+  describe('device of the submission', () => {
+    const device = {
+      platform: 'android' as const,
+      appVersion: '1.0.0',
+      osVersion: '16',
+      manufacturer: 'samsung',
+      model: 'SM-S908E',
+    };
+    const storedDevice = async (requestId: string) =>
+      (await owner.db.select().from(requests).where(eq(requests.id, requestId)))[0]!.device;
+
+    it('stores the device of the submission', async () => {
+      const res = await post({ ...(await body()), device });
+      expect(res.statusCode).toBe(201);
+      expect(await storedDevice(res.json<CreateRequestResponse>().requestId)).toEqual(device);
+    });
+
+    it('request without device (old app) is created with null device', async () => {
+      const res = await post(await body());
+      expect(res.statusCode).toBe(201);
+      expect(await storedDevice(res.json<CreateRequestResponse>().requestId)).toBeNull();
+    });
+
+    it('a repeated submission keeps the first device', async () => {
+      const input = { ...(await body()), device };
+      const first = await post(input);
+      expect(first.statusCode).toBe(201);
+      const again = await post({ ...input, device: { ...device, model: 'Outro' } });
+      expect(again.json<CreateRequestResponse>().duplicate).toBe(true);
+      expect(await storedDevice(first.json<CreateRequestResponse>().requestId)).toEqual(device);
+    });
+  });
+
   it('supporting an in_progress occurrence starts in_progress', async () => {
     const point = randomDemoPoint();
     const occurrenceId = await createOccurrence('in_progress', point);

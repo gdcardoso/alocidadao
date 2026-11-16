@@ -37,6 +37,13 @@ describe('legal documents', () => {
     }
   });
 
+  it('privacy policy lists the device details', () => {
+    const text = allText(PRIVACY_POLICY);
+    for (const term of ['fabricante', 'modelo', 'versão do sistema', 'navegador']) {
+      expect(text).toContain(term);
+    }
+  });
+
   it('never mention a password', () => {
     for (const doc of documents) expect(allText(doc)).not.toMatch(/senha/i);
   });

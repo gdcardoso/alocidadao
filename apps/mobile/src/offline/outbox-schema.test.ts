@@ -311,7 +311,12 @@ describe('SqliteOutboxStore', () => {
     await store.add(makeItem({ id: 'a', createdAt: 1 }));
     await store.add(makeItem({ id: 'b', createdAt: 2 }));
     const transport = new FakeTransport();
-    const result = await processOutbox({ store, transport, connection: fakeConnection() });
+    const result = await processOutbox({
+      store,
+      transport,
+      connection: fakeConnection(),
+      device: () => ({ platform: 'android', appVersion: '1.0.0' }),
+    });
     expect(result).toMatchObject({ sent: 2, failed: 0, stoppedByNetwork: false });
     expect((await store.list()).map((i) => [i.id, i.status])).toEqual([
       ['a', 'done'],

@@ -3,6 +3,7 @@ import { OUTBOX_OWNER_KEY } from '../auth/login-flow';
 import { createSessionTransport } from '../auth/native-session';
 import { api } from '../lib/api';
 import { measureApiLatency, toConnectionContext } from '../lib/connection';
+import { deviceInfo } from '../lib/device-info';
 import { readNetSnapshot } from '../lib/net-info';
 import { secureStore } from '../lib/secure-store';
 import {
@@ -105,7 +106,13 @@ async function syncPass(): Promise<void> {
     // Montado a cada passada: pega a sessão do login atual (a prefeitura vem de cada item).
     const transport = await createSessionTransport();
     const ownerId = await secureStore.getItem(OUTBOX_OWNER_KEY);
-    const result = await processOutbox({ store, transport, connection, ownerId });
+    const result = await processOutbox({
+      store,
+      transport,
+      connection,
+      device: deviceInfo,
+      ownerId,
+    });
     sent = result.sent;
     // O cartão da enviada fica na tela 4 até a lista do servidor trazer a solicitação.
     await rememberCreated(store, result.created);
@@ -145,7 +152,10 @@ export function submitCreateRequest(
     if (sendNow) {
       try {
         const transport = await createSessionTransport();
-        outcome = await processOutboxItem({ store, transport, connection }, item);
+        outcome = await processOutboxItem(
+          { store, transport, connection, device: deviceInfo },
+          item,
+        );
         // Enviada ou recusada na hora: a tela mostra o resultado e o item sai da fila.
         if (outcome.kind !== 'retry') await store.remove(item.id);
       } catch (error) {

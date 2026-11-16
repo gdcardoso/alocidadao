@@ -29,6 +29,7 @@ import { asActiveUser, INACTIVE } from '../auth/active-user.js';
 import { codeError, usersUniqueConflict, type AuthDeps } from '../auth/app-routes.js';
 import { deliverPhoneCode, hashCode, issueChallenge } from '../auth/codes.js';
 import { requireAuth } from '../auth/plugin.js';
+import { deviceDetails } from '../auth/session.js';
 import { isPgError } from '../db-errors.js';
 
 const { users, memberships, tenants, devices } = schema;
@@ -204,19 +205,28 @@ export function registerMeRoutes(instance: FastifyInstance, deps: MeDeps) {
     async (request, reply) => {
       const { userId } = request.auth!;
       const { installationId } = request.params;
-      const { platform, appVersion, pushToken } = request.body;
+      const { pushToken, ...device } = request.body;
+      const { platform, appVersion } = device;
       const result = await asActiveUser(db, userId, async (tx) => {
         // O token passa a ser só deste aparelho: sai de qualquer outro registro (de outra conta
         // que usou o celular, por exemplo) antes de ser gravado aqui, na mesma transação.
         if (pushToken) await claimPushToken(tx, pushToken);
         await tx
           .insert(devices)
-          .values({ userId, installationId, platform, appVersion, pushToken: pushToken ?? null })
+          .values({
+            userId,
+            installationId,
+            platform,
+            appVersion,
+            ...deviceDetails(device),
+            pushToken: pushToken ?? null,
+          })
           .onConflictDoUpdate({
             target: [devices.userId, devices.installationId],
             set: {
               platform,
               appVersion,
+              ...deviceDetails(device),
               // Sem pushToken no corpo, o token gravado continua; null apaga.
               ...(pushToken !== undefined && { pushToken }),
               lastSeenAt: sql`now()`,

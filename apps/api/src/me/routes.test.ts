@@ -283,6 +283,38 @@ describe('me routes', () => {
     });
   });
 
+  it('device update keeps stored details when the body omits them', async () => {
+    const user = await createUser();
+    const installationId = randomUUID();
+    const session = await signIn(user.phone, installationId);
+    const put = (payload: Record<string, unknown>) =>
+      app.inject({
+        method: 'PUT',
+        url: `/me/devices/${installationId}`,
+        headers: bearer(session),
+        payload: { platform: 'android', appVersion: '1.0.0', ...payload },
+      });
+    const stored = async () =>
+      (await owner.db.select().from(devices).where(eq(devices.userId, user.id)))[0];
+
+    expect(
+      (await put({ osVersion: '16', manufacturer: 'samsung', model: 'SM-S908E' })).statusCode,
+    ).toBe(204);
+    expect((await put({})).statusCode).toBe(204);
+    expect(await stored()).toMatchObject({
+      osVersion: '16',
+      manufacturer: 'samsung',
+      model: 'SM-S908E',
+    });
+
+    expect((await put({ osVersion: '17' })).statusCode).toBe(204);
+    expect(await stored()).toMatchObject({
+      osVersion: '17',
+      manufacturer: 'samsung',
+      model: 'SM-S908E',
+    });
+  });
+
   it('registering a push token removes it from another account', async () => {
     const previous = await createUser();
     const previousDevice = randomUUID();

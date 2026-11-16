@@ -87,8 +87,13 @@ function panelStart(cpf: string) {
   return app.inject({ method: 'POST', url: '/auth/panel/start', payload: { cpf } });
 }
 
-function panelVerify(challengeId: string, code = '123456') {
-  return app.inject({ method: 'POST', url: '/auth/panel/verify', payload: { challengeId, code } });
+function panelVerify(challengeId: string, code = '123456', headers?: Record<string, string>) {
+  return app.inject({
+    method: 'POST',
+    url: '/auth/panel/verify',
+    payload: { challengeId, code },
+    headers,
+  });
 }
 
 async function signInPanelWithCookie(cpf: string) {
@@ -196,6 +201,40 @@ describe('panel auth routes', () => {
     const again = await panelStart(cpf);
     expect(again.statusCode).toBe(429);
     expect(again.json()).toMatchObject({ code: 'code_rate_limited' });
+  });
+
+  describe('browser of the sign in', () => {
+    const CHROME_WINDOWS =
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36';
+
+    async function signInWith(headers: Record<string, string>) {
+      const cpf = newCpf();
+      const userId = await createUser({ cpf, email: `painel.${cpf}@exemplo.com` });
+      await addMembership(userId, 'manager');
+      const start = await panelStart(cpf);
+      const verify = await panelVerify(
+        start.json<PanelChallengeResponse>().challengeId,
+        '123456',
+        headers,
+      );
+      expect(verify.statusCode).toBe(200);
+      const { accessToken } = verify.json<PanelSessionResponse>().session;
+      const { sessionId } = (await verifyAccessToken(secret, accessToken))!;
+      const [session] = await owner.db.select().from(sessions).where(eq(sessions.id, sessionId));
+      return session!.device;
+    }
+
+    it('panel sign in stores browser and system on the session', async () => {
+      expect(await signInWith({ 'user-agent': CHROME_WINDOWS })).toMatchObject({
+        kind: 'browser',
+        browser: 'Chrome',
+        os: 'Windows',
+      });
+    });
+
+    it('panel sign in without a browser user agent still works', async () => {
+      expect(await signInWith({ 'user-agent': 'curl/8.0' })).toBeNull();
+    });
   });
 
   it('panel refuses the app fixed code', async () => {

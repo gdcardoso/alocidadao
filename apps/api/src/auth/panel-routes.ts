@@ -21,6 +21,7 @@ import { recordImplicitSupportLeave } from '../panel/audit.js';
 import { codeError, type AuthDeps } from './app-routes.js';
 import { hashCode, issueChallenge } from './codes.js';
 import { PANEL_IDLE_TIMEOUT_SECONDS, startSession } from './session.js';
+import { parseUserAgent } from './user-agent.js';
 import { hashRefreshToken, signAccessToken } from './tokens.js';
 
 const { sessions } = schema;
@@ -142,7 +143,12 @@ export function registerPanelAuthRoutes(instance: FastifyInstance, deps: AuthDep
       if (platformRole) await recordImplicitSupportLeave(db, { userId: user.id, platformRole });
 
       const session = await withContext(db, { userId: user.id }, (tx) =>
-        startSession(tx, { secret, userId: user.id, audience: 'panel' }),
+        startSession(tx, {
+          secret,
+          userId: user.id,
+          audience: 'panel',
+          client: parseUserAgent(request.headers['user-agent']),
+        }),
       );
       // O token de renovação vai só no cookie; o corpo leva o token de acesso.
       setRefreshCookie(reply, session.refreshToken);
